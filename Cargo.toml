@@ -1,0 +1,35 @@
+[package]
+name = "qubit-text-io"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+authors = ["Haixing Hu <starfish.hu@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/qubit-ltd/rs-text-io"
+description = "Text-oriented I/O traits and adapters for Rust"
+homepage = "https://github.com/qubit-ltd/rs-text-io"
+documentation = "https://docs.rs/qubit-text-io"
+readme = "README.md"
+keywords = ["text", "io", "unicode", "encoding", "qubit"]
+categories = ["encoding", "rust-patterns"]
+include = [
+    "/Cargo.toml",
+    "/LICENSE",
+    "/README.md",
+    "/README.zh_CN.md",
+    "/doc/**/user_guide*.md",
+    "/examples/**",
+    "/resources/**",
+    "/src/**",
+    "/tests/**",
+]
+
+[lib]
+name = "qubit_text_io"
+doctest = true
+
+[dependencies]
+encoding_rs = "0.8"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
