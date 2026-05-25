@@ -11,10 +11,8 @@
 
 ## 概述
 
-Qubit Text IO 提供一组小型 trait，让消费或生成 Unicode 文本的代码不必
-提前决定最终字节编码或存储目的地。它位于字节层的
-`std::io::Read` / `std::io::Write` 之上，也位于更高层的 Unicode 分词、
-规范化、区域相关大小写转换和显示宽度计算之下。
+Qubit Text IO 提供一组小型 trait，让消费或生成 Unicode 文本的代码不必提前决定最终字节编码或存储目的地。
+它位于字节层的`std::io::Read` / `std::io::Write` 之上，也位于更高层的 Unicode 分词、规范化、区域相关大小写转换和显示宽度计算之下。
 
 当你需要以下能力时，可以使用本 crate：
 
@@ -22,12 +20,10 @@ Qubit Text IO 提供一组小型 trait，让消费或生成 Unicode 文本的代
 - 用 `TextLineRead` 表达按行读取文本的消费边界；
 - 用 `TextWrite` 表达向可替换文本目的地写入文本的输出边界；
 - 为文本 writer 配置换行符；
-- 使用借用字符串、拥有字符串、UTF-8 字节流，以及基于 `encoding_rs` 的显式编码
-  适配器，例如 GBK 或 UTF-8；
+- 使用借用字符串、拥有字符串、UTF-8 字节流，以及基于 `encoding_rs` 的显式编码适配器，例如 GBK 或 UTF-8；
 - 对非法输入字节或不可编码文本采用严格报错或替换策略。
 
-如果需要字节流工具、二进制编码和 stream wrapper，请使用
-[qubit-io](https://github.com/qubit-ltd/rs-io)。
+如果需要字节流工具、二进制编码和 stream wrapper，请使用[qubit-io](https://github.com/qubit-ltd/rs-io)。
 
 更多用法、示例和 API 选择建议见[用户指南](doc/user_guide.zh_CN.md)。
 API 参考文档可在 [docs.rs](https://docs.rs/qubit-text-io) 查看。
@@ -88,8 +84,7 @@ assert_eq!("中abcdone\r\n".as_bytes(), bytes.as_slice());
 
 ### 编码错误策略
 
-`CodingErrorPolicy` 控制 encoded adapter 如何处理非法输入字节或目标编码无法表达的
-文本：
+`CodingErrorPolicy` 控制 encoded adapter 如何处理非法输入字节或目标编码无法表达的文本：
 
 | 策略 | 行为 |
 | --- | --- |
@@ -116,8 +111,7 @@ use qubit_text_io::prelude::*;
 
 ## Crate 边界
 
-`qubit-text-io` 只关注文本导向的 I/O trait 与 adapter，不试图提供完整 Unicode
-文本处理能力。
+`qubit-text-io` 只关注文本导向的 I/O trait 与 adapter，不试图提供完整 Unicode 文本处理能力。
 
 本 crate 不实现：
 
@@ -128,8 +122,7 @@ use qubit_text_io::prelude::*;
 - 文件系统路径工具；
 - 数据库专用 writer。
 
-如果需要这些语义，请使用 `unicode-segmentation`、`unicode-normalization`、
-`unicode-width` 或 ICU4X 等专门 crate。
+如果需要这些语义，请使用 `unicode-segmentation`、`unicode-normalization`、`unicode-width` 或 ICU4X 等专门 crate。
 
 ## 运行时依赖
 
@@ -190,8 +183,7 @@ Copyright (c) 2026. Haixing Hu.
 
 ## 相关项目
 
-- [qubit-io](https://github.com/qubit-ltd/rs-io)：Rust 字节流 I/O trait、工具、
-  codec 和 wrapper。
+- [qubit-io](https://github.com/qubit-ltd/rs-io)：Rust 字节流 I/O trait、工具、codec 和 wrapper。
 - Qubit 的更多 Rust 库发布在 [qubit-ltd](https://github.com/qubit-ltd) 组织下。
 
 ---
