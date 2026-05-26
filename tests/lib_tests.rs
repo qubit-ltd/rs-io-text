@@ -1,4 +1,4 @@
-use qubit_text_io::{
+use qubit_io_text::{
     CodingErrorPolicy,
     LineEnding,
 };

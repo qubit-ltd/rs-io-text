@@ -13,8 +13,8 @@
 //!
 //! This crate defines small traits for code that produces or consumes Unicode
 //! text without choosing the final byte encoding or storage destination. It also
-//! provides adapters for in-memory text, UTF-8 byte streams, and explicit
-//! `encoding_rs` encodings.
+//! provides adapters for in-memory text, UTF-8 byte streams, and byte-oriented
+//! [`qubit_codec_text`] charsets.
 
 mod adapters;
 mod coding_error_policy;
@@ -23,8 +23,8 @@ pub mod prelude;
 mod traits;
 
 pub use adapters::{
-    EncodedTextReader,
-    EncodedTextWriter,
+    CharsetTextReader,
+    CharsetTextWriter,
     StrTextReader,
     StringTextReader,
     StringTextWriter,
@@ -33,6 +33,15 @@ pub use adapters::{
 };
 pub use coding_error_policy::CodingErrorPolicy;
 pub use line_ending::LineEnding;
+pub use qubit_codec_text::{
+    AsciiCodec,
+    ByteOrder,
+    CharsetCodec,
+    Latin1Codec,
+    Utf8Codec,
+    Utf16ByteCodec,
+    Utf32ByteCodec,
+};
 pub use traits::{
     TextLineRead,
     TextRead,

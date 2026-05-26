@@ -10,9 +10,13 @@
 //! Common text I/O traits and adapters for Qubit Text IO users.
 
 pub use crate::{
+    AsciiCodec,
+    ByteOrder,
+    CharsetCodec,
+    CharsetTextReader,
+    CharsetTextWriter,
     CodingErrorPolicy,
-    EncodedTextReader,
-    EncodedTextWriter,
+    Latin1Codec,
     LineEnding,
     StrTextReader,
     StringTextReader,
@@ -20,6 +24,9 @@ pub use crate::{
     TextLineRead,
     TextRead,
     TextWrite,
+    Utf8Codec,
     Utf8TextReader,
     Utf8TextWriter,
+    Utf16ByteCodec,
+    Utf32ByteCodec,
 };

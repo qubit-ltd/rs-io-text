@@ -187,8 +187,5 @@ fn utf8_char_width(byte: u8) -> io::Result<usize> {
 /// # Returns
 /// An [`io::Error`] with [`io::ErrorKind::InvalidData`].
 fn invalid_utf8_error(error: std::str::Utf8Error) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::InvalidData,
-        format!("invalid UTF-8 text: {error}"),
-    )
+    io::Error::new(io::ErrorKind::InvalidData, format!("invalid UTF-8 text: {error}"))
 }

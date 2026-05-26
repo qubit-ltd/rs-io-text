@@ -5,15 +5,12 @@ use std::io::{
     Read,
 };
 
-use encoding_rs::{
-    GBK,
-    UTF_8,
-};
-use qubit_text_io::{
+use qubit_io_text::{
+    CharsetTextReader,
     CodingErrorPolicy,
-    EncodedTextReader,
     TextLineRead,
     TextRead,
+    Utf8Codec,
 };
 
 struct FailingReader;
@@ -25,15 +22,9 @@ impl Read for FailingReader {
 }
 
 #[test]
-fn test_new_decodes_gbk_text() -> std::io::Result<()> {
-    let (bytes, _, had_errors) = GBK.encode("中文\nsecond");
-    assert!(!had_errors);
-
-    let mut reader = EncodedTextReader::new(
-        Cursor::new(bytes.into_owned()),
-        GBK,
-        CodingErrorPolicy::Strict,
-    )?;
+fn test_new_decodes_utf8_text() -> std::io::Result<()> {
+    let bytes = "中文\nsecond".as_bytes().to_vec();
+    let mut reader = CharsetTextReader::new(Cursor::new(bytes), Utf8Codec, CodingErrorPolicy::Strict)?;
     let mut line = String::new();
 
     assert!(reader.read_line(&mut line)?);
@@ -47,11 +38,9 @@ fn test_new_decodes_gbk_text() -> std::io::Result<()> {
 
 #[test]
 fn test_read_char_and_into_inner_after_decoding() -> std::io::Result<()> {
-    let (bytes, _, had_errors) = GBK.encode("中文");
-    assert!(!had_errors);
-    let mut reader = EncodedTextReader::new(
-        Cursor::new(bytes.into_owned()),
-        GBK,
+    let mut reader = CharsetTextReader::new(
+        Cursor::new("中文".as_bytes().to_vec()),
+        Utf8Codec,
         CodingErrorPolicy::Strict,
     )?;
 
@@ -64,11 +53,9 @@ fn test_read_char_and_into_inner_after_decoding() -> std::io::Result<()> {
 
 #[test]
 fn test_read_chars_after_decoding() -> std::io::Result<()> {
-    let (bytes, _, had_errors) = GBK.encode("中文");
-    assert!(!had_errors);
-    let mut reader = EncodedTextReader::new(
-        Cursor::new(bytes.into_owned()),
-        GBK,
+    let mut reader = CharsetTextReader::new(
+        Cursor::new("中文".as_bytes().to_vec()),
+        Utf8Codec,
         CodingErrorPolicy::Strict,
     )?;
     let mut chars = Vec::new();
@@ -80,7 +67,7 @@ fn test_read_chars_after_decoding() -> std::io::Result<()> {
 
 #[test]
 fn test_new_propagates_reader_errors() {
-    let error = EncodedTextReader::new(FailingReader, UTF_8, CodingErrorPolicy::Strict)
+    let error = CharsetTextReader::new(FailingReader, Utf8Codec, CodingErrorPolicy::Strict)
         .expect_err("reader errors must be propagated");
 
     assert_eq!(ErrorKind::Other, error.kind());
@@ -88,7 +75,7 @@ fn test_new_propagates_reader_errors() {
 
 #[test]
 fn test_new_rejects_invalid_bytes_in_strict_mode() {
-    let error = EncodedTextReader::new(Cursor::new(vec![0xFF]), UTF_8, CodingErrorPolicy::Strict)
+    let error = CharsetTextReader::new(Cursor::new(vec![0xFF]), Utf8Codec, CodingErrorPolicy::Strict)
         .expect_err("strict mode must reject invalid text");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -96,8 +83,25 @@ fn test_new_rejects_invalid_bytes_in_strict_mode() {
 
 #[test]
 fn test_new_replaces_invalid_bytes_in_replace_mode() -> std::io::Result<()> {
-    let mut reader =
-        EncodedTextReader::new(Cursor::new(vec![0xFF]), UTF_8, CodingErrorPolicy::Replace)?;
+    let mut reader = CharsetTextReader::new(Cursor::new(vec![0xFF]), Utf8Codec, CodingErrorPolicy::Replace)?;
+    let mut output = String::new();
+
+    assert_eq!(1, reader.read_to_string(&mut output)?);
+    assert_eq!("\u{FFFD}", output);
+    Ok(())
+}
+
+#[test]
+fn test_new_reports_incomplete_bytes_in_strict_mode() {
+    let error = CharsetTextReader::new(Cursor::new(vec![0xE4, 0xB8]), Utf8Codec, CodingErrorPolicy::Strict)
+        .expect_err("strict mode must reject incomplete text");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+}
+
+#[test]
+fn test_new_replaces_incomplete_bytes_in_replace_mode() -> std::io::Result<()> {
+    let mut reader = CharsetTextReader::new(Cursor::new(vec![0xE4, 0xB8]), Utf8Codec, CodingErrorPolicy::Replace)?;
     let mut output = String::new();
 
     assert_eq!(1, reader.read_to_string(&mut output)?);

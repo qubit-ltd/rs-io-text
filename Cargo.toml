@@ -1,14 +1,14 @@
 [package]
-name = "qubit-text-io"
+name = "qubit-io-text"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.94"
 authors = ["Haixing Hu <starfish.hu@gmail.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/qubit-ltd/rs-text-io"
+repository = "https://github.com/qubit-ltd/rs-io-text"
 description = "Text-oriented I/O traits and adapters for Rust"
-homepage = "https://github.com/qubit-ltd/rs-text-io"
-documentation = "https://docs.rs/qubit-text-io"
+homepage = "https://github.com/qubit-ltd/rs-io-text"
+documentation = "https://docs.rs/qubit-io-text"
 readme = "README.md"
 keywords = ["text", "io", "unicode", "encoding", "qubit"]
 categories = ["encoding", "rust-patterns"]
@@ -27,11 +27,12 @@ include = [
 ]
 
 [lib]
-name = "qubit_text_io"
+name = "qubit_io_text"
 doctest = true
 
 [dependencies]
-encoding_rs = "0.8"
+qubit-codec-text = { version = "0.1", path = "../rs-codec-text" }
+qubit-io = { version = "0.6", path = "../rs-io" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

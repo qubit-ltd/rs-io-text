@@ -9,8 +9,8 @@
  ******************************************************************************/
 //! Text reader and writer adapters.
 
-mod encoded_text_reader;
-mod encoded_text_writer;
+mod charset_text_reader;
+mod charset_text_writer;
 mod str_text_reader;
 mod string_text_reader;
 mod string_text_writer;
@@ -18,8 +18,8 @@ mod text_cursor;
 mod utf8_text_reader;
 mod utf8_text_writer;
 
-pub use encoded_text_reader::EncodedTextReader;
-pub use encoded_text_writer::EncodedTextWriter;
+pub use charset_text_reader::CharsetTextReader;
+pub use charset_text_writer::CharsetTextWriter;
 pub use str_text_reader::StrTextReader;
 pub use string_text_reader::StringTextReader;
 pub use string_text_writer::StringTextWriter;

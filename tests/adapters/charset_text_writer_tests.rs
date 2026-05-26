@@ -1,0 +1,165 @@
+use std::io::{
+    self,
+    ErrorKind,
+    Write,
+};
+
+use qubit_codec_text::{
+    Charset,
+    CharsetDecodeResult,
+    CharsetEncodeError,
+    CharsetEncodeErrorKind,
+    CharsetEncodeResult,
+    DecodeStatus,
+};
+use qubit_io_text::{
+    AsciiCodec,
+    CharsetCodec,
+    CharsetTextWriter,
+    CodingErrorPolicy,
+    LineEnding,
+    TextWrite,
+    Utf8Codec,
+};
+
+struct FailingWriter;
+
+impl Write for FailingWriter {
+    fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+        Err(io::Error::other("write failed"))
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Err(io::Error::other("flush failed"))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct NeedOutputCodec;
+
+impl CharsetCodec for NeedOutputCodec {
+    type Unit = u8;
+
+    fn charset(&self) -> Charset {
+        Charset::ASCII
+    }
+
+    fn max_units_per_char(&self) -> usize {
+        1
+    }
+
+    fn decode_one(&self, _input: &[Self::Unit], _index: usize) -> CharsetDecodeResult<DecodeStatus> {
+        unreachable!("writer tests do not decode with NeedOutputCodec")
+    }
+
+    fn encode_one(&self, ch: char, output: &mut [Self::Unit], index: usize) -> CharsetEncodeResult<usize> {
+        if ch == 'B' {
+            let kind = CharsetEncodeErrorKind::BufferTooSmall {
+                required: index + 2,
+                available: output.len().saturating_sub(index),
+            };
+            Err(CharsetEncodeError::new(Charset::ASCII, kind, index))
+        } else {
+            output[index] = ch as u8;
+            Ok(1)
+        }
+    }
+}
+
+#[test]
+fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
+    let mut output = Vec::new();
+    {
+        let mut writer = CharsetTextWriter::new(&mut output, Utf8Codec, CodingErrorPolicy::Strict)
+            .with_line_ending(LineEnding::CrLf);
+
+        writer.write_char('A')?;
+        writer.write_chars(&['B', 'C'])?;
+        writer.write_line("中文")?;
+        writer.flush()?;
+    }
+
+    assert_eq!("ABC中文\r\n".as_bytes(), output.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_write_rejects_unencodable_text_in_strict_mode() {
+    let mut output = Vec::new();
+    let mut writer = CharsetTextWriter::new(&mut output, AsciiCodec, CodingErrorPolicy::Strict);
+
+    let error = writer
+        .write_str("🙂")
+        .expect_err("strict mode must reject unencodable text");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_write_chars_rejects_unencodable_text_in_strict_mode() {
+    let mut output = Vec::new();
+    let mut writer = CharsetTextWriter::new(&mut output, AsciiCodec, CodingErrorPolicy::Strict);
+
+    let error = writer
+        .write_chars(&['🙂'])
+        .expect_err("strict mode must reject unencodable chars");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_write_replaces_unencodable_text_in_replace_mode() -> std::io::Result<()> {
+    let mut output = Vec::new();
+    {
+        let mut writer = CharsetTextWriter::new(&mut output, AsciiCodec, CodingErrorPolicy::Replace);
+
+        writer.write_str("🙂")?;
+        writer.flush()?;
+    }
+
+    assert_eq!(b"?", output.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_accessors_and_into_inner() -> std::io::Result<()> {
+    let output = Vec::new();
+    let mut writer = CharsetTextWriter::new(output, AsciiCodec, CodingErrorPolicy::Strict);
+
+    assert!(writer.get_ref().is_empty());
+    writer.get_mut().extend_from_slice(b"prefix:");
+    assert_eq!(LineEnding::Lf, writer.line_ending());
+    writer.write_str("ascii")?;
+    writer.flush()?;
+
+    assert_eq!(b"prefix:ascii", writer.into_inner().as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_write_methods_propagate_underlying_errors() {
+    let mut writer = CharsetTextWriter::new(FailingWriter, AsciiCodec, CodingErrorPolicy::Strict);
+
+    assert_eq!(
+        ErrorKind::Other,
+        writer.write_char('x').expect_err("write_char must fail").kind(),
+    );
+    assert_eq!(
+        ErrorKind::Other,
+        writer.write_chars(&['x']).expect_err("write_chars must fail").kind(),
+    );
+    assert_eq!(
+        ErrorKind::Other,
+        writer.write_line("x").expect_err("write_line must fail").kind(),
+    );
+    assert_eq!(ErrorKind::Other, writer.flush().expect_err("flush must fail").kind(),);
+}
+
+#[test]
+fn test_write_reports_codec_need_output_as_io_error() {
+    let mut writer = CharsetTextWriter::new(Vec::new(), NeedOutputCodec, CodingErrorPolicy::Strict);
+
+    let error = writer
+        .write_char('B')
+        .expect_err("codec output contract errors must be reported");
+
+    assert_eq!(ErrorKind::Other, error.kind());
+}

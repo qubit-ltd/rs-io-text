@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use qubit_text_io::prelude::{
+use qubit_io_text::prelude::{
     StrTextReader,
     TextRead,
     TextWrite,
