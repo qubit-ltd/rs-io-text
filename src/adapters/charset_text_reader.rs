@@ -15,9 +15,10 @@ use std::io::{
 use qubit_codec_text::{
     CharsetCodec,
     CharsetDecodeError,
+    CharsetDecodePolicy,
     CharsetDecoder,
-    Coder,
-    CoderStatus,
+    TranscodeStatus,
+    Transcoder,
 };
 
 use crate::{
@@ -106,6 +107,9 @@ impl TextLineRead for CharsetTextReader {
 
 /// Decodes bytes into a string according to the requested policy.
 ///
+/// This function treats the byte slice as closed input: if decoding stops at an
+/// incomplete tail, the tail is handled by the requested EOF policy.
+///
 /// # Parameters
 ///
 /// - `bytes`: Encoded input bytes.
@@ -124,32 +128,29 @@ fn decode_bytes<C>(bytes: &[u8], codec: C, policy: CodingErrorPolicy) -> io::Res
 where
     C: CharsetCodec<Unit = u8>,
 {
-    let mut decoder = CharsetDecoder::new(codec);
-    decoder.set_malformed_action(policy.malformed_action());
+    let charset = codec.charset();
+    let mut decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
     let output_len = decoder.max_output_len(bytes.len()).unwrap_or(bytes.len()).max(1);
     let mut chars = vec!['\0'; output_len];
     let progress = decoder
-        .convert(bytes, 0, chars.as_mut_slice(), 0)
+        .transcode(bytes, 0, chars.as_mut_slice(), 0)
         .map_err(decode_error_to_io)?;
+    let written = progress.written();
     match progress.status() {
-        CoderStatus::Complete => {
-            chars.truncate(progress.written());
+        TranscodeStatus::Complete => {
+            chars.truncate(written);
             Ok(chars.into_iter().collect())
         }
-        CoderStatus::NeedInput { .. } if policy == CodingErrorPolicy::Replace => {
-            chars.truncate(progress.written());
-            chars.push(CharsetDecoder::<C>::DEFAULT_REPLACEMENT);
+        TranscodeStatus::NeedInput { .. } if policy == CodingErrorPolicy::Replace => {
+            chars.truncate(written);
+            chars.push(CharsetDecodePolicy::DEFAULT_REPLACEMENT);
             Ok(chars.into_iter().collect())
         }
-        CoderStatus::NeedInput { .. } => Err(io::Error::new(
+        TranscodeStatus::NeedInput { input_index, .. } => Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!(
-                "incomplete {} input at unit {}",
-                decoder.codec().charset(),
-                progress.index().unwrap_or(bytes.len()),
-            ),
+            format!("incomplete {charset} input at unit {input_index}"),
         )),
-        CoderStatus::NeedOutput { .. } => unreachable!("decoder maximum-output contract failed"),
+        TranscodeStatus::NeedOutput { .. } => unreachable!("decoder maximum-output contract failed"),
     }
 }
 

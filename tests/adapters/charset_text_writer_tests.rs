@@ -1,16 +1,21 @@
-use std::io::{
-    self,
-    ErrorKind,
-    Write,
+use std::{
+    io::{
+        self,
+        ErrorKind,
+        Write,
+    },
+    num::NonZeroUsize,
 };
 
 use qubit_codec_text::{
     Charset,
+    CharsetDecodeError,
     CharsetDecodeResult,
     CharsetEncodeError,
     CharsetEncodeErrorKind,
+    CharsetEncodeProbe,
     CharsetEncodeResult,
-    DecodeStatus,
+    Codec,
 };
 use qubit_io_text::{
     AsciiCodec,
@@ -43,24 +48,39 @@ impl CharsetCodec for NeedOutputCodec {
     fn charset(&self) -> Charset {
         Charset::ASCII
     }
+}
 
-    fn max_units_per_char(&self) -> usize {
-        1
+impl CharsetEncodeProbe for NeedOutputCodec {
+    fn encode_len(&self, ch: char, _index: usize) -> CharsetEncodeResult<usize> {
+        if ch == 'B' { Ok(2) } else { Ok(1) }
+    }
+}
+
+unsafe impl Codec<char, u8> for NeedOutputCodec {
+    type DecodeError = CharsetDecodeError;
+    type EncodeError = CharsetEncodeError;
+
+    fn min_units_per_value(&self) -> NonZeroUsize {
+        NonZeroUsize::new(1).expect("unit width is non-zero")
     }
 
-    fn decode_one(&self, _input: &[Self::Unit], _index: usize) -> CharsetDecodeResult<DecodeStatus> {
+    fn max_units_per_value(&self) -> NonZeroUsize {
+        NonZeroUsize::new(1).expect("unit width is non-zero")
+    }
+
+    unsafe fn decode_unchecked(&self, _input: &[u8], _index: usize) -> CharsetDecodeResult<(char, NonZeroUsize)> {
         unreachable!("writer tests do not decode with NeedOutputCodec")
     }
 
-    fn encode_one(&self, ch: char, output: &mut [Self::Unit], index: usize) -> CharsetEncodeResult<usize> {
-        if ch == 'B' {
+    unsafe fn encode_unchecked(&self, value: &char, output: &mut [u8], index: usize) -> CharsetEncodeResult<usize> {
+        if *value == 'B' {
             let kind = CharsetEncodeErrorKind::BufferTooSmall {
                 required: index + 2,
                 available: output.len().saturating_sub(index),
             };
             Err(CharsetEncodeError::new(Charset::ASCII, kind, index))
         } else {
-            output[index] = ch as u8;
+            output[index] = *value as u8;
             Ok(1)
         }
     }

@@ -13,6 +13,7 @@ pub use crate::{
     AsciiCodec,
     ByteOrder,
     CharsetCodec,
+    CharsetEncodeProbe,
     CharsetTextReader,
     CharsetTextWriter,
     CodingErrorPolicy,

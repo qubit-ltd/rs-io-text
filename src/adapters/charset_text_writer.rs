@@ -13,12 +13,13 @@ use std::io::{
 };
 
 use qubit_codec_text::{
-    CharsetCodec,
     CharsetEncodeError,
+    CharsetEncodePolicy,
+    CharsetEncodeProbe,
     CharsetEncoder,
-    Coder,
-    CoderProgress,
-    CoderStatus,
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
 };
 
 use crate::{
@@ -31,7 +32,7 @@ use crate::{
 #[derive(Debug)]
 pub struct CharsetTextWriter<W, C>
 where
-    C: CharsetCodec<Unit = u8>,
+    C: CharsetEncodeProbe<Unit = u8>,
 {
     inner: W,
     encoder: CharsetEncoder<C>,
@@ -41,7 +42,7 @@ where
 impl<W, C> CharsetTextWriter<W, C>
 where
     W: Write,
-    C: CharsetCodec<Unit = u8>,
+    C: CharsetEncodeProbe<Unit = u8>,
 {
     /// Creates a charset text writer.
     ///
@@ -57,13 +58,16 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if `codec` cannot encode either the default replacement character
-    /// or the fallback `?` replacement. That indicates a broken codec invariant,
-    /// not recoverable input data.
+    /// In replacement mode, panics if `codec` cannot encode either the default
+    /// replacement character or the fallback `?` replacement. That indicates a
+    /// broken codec invariant, not recoverable input data.
     #[must_use]
     pub fn new(inner: W, codec: C, policy: CodingErrorPolicy) -> Self {
-        let mut encoder = CharsetEncoder::new(codec);
-        encoder.set_unmappable_action(policy.unmappable_action());
+        let encoder = match policy {
+            CodingErrorPolicy::Strict => CharsetEncoder::with_policy(codec, CharsetEncodePolicy::report())
+                .expect("reporting encode policy does not require an encodable replacement"),
+            CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
+        };
         Self {
             inner,
             encoder,
@@ -119,7 +123,7 @@ where
 impl<W, C> TextWrite for CharsetTextWriter<W, C>
 where
     W: Write,
-    C: CharsetCodec<Unit = u8>,
+    C: CharsetEncodeProbe<Unit = u8>,
 {
     type Error = io::Error;
 
@@ -138,7 +142,7 @@ where
         let mut bytes = vec![0_u8; output_len];
         let progress = self
             .encoder
-            .convert(chars, 0, bytes.as_mut_slice(), 0)
+            .transcode(chars, 0, bytes.as_mut_slice(), 0)
             .map_err(encode_error_to_io)?;
         let written = encoded_written(progress)?;
         self.inner.write_all(&bytes[..written])?;
@@ -175,12 +179,12 @@ fn encode_error_to_io(error: CharsetEncodeError) -> io::Error {
 }
 
 /// Returns the written unit count for a completed encoder progress.
-fn encoded_written(progress: CoderProgress) -> io::Result<usize> {
+fn encoded_written(progress: TranscodeProgress) -> io::Result<usize> {
     match progress.status() {
-        CoderStatus::Complete => Ok(progress.written()),
-        CoderStatus::NeedOutput { .. } => Err(io::Error::other(
+        TranscodeStatus::Complete => Ok(progress.written()),
+        TranscodeStatus::NeedOutput { .. } => Err(io::Error::other(
             "charset encoder requested more output than its maximum-output contract",
         )),
-        CoderStatus::NeedInput { .. } => unreachable!("encoder requested more character input"),
+        TranscodeStatus::NeedInput { .. } => unreachable!("encoder requested more character input"),
     }
 }

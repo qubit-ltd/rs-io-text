@@ -7,10 +7,7 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-use qubit_codec_text::{
-    MalformedAction,
-    UnmappableAction,
-};
+use qubit_codec_text::CharsetDecodePolicy;
 
 /// Controls how text adapters handle malformed or unencodable data.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -24,29 +21,16 @@ pub enum CodingErrorPolicy {
 }
 
 impl CodingErrorPolicy {
-    /// Converts this policy to a text-codec malformed-input action.
+    /// Converts this policy to a text-codec decode policy.
     ///
     /// # Returns
     ///
-    /// Returns [`MalformedAction::Report`] for strict mode and
-    /// [`MalformedAction::Replace`] for replacement mode.
-    pub(crate) const fn malformed_action(self) -> MalformedAction {
+    /// Returns a reporting policy for strict mode and a default replacement
+    /// policy for replacement mode.
+    pub(crate) const fn decode_policy(self) -> CharsetDecodePolicy {
         match self {
-            Self::Strict => MalformedAction::Report,
-            Self::Replace => MalformedAction::Replace,
-        }
-    }
-
-    /// Converts this policy to a text-codec unmappable-character action.
-    ///
-    /// # Returns
-    ///
-    /// Returns [`UnmappableAction::Report`] for strict mode and
-    /// [`UnmappableAction::Replace`] for replacement mode.
-    pub(crate) const fn unmappable_action(self) -> UnmappableAction {
-        match self {
-            Self::Strict => UnmappableAction::Report,
-            Self::Replace => UnmappableAction::Replace,
+            Self::Strict => CharsetDecodePolicy::report(),
+            Self::Replace => CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
         }
     }
 }

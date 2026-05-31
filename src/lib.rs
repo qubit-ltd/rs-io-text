@@ -37,6 +37,7 @@ pub use qubit_codec_text::{
     AsciiCodec,
     ByteOrder,
     CharsetCodec,
+    CharsetEncodeProbe,
     Latin1Codec,
     Utf8Codec,
     Utf16ByteCodec,
