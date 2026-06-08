@@ -7,7 +7,10 @@
 // =============================================================================
 use std::{
     error::Error as StdError,
-    io::{self, Write},
+    io::{
+        self,
+        Write,
+    },
 };
 
 use qubit_codec::{
@@ -15,7 +18,10 @@ use qubit_codec::{
     BufferedTranscoder,
 };
 
-use crate::{LineEnding, TextWrite};
+use crate::{
+    LineEnding,
+    TextWrite,
+};
 
 /// Default byte buffer capacity used by buffered text writers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -26,7 +32,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// Buffered text writer driven by a character-to-byte transcoder.
 ///
 /// This type owns a byte writer and a streaming encoder. Encoded bytes are
-/// buffered by [`qubit_io::buffered::BufferedOutput`].
+/// buffered by [`qubit_codec::BufferedEncodeOutput`].
 #[derive(Debug)]
 pub struct BufferedWriter<W, E>
 where
