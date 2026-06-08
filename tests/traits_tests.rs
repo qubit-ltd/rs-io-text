@@ -1,7 +1,4 @@
-use qubit_io_text::{
-    TextRead,
-    TextWrite,
-};
+use qubit_io_text::{TextRead, TextWrite};
 
 #[derive(Debug, Eq, PartialEq)]
 struct ReadError;

@@ -1,23 +1,13 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
-use std::io::{
-    self,
-    BufRead,
-    BufReader,
-    Read,
-};
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+use std::io::{self, BufRead, BufReader, Read};
 
-use crate::{
-    TextLineRead,
-    TextRead,
-};
+use crate::{TextLineRead, TextRead};
 
 /// Streaming text reader for UTF-8 byte input.
 #[derive(Debug)]
@@ -187,5 +177,8 @@ fn utf8_char_width(byte: u8) -> io::Result<usize> {
 /// # Returns
 /// An [`io::Error`] with [`io::ErrorKind::InvalidData`].
 fn invalid_utf8_error(error: std::str::Utf8Error) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, format!("invalid UTF-8 text: {error}"))
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("invalid UTF-8 text: {error}"),
+    )
 }

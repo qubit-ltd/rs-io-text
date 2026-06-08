@@ -1,10 +1,6 @@
 use std::convert::Infallible;
 
-use qubit_io_text::{
-    LineEnding,
-    StringTextWriter,
-    TextWrite,
-};
+use qubit_io_text::{LineEnding, StringTextWriter, TextWrite};
 
 #[test]
 fn test_string_implements_text_write() -> Result<(), Infallible> {

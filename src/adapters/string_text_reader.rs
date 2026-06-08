@@ -1,23 +1,15 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use std::convert::Infallible;
 
 use crate::{
-    TextLineRead,
-    TextRead,
-    adapters::text_cursor::{
-        read_char_at,
-        read_chars_at,
-        read_line_at,
-        read_to_string_at,
-    },
+    TextLineRead, TextRead,
+    adapters::text_cursor::{read_char_at, read_chars_at, read_line_at, read_to_string_at},
 };
 
 /// Text reader over an owned string.

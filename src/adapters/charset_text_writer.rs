@@ -1,42 +1,28 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
-use std::io::{
-    self,
-    Write,
-};
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+use std::io::{self, Write};
 
-use qubit_codec_text::{
-    CharsetEncodeError,
-    CharsetEncodePolicy,
-    CharsetEncodeProbe,
-    CharsetEncoder,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec_text::{CharsetEncodePolicy, CharsetEncodeProbe, CharsetEncoder};
 
-use crate::{
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-};
+use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
 
 /// Text writer that encodes Unicode text with a charset codec.
+///
+/// This adapter is a charset-specific wrapper around [`BufferedWriter`]. It
+/// constructs the appropriate [`CharsetEncoder`] from the supplied codec and
+/// unmappable-character policy.
 #[derive(Debug)]
 pub struct CharsetTextWriter<W, C>
 where
+    W: Write,
     C: CharsetEncodeProbe<Unit = u8>,
 {
-    inner: W,
-    encoder: CharsetEncoder<C>,
-    line_ending: LineEnding,
+    writer: BufferedWriter<W, CharsetEncoder<C>>,
 }
 
 impl<W, C> CharsetTextWriter<W, C>
@@ -44,7 +30,7 @@ where
     W: Write,
     C: CharsetEncodeProbe<Unit = u8>,
 {
-    /// Creates a charset text writer.
+    /// Creates a charset text writer with the default buffer capacity.
     ///
     /// # Parameters
     ///
@@ -63,15 +49,34 @@ where
     /// broken codec invariant, not recoverable input data.
     #[must_use]
     pub fn new(inner: W, codec: C, policy: CodingErrorPolicy) -> Self {
-        let encoder = match policy {
-            CodingErrorPolicy::Strict => CharsetEncoder::with_policy(codec, CharsetEncodePolicy::report())
-                .expect("reporting encode policy does not require an encodable replacement"),
-            CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
-        };
+        let encoder = create_encoder(codec, policy);
         Self {
-            inner,
-            encoder,
-            line_ending: LineEnding::Lf,
+            writer: BufferedWriter::new(inner, encoder),
+        }
+    }
+
+    /// Creates a charset text writer with a requested byte buffer capacity.
+    ///
+    /// # Parameters
+    ///
+    /// - `inner`: Byte writer to receive encoded bytes.
+    /// - `codec`: Byte-oriented charset codec used for outgoing text.
+    /// - `policy`: Unencodable text handling policy.
+    /// - `capacity`: Requested internal byte buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// Returns a text writer using LF line endings.
+    ///
+    /// # Panics
+    ///
+    /// In replacement mode, panics if no replacement character can be encoded
+    /// by the codec.
+    #[must_use]
+    pub fn with_capacity(inner: W, codec: C, policy: CodingErrorPolicy, capacity: usize) -> Self {
+        let encoder = create_encoder(codec, policy);
+        Self {
+            writer: BufferedWriter::with_capacity(inner, encoder, capacity),
         }
     }
 
@@ -85,9 +90,29 @@ where
     ///
     /// Returns this writer with the configured line ending.
     #[must_use]
-    pub const fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
-        self.line_ending = line_ending;
+    pub fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
+        self.writer = self.writer.with_line_ending(line_ending);
         self
+    }
+
+    /// Returns a shared reference to the wrapped byte writer.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte writer. Pending bytes may still be buffered.
+    #[must_use]
+    pub const fn get_ref(&self) -> &W {
+        self.writer.inner()
+    }
+
+    /// Returns a mutable reference to the wrapped byte writer.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte writer. Flush first if it must observe all
+    /// prior text writes.
+    pub fn get_mut(&mut self) -> &mut W {
+        self.writer.inner_mut()
     }
 
     /// Returns a shared reference to the wrapped byte writer.
@@ -96,8 +121,8 @@ where
     ///
     /// Returns the wrapped byte writer.
     #[must_use]
-    pub const fn get_ref(&self) -> &W {
-        &self.inner
+    pub const fn inner(&self) -> &W {
+        self.writer.inner()
     }
 
     /// Returns a mutable reference to the wrapped byte writer.
@@ -105,18 +130,32 @@ where
     /// # Returns
     ///
     /// Returns the wrapped byte writer.
-    pub fn get_mut(&mut self) -> &mut W {
-        &mut self.inner
+    pub fn inner_mut(&mut self) -> &mut W {
+        self.writer.inner_mut()
     }
 
-    /// Returns the wrapped byte writer.
+    /// Finishes codec-owned output and flushes pending bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding finalization errors or I/O errors from the wrapped
+    /// writer. After a successful finish, later write calls return
+    /// [`io::ErrorKind::InvalidInput`].
+    pub fn finish(&mut self) -> io::Result<()> {
+        self.writer.finish()
+    }
+
+    /// Returns the wrapped byte writer after finishing and flushing.
     ///
     /// # Returns
     ///
-    /// Returns the underlying byte writer.
-    #[must_use]
-    pub fn into_inner(self) -> W {
-        self.inner
+    /// Returns the underlying byte writer after pending bytes reach it.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding finalization or I/O errors.
+    pub fn into_inner(self) -> io::Result<W> {
+        self.writer.into_inner()
     }
 }
 
@@ -129,62 +168,55 @@ where
 
     #[inline]
     fn line_ending(&self) -> LineEnding {
-        self.line_ending
+        self.writer.configured_line_ending()
     }
 
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
-        self.write_chars(&[ch])
+        self.writer.write_char(ch)
     }
 
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
-        let output_len = self.encoder.max_output_len(chars.len()).unwrap_or(chars.len()).max(1);
-        let mut bytes = vec![0_u8; output_len];
-        let progress = self
-            .encoder
-            .transcode(chars, 0, bytes.as_mut_slice(), 0)
-            .map_err(encode_error_to_io)?;
-        let written = encoded_written(progress)?;
-        self.inner.write_all(&bytes[..written])?;
-        Ok(())
+        self.writer.write_chars(chars)
     }
 
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
-        let chars: Vec<char> = text.chars().collect();
-        self.write_chars(chars.as_slice())
+        self.writer.write_str(text)
     }
 
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
-        self.write_str(line)?;
-        self.write_str(self.line_ending.as_str())
+        self.writer.write_line(line)
     }
 
-    #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
-        self.inner.flush()
+        self.writer.flush()
     }
 }
 
-/// Converts a charset encoding error into an I/O error.
+/// Creates a charset encoder from the public text I/O policy.
 ///
 /// # Parameters
 ///
-/// - `error`: Charset encoding error.
+/// - `codec`: Charset codec used for outgoing text.
+/// - `policy`: Text I/O unencodable-character policy.
 ///
 /// # Returns
 ///
-/// Returns an [`io::ErrorKind::InvalidInput`] error carrying the codec context.
-fn encode_error_to_io(error: CharsetEncodeError) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidInput, error)
-}
-
-/// Returns the written unit count for a completed encoder progress.
-fn encoded_written(progress: TranscodeProgress) -> io::Result<usize> {
-    match progress.status() {
-        TranscodeStatus::Complete => Ok(progress.written()),
-        TranscodeStatus::NeedOutput { .. } => Err(io::Error::other(
-            "charset encoder requested more output than its maximum-output contract",
-        )),
-        TranscodeStatus::NeedInput { .. } => unreachable!("encoder requested more character input"),
+/// Returns a streaming charset encoder.
+///
+/// # Panics
+///
+/// Panics only when replacement mode cannot build a replacement encoder for
+/// the supplied codec, matching [`CharsetEncoder::new`] semantics.
+fn create_encoder<C>(codec: C, policy: CodingErrorPolicy) -> CharsetEncoder<C>
+where
+    C: CharsetEncodeProbe<Unit = u8>,
+{
+    match policy {
+        CodingErrorPolicy::Strict => {
+            CharsetEncoder::with_policy(codec, CharsetEncodePolicy::report())
+                .expect("reporting encode policy does not require an encodable replacement")
+        }
+        CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
     }
 }

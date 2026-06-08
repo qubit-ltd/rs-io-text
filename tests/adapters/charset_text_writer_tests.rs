@@ -1,30 +1,15 @@
 use std::{
-    io::{
-        self,
-        ErrorKind,
-        Write,
-    },
+    io::{self, ErrorKind, Write},
     num::NonZeroUsize,
 };
 
 use qubit_codec_text::{
-    Charset,
-    CharsetDecodeError,
-    CharsetDecodeResult,
-    CharsetEncodeError,
-    CharsetEncodeErrorKind,
-    CharsetEncodeProbe,
-    CharsetEncodeResult,
-    Codec,
+    Charset, CharsetDecodeError, CharsetDecodeResult, CharsetEncodeError, CharsetEncodeErrorKind,
+    CharsetEncodeProbe, CharsetEncodeResult, Codec,
 };
 use qubit_io_text::{
-    AsciiCodec,
-    CharsetCodec,
-    CharsetTextWriter,
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-    Utf8Codec,
+    AsciiCodec, CharsetCodec, CharsetTextWriter, CharsetWriteExt, CodingErrorPolicy, LineEnding,
+    TextWrite, Utf8Codec,
 };
 
 struct FailingWriter;
@@ -43,8 +28,6 @@ impl Write for FailingWriter {
 struct NeedOutputCodec;
 
 impl CharsetCodec for NeedOutputCodec {
-    type Unit = u8;
-
     fn charset(&self) -> Charset {
         Charset::ASCII
     }
@@ -56,7 +39,9 @@ impl CharsetEncodeProbe for NeedOutputCodec {
     }
 }
 
-unsafe impl Codec<char, u8> for NeedOutputCodec {
+unsafe impl Codec for NeedOutputCodec {
+    type Value = char;
+    type Unit = u8;
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
@@ -68,11 +53,20 @@ unsafe impl Codec<char, u8> for NeedOutputCodec {
         NonZeroUsize::new(1).expect("unit width is non-zero")
     }
 
-    unsafe fn decode_unchecked(&self, _input: &[u8], _index: usize) -> CharsetDecodeResult<(char, NonZeroUsize)> {
+    unsafe fn decode_unchecked(
+        &self,
+        _input: &[u8],
+        _index: usize,
+    ) -> CharsetDecodeResult<(char, NonZeroUsize)> {
         unreachable!("writer tests do not decode with NeedOutputCodec")
     }
 
-    unsafe fn encode_unchecked(&self, value: &char, output: &mut [u8], index: usize) -> CharsetEncodeResult<usize> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &char,
+        output: &mut [u8],
+        index: usize,
+    ) -> CharsetEncodeResult<usize> {
         if *value == 'B' {
             let kind = CharsetEncodeErrorKind::BufferTooSmall {
                 required: index + 2,
@@ -129,7 +123,8 @@ fn test_write_chars_rejects_unencodable_text_in_strict_mode() {
 fn test_write_replaces_unencodable_text_in_replace_mode() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
-        let mut writer = CharsetTextWriter::new(&mut output, AsciiCodec, CodingErrorPolicy::Replace);
+        let mut writer =
+            CharsetTextWriter::new(&mut output, AsciiCodec, CodingErrorPolicy::Replace);
 
         writer.write_str("🙂")?;
         writer.flush()?;
@@ -150,27 +145,37 @@ fn test_accessors_and_into_inner() -> std::io::Result<()> {
     writer.write_str("ascii")?;
     writer.flush()?;
 
-    assert_eq!(b"prefix:ascii", writer.into_inner().as_slice());
+    let output = writer.into_inner()?;
+    assert_eq!(b"prefix:ascii", output.as_slice());
     Ok(())
 }
 
 #[test]
 fn test_write_methods_propagate_underlying_errors() {
-    let mut writer = CharsetTextWriter::new(FailingWriter, AsciiCodec, CodingErrorPolicy::Strict);
+    let mut writer =
+        CharsetTextWriter::with_capacity(FailingWriter, AsciiCodec, CodingErrorPolicy::Strict, 1);
 
+    writer
+        .write_char('x')
+        .expect("first single-byte write should stay buffered");
     assert_eq!(
         ErrorKind::Other,
-        writer.write_char('x').expect_err("write_char must fail").kind(),
+        writer
+            .write_chars(&['x'])
+            .expect_err("write_chars should flush buffered bytes before writing")
+            .kind(),
     );
     assert_eq!(
         ErrorKind::Other,
-        writer.write_chars(&['x']).expect_err("write_chars must fail").kind(),
+        writer
+            .write_line("x")
+            .expect_err("write_line should report pending buffered write errors")
+            .kind(),
     );
     assert_eq!(
         ErrorKind::Other,
-        writer.write_line("x").expect_err("write_line must fail").kind(),
+        writer.flush().expect_err("flush must fail").kind(),
     );
-    assert_eq!(ErrorKind::Other, writer.flush().expect_err("flush must fail").kind(),);
 }
 
 #[test]
@@ -181,5 +186,43 @@ fn test_write_reports_codec_need_output_as_io_error() {
         .write_char('B')
         .expect_err("codec output contract errors must be reported");
 
-    assert_eq!(ErrorKind::Other, error.kind());
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_with_capacity_buffers_until_flush() -> std::io::Result<()> {
+    let mut output = Vec::new();
+    {
+        let mut writer =
+            CharsetTextWriter::with_capacity(&mut output, Utf8Codec, CodingErrorPolicy::Strict, 64);
+
+        writer.write_str("buffered")?;
+        assert!(writer.get_ref().is_empty());
+        writer.flush()?;
+    }
+
+    assert_eq!(b"buffered", output.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_charset_write_ext_creates_stream_writer() -> std::io::Result<()> {
+    let output = Vec::new();
+    let mut writer = output.charset_text_writer(AsciiCodec, CodingErrorPolicy::Replace);
+
+    writer.write_line("A🙂")?;
+    let output = writer.into_inner()?;
+
+    assert_eq!(b"A?\n", output.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_charset_write_ext_writes_one_shot_text() -> std::io::Result<()> {
+    let mut output = Vec::new();
+
+    output.write_str_with_charset("A🙂", AsciiCodec, CodingErrorPolicy::Replace)?;
+
+    assert_eq!(b"A?", output.as_slice());
+    Ok(())
 }

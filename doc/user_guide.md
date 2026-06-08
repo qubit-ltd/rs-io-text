@@ -13,6 +13,7 @@ UTF-8 byte streams, and byte-oriented `qubit-codec-text` charsets.
 | In-memory writer | `StringTextWriter` | write text into a borrowed `String` with line-ending policy |
 | UTF-8 streams | `Utf8TextReader`, `Utf8TextWriter` | adapt `Read` and `Write` byte streams as UTF-8 text |
 | Charset streams | `CharsetTextReader`, `CharsetTextWriter` | adapt byte-oriented `qubit-codec-text` codecs |
+| Extension traits | `CharsetReadExt`, `CharsetWriteExt` | create charset text streams from `Read` and `Write` values |
 | Policy values | `LineEnding`, `CodingErrorPolicy` | configure line endings and malformed/unmappable handling |
 
 ## Installation
@@ -122,11 +123,37 @@ let mut reader = CharsetTextReader::new(
     Cursor::new(vec![0xFF]),
     Utf8Codec,
     CodingErrorPolicy::Replace,
-)?;
+);
 let mut output = String::new();
 
 reader.read_to_string(&mut output)?;
 assert_eq!("\u{FFFD}", output);
+# Ok::<(), std::io::Error>(())
+```
+
+The same charset streams can be created from standard byte streams through
+extension traits:
+
+```rust
+use std::io::Cursor;
+
+use qubit_io_text::{
+    CharsetReadExt,
+    CharsetWriteExt,
+    CodingErrorPolicy,
+    TextRead,
+    Utf8Codec,
+};
+
+let mut reader = Cursor::new("hello".as_bytes().to_vec())
+    .charset_text_reader(Utf8Codec, CodingErrorPolicy::Strict);
+let mut text = String::new();
+reader.read_to_string(&mut text)?;
+assert_eq!("hello", text);
+
+let mut bytes = Vec::new();
+bytes.write_str_with_charset("hello", Utf8Codec, CodingErrorPolicy::Strict)?;
+assert_eq!(b"hello", bytes.as_slice());
 # Ok::<(), std::io::Error>(())
 ```
 

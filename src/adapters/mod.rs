@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Text reader and writer adapters.
 
 mod charset_text_reader;
@@ -25,3 +23,9 @@ pub use string_text_reader::StringTextReader;
 pub use string_text_writer::StringTextWriter;
 pub use utf8_text_reader::Utf8TextReader;
 pub use utf8_text_writer::Utf8TextWriter;
+
+/// Buffered charset-backed text reader.
+pub type BufferedCharsetTextReader<R, C> = CharsetTextReader<R, C>;
+
+/// Buffered charset-backed text writer.
+pub type BufferedCharsetTextWriter<W, C> = CharsetTextWriter<W, C>;

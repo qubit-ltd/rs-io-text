@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use crate::LineEnding;
 
 /// Writes Unicode text to a text sink.
@@ -20,7 +18,8 @@ pub trait TextWrite {
     /// Returns the configured line ending for [`TextWrite::write_line`].
     ///
     /// # Returns
-    /// The configured line ending. Implementations default to [`LineEnding::Lf`].
+    /// The configured line ending. Implementations default to
+    /// [`LineEnding::Lf`].
     #[must_use]
     fn line_ending(&self) -> LineEnding {
         LineEnding::Lf
@@ -52,8 +51,8 @@ pub trait TextWrite {
     /// - `text`: Text to write.
     ///
     /// # Errors
-    /// Returns an implementation-specific error when the text cannot be accepted
-    /// by the sink.
+    /// Returns an implementation-specific error when the text cannot be
+    /// accepted by the sink.
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error>;
 
     /// Writes a line followed by the configured line ending.

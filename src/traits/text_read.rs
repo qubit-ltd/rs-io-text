@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 /// Reads Unicode scalar values and strings from a text source.
 ///
 /// `TextRead` operates on Rust [`char`] and [`str`] values. Implementations are
@@ -42,7 +40,8 @@ pub trait TextRead {
     /// Reads all remaining text into `output`.
     ///
     /// # Parameters
-    /// - `output`: Destination string. Text is appended to the existing content.
+    /// - `output`: Destination string. Text is appended to the existing
+    ///   content.
     ///
     /// # Returns
     /// The number of Unicode scalar values appended to `output`.

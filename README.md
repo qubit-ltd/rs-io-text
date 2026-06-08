@@ -18,6 +18,7 @@ Text-oriented I/O traits and adapters for Rust.
 - UTF-8 byte stream adapters: `Utf8TextReader` and `Utf8TextWriter`;
 - charset adapters backed by `qubit-codec-text`: `CharsetTextReader` and
   `CharsetTextWriter`;
+- charset read/write extension traits: `CharsetReadExt` and `CharsetWriteExt`;
 - configurable line endings through `LineEnding`;
 - strict or replacement error policy through `CodingErrorPolicy`.
 
@@ -55,6 +56,8 @@ reference documentation is available on [docs.rs](https://docs.rs/qubit-io-text)
 - **`Utf8TextReader` / `Utf8TextWriter`**: direct UTF-8 byte stream adapters.
 - **`CharsetTextReader` / `CharsetTextWriter`**: adapters backed by
   `qubit-codec-text` charset codecs.
+- **`CharsetReadExt` / `CharsetWriteExt`**: extension traits that wrap
+  `Read` and `Write` streams as charset text readers and writers.
 
 ### Configuration
 
@@ -118,6 +121,8 @@ assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
 | `StringTextWriter` | `String`-backed writer |
 | `Utf8TextReader` / `Utf8TextWriter` | UTF-8 byte stream adapters |
 | `CharsetTextReader` / `CharsetTextWriter` | Charset codec backed byte stream adapters |
+| `BufferedCharsetTextReader` / `BufferedCharsetTextWriter` | Buffered charset stream aliases |
+| `CharsetReadExt` / `CharsetWriteExt` | Extension traits for `Read` and `Write` |
 
 ### Configuration Types
 

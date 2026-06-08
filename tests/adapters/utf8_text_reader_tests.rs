@@ -1,16 +1,6 @@
-use std::io::{
-    self,
-    BufReader,
-    Cursor,
-    ErrorKind,
-    Read,
-};
+use std::io::{self, BufReader, Cursor, ErrorKind, Read};
 
-use qubit_io_text::{
-    TextLineRead,
-    TextRead,
-    Utf8TextReader,
-};
+use qubit_io_text::{TextLineRead, TextRead, Utf8TextReader};
 
 struct FailingReader;
 
@@ -126,7 +116,9 @@ fn test_read_line_reports_invalid_utf8() {
 fn test_read_char_propagates_io_errors() {
     let mut reader = Utf8TextReader::from_read(FailingReader);
 
-    let error = reader.read_char().expect_err("reader I/O errors must be propagated");
+    let error = reader
+        .read_char()
+        .expect_err("reader I/O errors must be propagated");
     assert_eq!(ErrorKind::Other, error.kind());
 }
 
@@ -135,7 +127,9 @@ fn test_read_char_reports_invalid_utf8() {
     let input = Cursor::new(vec![0xE4, 0xFF, 0xAD]);
     let mut reader = Utf8TextReader::from_read(input);
 
-    let error = reader.read_char().expect_err("invalid UTF-8 scalar must be rejected");
+    let error = reader
+        .read_char()
+        .expect_err("invalid UTF-8 scalar must be rejected");
     assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
@@ -155,7 +149,9 @@ fn test_read_char_reports_unexpected_eof_in_utf8_sequence() {
     let input = Cursor::new(vec![0xE4, 0xB8]);
     let mut reader = Utf8TextReader::from_read(input);
 
-    let error = reader.read_char().expect_err("truncated UTF-8 scalar must be rejected");
+    let error = reader
+        .read_char()
+        .expect_err("truncated UTF-8 scalar must be rejected");
     assert_eq!(ErrorKind::UnexpectedEof, error.kind());
 }
 

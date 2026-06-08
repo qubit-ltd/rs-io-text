@@ -18,6 +18,7 @@
 - UTF-8 byte stream adapter：`Utf8TextReader` 和 `Utf8TextWriter`；
 - 基于 `qubit-codec-text` 的 charset adapter：`CharsetTextReader` 和
   `CharsetTextWriter`；
+- charset read/write 扩展 trait：`CharsetReadExt` 和 `CharsetWriteExt`；
 - 通过 `LineEnding` 配置换行；
 - 通过 `CodingErrorPolicy` 配置 strict 或 replacement 错误策略。
 
@@ -51,6 +52,8 @@
 - **`Utf8TextReader` / `Utf8TextWriter`**：直接处理 UTF-8 byte stream。
 - **`CharsetTextReader` / `CharsetTextWriter`**：基于 `qubit-codec-text`
   charset codec 的 adapter。
+- **`CharsetReadExt` / `CharsetWriteExt`**：把 `Read` / `Write` stream
+  包装为 charset text reader / writer 的扩展 trait。
 
 ### 配置
 
@@ -114,6 +117,8 @@ assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
 | `StringTextWriter` | 基于 `String` 的 writer |
 | `Utf8TextReader` / `Utf8TextWriter` | UTF-8 byte stream adapter |
 | `CharsetTextReader` / `CharsetTextWriter` | 基于 charset codec 的 byte stream adapter |
+| `BufferedCharsetTextReader` / `BufferedCharsetTextWriter` | buffered charset stream alias |
+| `CharsetReadExt` / `CharsetWriteExt` | 面向 `Read` / `Write` 的扩展 trait |
 
 ### 配置类型
 

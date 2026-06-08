@@ -1,168 +1,154 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
-use std::io::{
-    self,
-    Read,
-};
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+use std::io::{self, Read};
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecoder};
 
-use crate::{
-    CodingErrorPolicy,
-    StringTextReader,
-    TextLineRead,
-    TextRead,
-};
+use crate::{BufferedReader, CodingErrorPolicy, TextLineRead, TextRead};
 
-/// Text reader that decodes a byte reader with a charset codec.
+/// Text reader that decodes a byte stream with a charset codec.
 ///
-/// This adapter decodes the complete byte input during construction and then
-/// serves Unicode text from memory. Use it for bounded inputs such as
-/// configuration files, protocol fields, and already-limited payloads.
+/// This adapter is a charset-specific wrapper around [`BufferedReader`]. It
+/// constructs the appropriate [`CharsetDecoder`] from the supplied codec and
+/// malformed-input policy.
 #[derive(Debug)]
-pub struct CharsetTextReader {
-    inner: StringTextReader,
+pub struct CharsetTextReader<R, C>
+where
+    R: Read,
+    C: CharsetCodec<Unit = u8>,
+{
+    reader: BufferedReader<R, CharsetDecoder<C>>,
 }
 
-impl CharsetTextReader {
-    /// Reads and decodes all bytes from `reader`.
+impl<R, C> CharsetTextReader<R, C>
+where
+    R: Read,
+    C: CharsetCodec<Unit = u8>,
+{
+    /// Creates a charset text reader with the default buffer capacity.
     ///
     /// # Parameters
     ///
-    /// - `reader`: Byte reader to decode.
+    /// - `inner`: Byte reader to decode lazily.
     /// - `codec`: Byte-oriented charset codec used by the input.
     /// - `policy`: Malformed input handling policy.
     ///
     /// # Returns
     ///
-    /// Returns a text reader over the decoded content.
-    ///
-    /// # Errors
-    ///
-    /// Returns an I/O error when reading fails or when strict decoding finds
-    /// malformed or incomplete input bytes.
-    pub fn new<R, C>(mut reader: R, codec: C, policy: CodingErrorPolicy) -> io::Result<Self>
-    where
-        R: Read,
-        C: CharsetCodec<Unit = u8>,
-    {
-        let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes)?;
-        let text = decode_bytes(bytes.as_slice(), codec, policy)?;
-        Ok(Self {
-            inner: StringTextReader::new(text),
-        })
+    /// Returns a streaming text reader. Construction does not read from
+    /// `inner`; I/O and decode errors are reported by read methods.
+    #[must_use]
+    pub fn new(inner: R, codec: C, policy: CodingErrorPolicy) -> Self {
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
+        Self {
+            reader: BufferedReader::new(inner, decoder, policy),
+        }
     }
 
-    /// Returns the inner decoded string reader.
+    /// Creates a charset text reader with a requested byte buffer capacity.
+    ///
+    /// # Parameters
+    ///
+    /// - `inner`: Byte reader to decode lazily.
+    /// - `codec`: Byte-oriented charset codec used by the input.
+    /// - `policy`: Malformed input handling policy.
+    /// - `capacity`: Requested internal byte buffer capacity.
     ///
     /// # Returns
     ///
-    /// Returns the decoded string reader.
+    /// Returns a streaming text reader. The generic buffered text layer raises
+    /// too-small capacities enough to retain built-in charset tails.
     #[must_use]
-    pub fn into_inner(self) -> StringTextReader {
-        self.inner
+    pub fn with_capacity(inner: R, codec: C, policy: CodingErrorPolicy, capacity: usize) -> Self {
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
+        Self {
+            reader: BufferedReader::with_capacity(inner, decoder, policy, capacity),
+        }
+    }
+
+    /// Returns a shared reference to the wrapped byte reader.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte reader. It may already be positioned beyond
+    /// bytes retained in this reader's internal buffer.
+    #[must_use]
+    pub const fn get_ref(&self) -> &R {
+        self.reader.inner()
+    }
+
+    /// Returns a mutable reference to the wrapped byte reader.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte reader. Mutating it directly can invalidate the
+    /// logical stream position represented by buffered bytes.
+    pub fn get_mut(&mut self) -> &mut R {
+        self.reader.inner_mut()
+    }
+
+    /// Returns a shared reference to the wrapped byte reader.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte reader.
+    #[must_use]
+    pub const fn inner(&self) -> &R {
+        self.reader.inner()
+    }
+
+    /// Returns a mutable reference to the wrapped byte reader.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte reader.
+    pub fn inner_mut(&mut self) -> &mut R {
+        self.reader.inner_mut()
+    }
+
+    /// Consumes this reader and returns the wrapped byte reader.
+    ///
+    /// # Returns
+    ///
+    /// Returns the underlying reader. Any encoded bytes or decoded characters
+    /// already buffered by this reader are discarded.
+    #[must_use]
+    pub fn into_inner(self) -> R {
+        self.reader.into_inner()
     }
 }
 
-impl TextRead for CharsetTextReader {
-    type Error = io::Error;
-
-    #[inline]
-    fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
-        self.inner.read_char().map_err(|error| match error {})
-    }
-
-    #[inline]
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
-        self.inner.read_chars(output, max).map_err(|error| match error {})
-    }
-
-    #[inline]
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
-        self.inner.read_to_string(output).map_err(|error| match error {})
-    }
-}
-
-impl TextLineRead for CharsetTextReader {
-    #[inline]
-    fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
-        self.inner.read_line(output).map_err(|error| match error {})
-    }
-}
-
-/// Decodes bytes into a string according to the requested policy.
-///
-/// This function treats the byte slice as closed input: if decoding stops at an
-/// incomplete tail, the tail is handled by the requested EOF policy.
-///
-/// # Parameters
-///
-/// - `bytes`: Encoded input bytes.
-/// - `codec`: Charset codec used by `bytes`.
-/// - `policy`: Malformed input handling policy.
-///
-/// # Returns
-///
-/// Returns decoded Unicode text.
-///
-/// # Errors
-///
-/// Returns [`io::ErrorKind::InvalidData`] when strict mode detects malformed or
-/// incomplete input bytes.
-fn decode_bytes<C>(bytes: &[u8], codec: C, policy: CodingErrorPolicy) -> io::Result<String>
+impl<R, C> TextRead for CharsetTextReader<R, C>
 where
+    R: Read,
     C: CharsetCodec<Unit = u8>,
 {
-    let charset = codec.charset();
-    let mut decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
-    let output_len = decoder.max_output_len(bytes.len()).unwrap_or(bytes.len()).max(1);
-    let mut chars = vec!['\0'; output_len];
-    let progress = decoder
-        .transcode(bytes, 0, chars.as_mut_slice(), 0)
-        .map_err(decode_error_to_io)?;
-    let written = progress.written();
-    match progress.status() {
-        TranscodeStatus::Complete => {
-            chars.truncate(written);
-            Ok(chars.into_iter().collect())
-        }
-        TranscodeStatus::NeedInput { .. } if policy == CodingErrorPolicy::Replace => {
-            chars.truncate(written);
-            chars.push(CharsetDecodePolicy::DEFAULT_REPLACEMENT);
-            Ok(chars.into_iter().collect())
-        }
-        TranscodeStatus::NeedInput { input_index, .. } => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("incomplete {charset} input at unit {input_index}"),
-        )),
-        TranscodeStatus::NeedOutput { .. } => unreachable!("decoder maximum-output contract failed"),
+    type Error = io::Error;
+
+    fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
+        self.reader.read_char()
+    }
+
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+        self.reader.read_chars(output, max)
+    }
+
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+        self.reader.read_to_string(output)
     }
 }
 
-/// Converts a charset decoding error into an I/O error.
-///
-/// # Parameters
-///
-/// - `error`: Charset decoding error.
-///
-/// # Returns
-///
-/// Returns an [`io::ErrorKind::InvalidData`] error carrying the codec context.
-fn decode_error_to_io(error: CharsetDecodeError) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, error)
+impl<R, C> TextLineRead for CharsetTextReader<R, C>
+where
+    R: Read,
+    C: CharsetCodec<Unit = u8>,
+{
+    fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
+        self.reader.read_line(output)
+    }
 }

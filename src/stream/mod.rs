@@ -5,12 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Text I/O traits.
+//! Buffered text stream adapters.
 
-mod text_line_read;
-mod text_read;
-mod text_write;
+mod buffered_reader;
+mod buffered_writer;
 
-pub use text_line_read::TextLineRead;
-pub use text_read::TextRead;
-pub use text_write::TextWrite;
+pub use buffered_reader::BufferedReader;
+pub use buffered_writer::BufferedWriter;

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use crate::TextRead;
 
 /// Reads text by line while preserving line terminators.
@@ -17,7 +15,8 @@ pub trait TextLineRead: TextRead {
     /// Reads one line into `output`.
     ///
     /// # Parameters
-    /// - `output`: Destination string. The line is appended to existing content.
+    /// - `output`: Destination string. The line is appended to existing
+    ///   content.
     ///
     /// # Returns
     /// `true` when a line or a final unterminated line was read, or `false` at

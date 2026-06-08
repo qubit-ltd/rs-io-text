@@ -1,14 +1,6 @@
-use std::io::{
-    self,
-    ErrorKind,
-    Write,
-};
+use std::io::{self, ErrorKind, Write};
 
-use qubit_io_text::{
-    LineEnding,
-    TextWrite,
-    Utf8TextWriter,
-};
+use qubit_io_text::{LineEnding, TextWrite, Utf8TextWriter};
 
 struct FailingWriter;
 
@@ -60,15 +52,27 @@ fn test_write_methods_propagate_underlying_errors() {
 
     assert_eq!(
         ErrorKind::Other,
-        writer.write_char('x').expect_err("write_char must fail").kind(),
+        writer
+            .write_char('x')
+            .expect_err("write_char must fail")
+            .kind(),
     );
     assert_eq!(
         ErrorKind::Other,
-        writer.write_chars(&['x']).expect_err("write_chars must fail").kind(),
+        writer
+            .write_chars(&['x'])
+            .expect_err("write_chars must fail")
+            .kind(),
     );
     assert_eq!(
         ErrorKind::Other,
-        writer.write_line("x").expect_err("write_line must fail").kind(),
+        writer
+            .write_line("x")
+            .expect_err("write_line must fail")
+            .kind(),
     );
-    assert_eq!(ErrorKind::Other, writer.flush().expect_err("flush must fail").kind(),);
+    assert_eq!(
+        ErrorKind::Other,
+        writer.flush().expect_err("flush must fail").kind(),
+    );
 }

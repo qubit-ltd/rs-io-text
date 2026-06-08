@@ -5,12 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Text I/O traits.
+//! Extension traits for charset text I/O.
 
-mod text_line_read;
-mod text_read;
-mod text_write;
+mod charset_read_ext;
+mod charset_write_ext;
 
-pub use text_line_read::TextLineRead;
-pub use text_read::TextRead;
-pub use text_write::TextWrite;
+pub use charset_read_ext::CharsetReadExt;
+pub use charset_write_ext::CharsetWriteExt;

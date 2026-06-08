@@ -31,8 +31,8 @@ name = "qubit_io_text"
 doctest = true
 
 [dependencies]
+qubit-codec = { version = "0.6", path = "../rs-codec" }
 qubit-codec-text = { version = "0.1", path = "../rs-codec-text" }
-qubit-io = { version = "0.6", path = "../rs-io" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 /// Reads the next character from a string slice at the current byte position.
 ///
 /// # Parameters
@@ -31,7 +29,12 @@ pub(crate) fn read_char_at(text: &str, position: &mut usize) -> Option<char> {
 ///
 /// # Returns
 /// The number of characters appended.
-pub(crate) fn read_chars_at(text: &str, position: &mut usize, output: &mut Vec<char>, max: usize) -> usize {
+pub(crate) fn read_chars_at(
+    text: &str,
+    position: &mut usize,
+    output: &mut Vec<char>,
+    max: usize,
+) -> usize {
     let mut count = 0;
     while count < max {
         match read_char_at(text, position) {

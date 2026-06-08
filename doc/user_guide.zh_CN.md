@@ -13,6 +13,7 @@
 | 内存 writer | `StringTextWriter` | 按换行策略写入借用 `String` |
 | UTF-8 stream | `Utf8TextReader`、`Utf8TextWriter` | 将 `Read` / `Write` byte stream 适配为 UTF-8 文本 |
 | Charset stream | `CharsetTextReader`、`CharsetTextWriter` | 适配 byte-oriented `qubit-codec-text` codec |
+| 扩展 trait | `CharsetReadExt`、`CharsetWriteExt` | 从 `Read` 和 `Write` 创建 charset text stream |
 | 策略值 | `LineEnding`、`CodingErrorPolicy` | 配置换行和 malformed / unmappable 处理 |
 
 ## 安装
@@ -122,11 +123,36 @@ let mut reader = CharsetTextReader::new(
     Cursor::new(vec![0xFF]),
     Utf8Codec,
     CodingErrorPolicy::Replace,
-)?;
+);
 let mut output = String::new();
 
 reader.read_to_string(&mut output)?;
 assert_eq!("\u{FFFD}", output);
+# Ok::<(), std::io::Error>(())
+```
+
+也可以通过扩展 trait 从标准 byte stream 创建同样的 charset stream：
+
+```rust
+use std::io::Cursor;
+
+use qubit_io_text::{
+    CharsetReadExt,
+    CharsetWriteExt,
+    CodingErrorPolicy,
+    TextRead,
+    Utf8Codec,
+};
+
+let mut reader = Cursor::new("hello".as_bytes().to_vec())
+    .charset_text_reader(Utf8Codec, CodingErrorPolicy::Strict);
+let mut text = String::new();
+reader.read_to_string(&mut text)?;
+assert_eq!("hello", text);
+
+let mut bytes = Vec::new();
+bytes.write_str_with_charset("hello", Utf8Codec, CodingErrorPolicy::Strict)?;
+assert_eq!(b"hello", bytes.as_slice());
 # Ok::<(), std::io::Error>(())
 ```
 
