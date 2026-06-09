@@ -8,25 +8,14 @@
 
 use std::io::Cursor;
 
-use qubit_codec_text::{
-    CharsetEncodePolicy,
-    CharsetEncoder,
-};
-use qubit_io_text::{
-    BufferedWriter,
-    LineEnding,
-    TextWrite,
-    Utf8Codec,
-};
+use qubit_codec_text::{CharsetEncodePolicy, CharsetEncoder};
+use qubit_io_text::{BufferedWriter, LineEnding, TextWrite, Utf8Codec};
 
 #[test]
-fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
--> std::io::Result<()> {
-    let encoder =
-        CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
-            .expect("strict UTF-8 encoder should be constructible");
-    let mut writer =
-        BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
+fn test_buffered_writer_encodes_utf8_into_shared_output_buffer() -> std::io::Result<()> {
+    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+        .expect("strict UTF-8 encoder should be constructible");
+    let mut writer = BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
 
     writer.write_str("Aé🙂")?;
     let cursor = writer.into_inner()?;
@@ -36,13 +25,11 @@ fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
 }
 
 #[test]
-fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()>
-{
-    let encoder =
-        CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
-            .expect("strict UTF-8 encoder should be constructible");
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder)
-        .with_line_ending(LineEnding::CrLf);
+fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()> {
+    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+        .expect("strict UTF-8 encoder should be constructible");
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), encoder).with_line_ending(LineEnding::CrLf);
 
     writer.write_line("line")?;
     let cursor = writer.into_inner()?;

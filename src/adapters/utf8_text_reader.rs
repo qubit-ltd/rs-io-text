@@ -5,17 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    BufRead,
-    BufReader,
-    Read,
-};
+use std::io::{self, BufRead, BufReader, Read};
 
-use crate::{
-    TextLineRead,
-    TextRead,
-};
+use crate::{TextLineRead, TextRead};
 
 /// Streaming text reader for UTF-8 byte input.
 #[derive(Debug)]
@@ -95,11 +87,7 @@ where
         read_utf8_char(&mut self.inner)
     }
 
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max {
             match self.read_char()? {
@@ -113,10 +101,7 @@ where
         Ok(count)
     }
 
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let start = output.len();
         self.inner.read_to_string(output)?;
         Ok(output[start..].chars().count())
@@ -156,8 +141,7 @@ where
     let mut buffer = [0_u8; 4];
     buffer[0] = first[0];
     reader.read_exact(&mut buffer[1..width])?;
-    let text =
-        std::str::from_utf8(&buffer[..width]).map_err(invalid_utf8_error)?;
+    let text = std::str::from_utf8(&buffer[..width]).map_err(invalid_utf8_error)?;
     Ok(text.chars().next())
 }
 

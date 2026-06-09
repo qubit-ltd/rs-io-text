@@ -1,16 +1,6 @@
-use std::io::{
-    self,
-    BufReader,
-    Cursor,
-    ErrorKind,
-    Read,
-};
+use std::io::{self, BufReader, Cursor, ErrorKind, Read};
 
-use qubit_io_text::{
-    TextLineRead,
-    TextRead,
-    Utf8TextReader,
-};
+use qubit_io_text::{TextLineRead, TextRead, Utf8TextReader};
 
 struct FailingReader;
 

@@ -1,17 +1,7 @@
-use std::io::{
-    self,
-    Cursor,
-    ErrorKind,
-    Read,
-};
+use std::io::{self, Cursor, ErrorKind, Read};
 
 use qubit_io_text::{
-    CharsetReadExt,
-    CharsetTextReader,
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
-    Utf8Codec,
+    CharsetReadExt, CharsetTextReader, CodingErrorPolicy, TextLineRead, TextRead, Utf8Codec,
 };
 
 struct FailingReader;
@@ -25,11 +15,8 @@ impl Read for FailingReader {
 #[test]
 fn test_new_decodes_utf8_text() -> std::io::Result<()> {
     let bytes = "中文\nsecond".as_bytes().to_vec();
-    let mut reader = CharsetTextReader::new(
-        Cursor::new(bytes),
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut reader =
+        CharsetTextReader::new(Cursor::new(bytes), Utf8Codec, CodingErrorPolicy::Strict);
     let mut line = String::new();
 
     assert!(reader.read_line(&mut line)?);
@@ -72,11 +59,7 @@ fn test_read_chars_after_decoding() -> std::io::Result<()> {
 
 #[test]
 fn test_new_propagates_reader_errors() {
-    let mut reader = CharsetTextReader::new(
-        FailingReader,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut reader = CharsetTextReader::new(FailingReader, Utf8Codec, CodingErrorPolicy::Strict);
     let error = reader
         .read_char()
         .expect_err("reader errors must be propagated");
@@ -141,15 +124,10 @@ fn test_new_replaces_incomplete_bytes_in_replace_mode() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_with_capacity_preserves_utf8_tail_across_refills() -> std::io::Result<()>
-{
+fn test_with_capacity_preserves_utf8_tail_across_refills() -> std::io::Result<()> {
     let input = Cursor::new("中🙂".as_bytes().to_vec());
-    let mut reader = CharsetTextReader::with_capacity(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-        1,
-    );
+    let mut reader =
+        CharsetTextReader::with_capacity(input, Utf8Codec, CodingErrorPolicy::Strict, 1);
 
     assert_eq!(Some('中'), reader.read_char()?);
     assert_eq!(Some('🙂'), reader.read_char()?);
@@ -160,8 +138,7 @@ fn test_with_capacity_preserves_utf8_tail_across_refills() -> std::io::Result<()
 #[test]
 fn test_charset_read_ext_creates_stream_reader() -> std::io::Result<()> {
     let input = Cursor::new("ext中文".as_bytes().to_vec());
-    let mut reader =
-        input.charset_text_reader(Utf8Codec, CodingErrorPolicy::Strict);
+    let mut reader = input.charset_text_reader(Utf8Codec, CodingErrorPolicy::Strict);
     let mut output = String::new();
 
     assert_eq!(5, reader.read_to_string(&mut output)?);

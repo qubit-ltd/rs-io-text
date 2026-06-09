@@ -5,23 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    Write,
-};
+use std::io::{self, Write};
 
-use qubit_codec_text::{
-    CharsetEncodePolicy,
-    CharsetEncodeProbe,
-    CharsetEncoder,
-};
+use qubit_codec_text::{CharsetEncodePolicy, CharsetEncodeProbe, CharsetEncoder};
 
-use crate::{
-    BufferedWriter,
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-};
+use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
@@ -85,12 +73,7 @@ where
     /// In replacement mode, panics if no replacement character can be encoded
     /// by the codec.
     #[must_use]
-    pub fn with_capacity(
-        inner: W,
-        codec: C,
-        policy: CodingErrorPolicy,
-        capacity: usize,
-    ) -> Self {
+    pub fn with_capacity(inner: W, codec: C, policy: CodingErrorPolicy, capacity: usize) -> Self {
         let encoder = create_encoder(codec, policy);
         Self {
             writer: BufferedWriter::with_capacity(inner, encoder, capacity),
@@ -230,13 +213,10 @@ where
     C: CharsetEncodeProbe<Unit = u8>,
 {
     match policy {
-        CodingErrorPolicy::Strict => CharsetEncoder::with_policy(
-            codec,
-            CharsetEncodePolicy::report(),
-        )
-        .expect(
-            "reporting encode policy does not require an encodable replacement",
-        ),
+        CodingErrorPolicy::Strict => {
+            CharsetEncoder::with_policy(codec, CharsetEncodePolicy::report())
+                .expect("reporting encode policy does not require an encodable replacement")
+        }
         CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
     }
 }

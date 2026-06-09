@@ -16,14 +16,8 @@ mod text_cursor;
 mod utf8_text_reader;
 mod utf8_text_writer;
 
-pub use charset_text_reader::{
-    BufferedCharsetTextReader,
-    CharsetTextReader,
-};
-pub use charset_text_writer::{
-    BufferedCharsetTextWriter,
-    CharsetTextWriter,
-};
+pub use charset_text_reader::{BufferedCharsetTextReader, CharsetTextReader};
+pub use charset_text_writer::{BufferedCharsetTextWriter, CharsetTextWriter};
 pub use str_text_reader::StrTextReader;
 pub use string_text_reader::StringTextReader;
 pub use string_text_writer::StringTextWriter;

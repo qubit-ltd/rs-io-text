@@ -5,18 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    Read,
-};
+use std::io::{self, Read};
 
 use qubit_codec_text::CharsetCodec;
 
-use crate::{
-    CharsetTextReader,
-    CodingErrorPolicy,
-    TextRead,
-};
+use crate::{CharsetTextReader, CodingErrorPolicy, TextRead};
 
 /// Extension methods for reading charset-encoded text from byte streams.
 pub trait CharsetReadExt: Read + Sized {
