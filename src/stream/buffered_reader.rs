@@ -10,7 +10,7 @@ use std::{
     io::{self, Read},
 };
 
-use qubit_codec::{BufferedDecodeInput, BufferedTranscoder};
+use qubit_codec::{TranscodeDecodeInput, Transcoder};
 use qubit_codec_text::CharsetDecodePolicy;
 
 use crate::{CodingErrorPolicy, TextLineRead, TextRead};
@@ -24,14 +24,14 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// Buffered text reader driven by a byte-to-character transcoder.
 ///
 /// This type owns a byte reader and a streaming decoder. Encoded bytes are
-/// buffered by [`qubit_codec::BufferedDecodeInput`], while decoded
+/// buffered by [`qubit_codec::TranscodeDecodeInput`], while decoded
 /// characters are exposed through [`TextRead`].
 #[derive(Debug)]
 pub struct BufferedReader<R, D>
 where
     R: Read,
 {
-    input: BufferedDecodeInput<R>,
+    input: TranscodeDecodeInput<R>,
     decoder: D,
     policy: CodingErrorPolicy,
     chars: Vec<char>,
@@ -78,7 +78,7 @@ where
     pub fn with_capacity(inner: R, decoder: D, policy: CodingErrorPolicy, capacity: usize) -> Self {
         let capacity = capacity.max(MIN_TEXT_BUFFER_CAPACITY);
         Self {
-            input: BufferedDecodeInput::with_capacity(inner, capacity),
+            input: TranscodeDecodeInput::with_capacity(inner, capacity),
             decoder,
             policy,
             chars: vec!['\0'; capacity],
@@ -148,7 +148,7 @@ where
 impl<R, D> BufferedReader<R, D>
 where
     R: Read,
-    D: BufferedTranscoder<u8, char>,
+    D: Transcoder<u8, char>,
     D::Error: StdError + Send + Sync + 'static,
 {
     /// Handles an incomplete encoded tail after EOF.
@@ -202,7 +202,7 @@ where
             self.chars.resize(capacity, '\0');
         }
         let written = unsafe {
-            self.input.finish_into(
+            self.input.finish_transcode_into(
                 &mut self.decoder,
                 &mut decode_error_to_io,
                 self.chars.as_mut_slice(),
@@ -232,7 +232,7 @@ where
         self.clear_chars();
         let capacity = self.chars.len();
         let written = unsafe {
-            self.input.decode_into(
+            self.input.transcode_into(
                 &mut self.decoder,
                 &mut decode_error_to_io,
                 self.chars.as_mut_slice(),
@@ -255,7 +255,7 @@ where
 impl<R, D> TextRead for BufferedReader<R, D>
 where
     R: Read,
-    D: BufferedTranscoder<u8, char>,
+    D: Transcoder<u8, char>,
     D::Error: StdError + Send + Sync + 'static,
 {
     type Error = io::Error;
@@ -296,7 +296,7 @@ where
 impl<R, D> TextLineRead for BufferedReader<R, D>
 where
     R: Read,
-    D: BufferedTranscoder<u8, char>,
+    D: Transcoder<u8, char>,
     D::Error: StdError + Send + Sync + 'static,
 {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {

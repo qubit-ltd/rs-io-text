@@ -44,6 +44,8 @@ unsafe impl Codec for NeedOutputCodec {
     type Unit = u8;
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> NonZeroUsize {
         NonZeroUsize::new(1).expect("unit width is non-zero")
@@ -53,16 +55,16 @@ unsafe impl Codec for NeedOutputCodec {
         NonZeroUsize::new(1).expect("unit width is non-zero")
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         _input: &[u8],
         _index: usize,
     ) -> CharsetDecodeResult<(char, NonZeroUsize)> {
         unreachable!("writer tests do not decode with NeedOutputCodec")
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &char,
         output: &mut [u8],
         index: usize,

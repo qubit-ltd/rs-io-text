@@ -10,7 +10,7 @@ use std::{
     io::{self, Write},
 };
 
-use qubit_codec::{BufferedEncodeOutput, BufferedTranscoder};
+use qubit_codec::{TranscodeEncodeOutput, Transcoder};
 
 use crate::{LineEnding, TextWrite};
 
@@ -23,13 +23,13 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// Buffered text writer driven by a character-to-byte transcoder.
 ///
 /// This type owns a byte writer and a streaming encoder. Encoded bytes are
-/// buffered by [`qubit_codec::BufferedEncodeOutput`].
+/// buffered by [`qubit_codec::TranscodeEncodeOutput`].
 #[derive(Debug)]
 pub struct BufferedWriter<W, E>
 where
     W: Write,
 {
-    output: BufferedEncodeOutput<W>,
+    output: TranscodeEncodeOutput<W>,
     encoder: E,
     line_ending: LineEnding,
     char_buffer: Vec<char>,
@@ -39,7 +39,7 @@ where
 impl<W, E> BufferedWriter<W, E>
 where
     W: Write,
-    E: BufferedTranscoder<char, u8>,
+    E: Transcoder<char, u8>,
 {
     /// Creates a buffered text writer with the default byte buffer capacity.
     ///
@@ -73,7 +73,7 @@ where
         let min_output_capacity = encoder.max_output_len(1).unwrap_or(1).max(1);
         let capacity = capacity.max(min_output_capacity);
         Self {
-            output: BufferedEncodeOutput::with_capacity(inner, capacity),
+            output: TranscodeEncodeOutput::with_capacity(inner, capacity),
             encoder,
             line_ending: LineEnding::Lf,
             char_buffer: Vec::with_capacity(DEFAULT_CHAR_CHUNK_CAPACITY),
@@ -142,7 +142,7 @@ where
 impl<W, E> BufferedWriter<W, E>
 where
     W: Write,
-    E: BufferedTranscoder<char, u8>,
+    E: Transcoder<char, u8>,
     E::Error: StdError + Send + Sync + 'static,
 {
     /// Encodes a character slice into the shared output buffer.
@@ -156,7 +156,7 @@ where
     /// Returns encoding errors or I/O errors from the wrapped writer.
     fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
         let written = unsafe {
-            self.output.encode_from(
+            self.output.transcode_from(
                 &mut self.encoder,
                 &mut encode_error_to_io,
                 chars,
@@ -223,7 +223,7 @@ where
 impl<W, E> TextWrite for BufferedWriter<W, E>
 where
     W: Write,
-    E: BufferedTranscoder<char, u8>,
+    E: Transcoder<char, u8>,
     E::Error: StdError + Send + Sync + 'static,
 {
     type Error = io::Error;
