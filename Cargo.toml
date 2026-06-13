@@ -31,7 +31,7 @@ name = "qubit_io_text"
 doctest = true
 
 [dependencies]
-qubit-codec = { version = "0.7", path = "../rs-codec" }
+qubit-codec = { version = "0.8", path = "../rs-codec" }
 qubit-codec-text = { version = "0.1", path = "../rs-codec-text" }
 
 [lints.rust]

@@ -44,8 +44,6 @@ unsafe impl Codec for NeedOutputCodec {
     type Unit = u8;
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> NonZeroUsize {
         NonZeroUsize::new(1).expect("unit width is non-zero")
@@ -68,7 +66,7 @@ unsafe impl Codec for NeedOutputCodec {
         value: &char,
         output: &mut [u8],
         index: usize,
-    ) -> CharsetEncodeResult<usize> {
+    ) -> CharsetEncodeResult<NonZeroUsize> {
         if *value == 'B' {
             let kind = CharsetEncodeErrorKind::BufferTooSmall {
                 required: index + 2,
@@ -77,7 +75,7 @@ unsafe impl Codec for NeedOutputCodec {
             Err(CharsetEncodeError::new(Charset::ASCII, kind, index))
         } else {
             output[index] = *value as u8;
-            Ok(1)
+            Ok(NonZeroUsize::MIN)
         }
     }
 }
