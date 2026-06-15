@@ -10,7 +10,7 @@ use std::{
     io::{self, Write},
 };
 
-use qubit_codec::{TranscodeEncodeOutput, Transcoder};
+use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder};
 
 use crate::{LineEnding, TextWrite};
 
@@ -39,7 +39,7 @@ where
 impl<W, E> BufferedWriter<W, E>
 where
     W: Write,
-    E: Transcoder<char, u8>,
+    E: TranscodeEncoder<char, u8>,
 {
     /// Creates a buffered text writer with the default byte buffer capacity.
     ///
@@ -142,7 +142,7 @@ where
 impl<W, E> BufferedWriter<W, E>
 where
     W: Write,
-    E: Transcoder<char, u8>,
+    E: TranscodeEncoder<char, u8>,
     E::Error: StdError + Send + Sync + 'static,
 {
     /// Encodes a character slice into the shared output buffer.
@@ -223,7 +223,7 @@ where
 impl<W, E> TextWrite for BufferedWriter<W, E>
 where
     W: Write,
-    E: Transcoder<char, u8>,
+    E: TranscodeEncoder<char, u8>,
     E::Error: StdError + Send + Sync + 'static,
 {
     type Error = io::Error;
