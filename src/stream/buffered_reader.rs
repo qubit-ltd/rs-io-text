@@ -10,7 +10,7 @@ use std::{
     io::{self, Read},
 };
 
-use qubit_codec::{TranscodeDecodeInput, Transcoder};
+use qubit_codec::{TranscodeDecodeInput, TranscodeDecoder};
 use qubit_codec_text::CharsetDecodePolicy;
 
 use crate::{CodingErrorPolicy, TextLineRead, TextRead};
@@ -148,7 +148,7 @@ where
 impl<R, D> BufferedReader<R, D>
 where
     R: Read,
-    D: Transcoder<u8, char>,
+    D: TranscodeDecoder<u8, char>,
     D::Error: StdError + Send + Sync + 'static,
 {
     /// Handles an incomplete encoded tail after EOF.
@@ -255,7 +255,7 @@ where
 impl<R, D> TextRead for BufferedReader<R, D>
 where
     R: Read,
-    D: Transcoder<u8, char>,
+    D: TranscodeDecoder<u8, char>,
     D::Error: StdError + Send + Sync + 'static,
 {
     type Error = io::Error;
@@ -296,7 +296,7 @@ where
 impl<R, D> TextLineRead for BufferedReader<R, D>
 where
     R: Read,
-    D: Transcoder<u8, char>,
+    D: TranscodeDecoder<u8, char>,
     D::Error: StdError + Send + Sync + 'static,
 {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
