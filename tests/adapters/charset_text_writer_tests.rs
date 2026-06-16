@@ -4,8 +4,8 @@ use std::{
 };
 
 use qubit_codec_text::{
-    Charset, CharsetDecodeError, CharsetDecodeResult, CharsetEncodeError, CharsetEncodeErrorKind,
-    CharsetEncodeProbe, CharsetEncodeResult, Codec,
+    Charset, CharsetDecodeError, CharsetDecodeResult, CharsetEncodeError, CharsetEncodeResult,
+    Codec,
 };
 use qubit_io_text::{
     AsciiCodec, CharsetCodec, CharsetTextWriter, CharsetWriteExt, CodingErrorPolicy, LineEnding,
@@ -33,12 +33,6 @@ impl CharsetCodec for NeedOutputCodec {
     }
 }
 
-impl CharsetEncodeProbe for NeedOutputCodec {
-    fn encode_len(&self, ch: char, _index: usize) -> CharsetEncodeResult<usize> {
-        if ch == 'B' { Ok(2) } else { Ok(1) }
-    }
-}
-
 unsafe impl Codec for NeedOutputCodec {
     type Value = char;
     type Unit = u8;
@@ -50,7 +44,15 @@ unsafe impl Codec for NeedOutputCodec {
     }
 
     fn max_units_per_value(&self) -> NonZeroUsize {
-        NonZeroUsize::new(1).expect("unit width is non-zero")
+        NonZeroUsize::new(2).expect("unit width is non-zero")
+    }
+
+    fn encode_len(&self, value: &char) -> NonZeroUsize {
+        if *value == 'B' {
+            NonZeroUsize::new(2).expect("unit width is non-zero")
+        } else {
+            NonZeroUsize::MIN
+        }
     }
 
     unsafe fn decode(
@@ -67,16 +69,21 @@ unsafe impl Codec for NeedOutputCodec {
         output: &mut [u8],
         index: usize,
     ) -> CharsetEncodeResult<NonZeroUsize> {
-        if *value == 'B' {
-            let kind = CharsetEncodeErrorKind::BufferTooSmall {
-                required: index + 2,
-                available: output.len().saturating_sub(index),
-            };
-            Err(CharsetEncodeError::new(Charset::ASCII, kind, index))
-        } else {
-            output[index] = *value as u8;
-            Ok(NonZeroUsize::MIN)
+        let required = self.encode_len(value).get();
+        debug_assert!(
+            index
+                .checked_add(required)
+                .is_some_and(|end| end <= output.len())
+        );
+        unsafe {
+            // SAFETY: The caller guarantees that `required` units are writable
+            // from `index`.
+            *output.as_mut_ptr().add(index) = *value as u8;
+            if required == 2 {
+                *output.as_mut_ptr().add(index + 1) = *value as u8;
+            }
         }
+        Ok(self.encode_len(value))
     }
 }
 
@@ -179,14 +186,15 @@ fn test_write_methods_propagate_underlying_errors() {
 }
 
 #[test]
-fn test_write_reports_codec_need_output_as_io_error() {
-    let mut writer = CharsetTextWriter::new(Vec::new(), NeedOutputCodec, CodingErrorPolicy::Strict);
+fn test_write_raises_buffer_to_single_character_max_output() -> std::io::Result<()> {
+    let mut writer =
+        CharsetTextWriter::with_capacity(Vec::new(), NeedOutputCodec, CodingErrorPolicy::Strict, 1);
 
-    let error = writer
-        .write_char('B')
-        .expect_err("codec output contract errors must be reported");
+    writer.write_char('B')?;
+    let output = writer.into_inner()?;
 
-    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert_eq!(b"BB", output.as_slice());
+    Ok(())
 }
 
 #[test]

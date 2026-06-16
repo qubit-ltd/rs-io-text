@@ -7,7 +7,7 @@
 // =============================================================================
 use std::io::{self, Write};
 
-use qubit_codec_text::{CharsetEncodePolicy, CharsetEncodeProbe, CharsetEncoder};
+use qubit_codec_text::{CharsetCodec, CharsetEncodePolicy, CharsetEncoder};
 
 use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
 
@@ -20,7 +20,7 @@ use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
 pub struct CharsetTextWriter<W, C>
 where
     W: Write,
-    C: CharsetEncodeProbe<Unit = u8>,
+    C: CharsetCodec<Unit = u8>,
 {
     writer: BufferedWriter<W, CharsetEncoder<C>>,
 }
@@ -28,7 +28,7 @@ where
 impl<W, C> CharsetTextWriter<W, C>
 where
     W: Write,
-    C: CharsetEncodeProbe<Unit = u8>,
+    C: CharsetCodec<Unit = u8>,
 {
     /// Creates a charset text writer with the default buffer capacity.
     ///
@@ -162,7 +162,7 @@ where
 impl<W, C> TextWrite for CharsetTextWriter<W, C>
 where
     W: Write,
-    C: CharsetEncodeProbe<Unit = u8>,
+    C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
 
@@ -210,7 +210,7 @@ where
 /// the supplied codec, matching [`CharsetEncoder::new`] semantics.
 fn create_encoder<C>(codec: C, policy: CodingErrorPolicy) -> CharsetEncoder<C>
 where
-    C: CharsetEncodeProbe<Unit = u8>,
+    C: CharsetCodec<Unit = u8>,
 {
     match policy {
         CodingErrorPolicy::Strict => {

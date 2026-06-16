@@ -7,7 +7,7 @@
 // =============================================================================
 use std::io::{self, Write};
 
-use qubit_codec_text::CharsetEncodeProbe;
+use qubit_codec_text::CharsetCodec;
 
 use crate::{CharsetTextWriter, CodingErrorPolicy, TextWrite};
 
@@ -29,7 +29,7 @@ pub trait CharsetWriteExt: Write + Sized {
         policy: CodingErrorPolicy,
     ) -> CharsetTextWriter<Self, C>
     where
-        C: CharsetEncodeProbe<Unit = u8>,
+        C: CharsetCodec<Unit = u8>,
     {
         CharsetTextWriter::new(self, codec, policy)
     }
@@ -52,7 +52,7 @@ pub trait CharsetWriteExt: Write + Sized {
         capacity: usize,
     ) -> CharsetTextWriter<Self, C>
     where
-        C: CharsetEncodeProbe<Unit = u8>,
+        C: CharsetCodec<Unit = u8>,
     {
         CharsetTextWriter::with_capacity(self, codec, policy, capacity)
     }
@@ -76,7 +76,7 @@ pub trait CharsetWriteExt: Write + Sized {
         policy: CodingErrorPolicy,
     ) -> io::Result<()>
     where
-        C: CharsetEncodeProbe<Unit = u8>,
+        C: CharsetCodec<Unit = u8>,
     {
         let mut writer = CharsetTextWriter::new(self, codec, policy);
         writer.write_str(text)?;

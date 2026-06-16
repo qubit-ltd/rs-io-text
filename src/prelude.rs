@@ -9,8 +9,8 @@
 
 pub use crate::{
     AsciiCodec, BufferedCharsetTextReader, BufferedCharsetTextWriter, BufferedReader,
-    BufferedWriter, ByteOrder, CharsetCodec, CharsetEncodeProbe, CharsetReadExt, CharsetTextReader,
-    CharsetTextWriter, CharsetWriteExt, CodingErrorPolicy, Latin1Codec, LineEnding, StrTextReader,
-    StringTextReader, StringTextWriter, TextLineRead, TextRead, TextWrite, Utf8Codec,
-    Utf8TextReader, Utf8TextWriter, Utf16ByteCodec, Utf32ByteCodec,
+    BufferedWriter, ByteOrder, CharsetCodec, CharsetReadExt, CharsetTextReader, CharsetTextWriter,
+    CharsetWriteExt, CodingErrorPolicy, Latin1Codec, LineEnding, StrTextReader, StringTextReader,
+    StringTextWriter, TextLineRead, TextRead, TextWrite, Utf8Codec, Utf8TextReader, Utf8TextWriter,
+    Utf16ByteCodec, Utf32ByteCodec,
 };
