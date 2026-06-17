@@ -102,6 +102,26 @@ assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
 # Ok::<(), std::io::Error>(())
 ```
 
+### `TextRead::read_to_string` Count
+
+`TextRead::read_to_string` appends the remaining text and returns the number of
+Unicode scalar values appended. This is different from `std::io::Read`, whose
+string helper reports bytes.
+
+```rust
+use qubit_io_text::{StrTextReader, TextRead};
+
+let mut reader = StrTextReader::new("中🙂");
+let mut text = String::new();
+
+let count = reader.read_to_string(&mut text)?;
+
+assert_eq!(2, count);
+assert_eq!(7, text.len());
+assert_eq!("中🙂", text);
+# Ok::<(), core::convert::Infallible>(())
+```
+
 ## API Reference
 
 ### Text Traits

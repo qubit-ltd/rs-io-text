@@ -133,7 +133,13 @@ where
     R: Read + ?Sized,
 {
     let mut first = [0_u8; 1];
-    let read = reader.read(&mut first)?;
+    let read = loop {
+        match reader.read(&mut first) {
+            Ok(read) => break read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    };
     if read == 0 {
         return Ok(None);
     }

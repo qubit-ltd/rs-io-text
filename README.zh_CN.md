@@ -98,6 +98,26 @@ assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
 # Ok::<(), std::io::Error>(())
 ```
 
+### `TextRead::read_to_string` 计数语义
+
+`TextRead::read_to_string` 会把剩余文本追加到目标字符串，并返回追加的
+Unicode scalar value 数量。这个返回值不同于 `std::io::Read` 的同名 helper，
+后者通常报告 byte 数。
+
+```rust
+use qubit_io_text::{StrTextReader, TextRead};
+
+let mut reader = StrTextReader::new("中🙂");
+let mut text = String::new();
+
+let count = reader.read_to_string(&mut text)?;
+
+assert_eq!(2, count);
+assert_eq!(7, text.len());
+assert_eq!("中🙂", text);
+# Ok::<(), core::convert::Infallible>(())
+```
+
 ## API 参考
 
 ### Text Trait

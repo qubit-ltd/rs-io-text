@@ -10,6 +10,30 @@ impl Read for FailingReader {
     }
 }
 
+struct InterruptedOnceReader {
+    data: Cursor<Vec<u8>>,
+    interrupted: bool,
+}
+
+impl InterruptedOnceReader {
+    fn new(data: impl Into<Vec<u8>>) -> Self {
+        Self {
+            data: Cursor::new(data.into()),
+            interrupted: false,
+        }
+    }
+}
+
+impl Read for InterruptedOnceReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if !self.interrupted {
+            self.interrupted = true;
+            return Err(io::Error::from(ErrorKind::Interrupted));
+        }
+        self.data.read(buf)
+    }
+}
+
 #[test]
 fn test_read_char_and_line_from_utf8_reader() -> std::io::Result<()> {
     let input = Cursor::new("a中\nβeta".as_bytes().to_vec());
@@ -110,6 +134,16 @@ fn test_read_line_reports_invalid_utf8() {
         .read_line(&mut line)
         .expect_err("invalid UTF-8 line must be rejected");
     assert_eq!(ErrorKind::InvalidData, error.kind());
+}
+
+#[test]
+fn test_read_char_retries_interrupted_first_byte() -> std::io::Result<()> {
+    let input = InterruptedOnceReader::new("é".as_bytes().to_vec());
+    let mut reader = Utf8TextReader::from_read(input);
+
+    assert_eq!(Some('é'), reader.read_char()?);
+    assert_eq!(None, reader.read_char()?);
+    Ok(())
 }
 
 #[test]
