@@ -7,6 +7,7 @@
 // =============================================================================
 use std::io::{self, BufRead, BufReader, Read};
 
+use qubit_io::UncheckedSlice;
 use crate::{TextLineRead, TextRead};
 
 /// Streaming text reader for UTF-8 byte input.
@@ -143,10 +144,17 @@ where
     if read == 0 {
         return Ok(None);
     }
-    let width = utf8_char_width(first[0])?;
+    let first = unsafe { UncheckedSlice::read(&first, 0) };
+    let width = utf8_char_width(first)?;
+    debug_assert!(UncheckedSlice::range_fits(4, 0, width));
     let mut buffer = [0_u8; 4];
-    buffer[0] = first[0];
-    reader.read_exact(&mut buffer[1..width])?;
+    unsafe {
+        UncheckedSlice::write(&mut buffer, 0, first);
+    }
+    if width > 1 {
+        debug_assert!(UncheckedSlice::range_fits(buffer.len(), 1, width - 1));
+        reader.read_exact(&mut buffer[1..width])?;
+    }
     let text = std::str::from_utf8(&buffer[..width]).map_err(invalid_utf8_error)?;
     Ok(text.chars().next())
 }

@@ -12,6 +12,7 @@ use std::{
 
 use qubit_codec::{TranscodeDecodeInput, TranscodeDecoder};
 use qubit_codec_text::CharsetDecodePolicy;
+use qubit_io::{nz, UncheckedSlice};
 
 use crate::{CodingErrorPolicy, TextLineRead, TextRead};
 
@@ -171,7 +172,10 @@ where
                 if self.chars.is_empty() {
                     self.chars.push(CharsetDecodePolicy::DEFAULT_REPLACEMENT);
                 } else {
-                    self.chars[0] = CharsetDecodePolicy::DEFAULT_REPLACEMENT;
+                    unsafe {
+                        *UncheckedSlice::get_mut(self.chars.as_mut_slice(), 0) =
+                            CharsetDecodePolicy::DEFAULT_REPLACEMENT;
+                    }
                 }
                 self.char_position = 0;
                 self.char_limit = 1;
@@ -197,7 +201,7 @@ where
             .decoder
             .max_finish_output_len()
             .map_err(capacity_error_to_io)?
-            .max(1);
+            .max(nz(1).get());
         if self.chars.len() < capacity {
             self.chars.resize(capacity, '\0');
         }
@@ -264,7 +268,7 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = self.chars[self.char_position];
+        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
         self.char_position += 1;
         Ok(Some(ch))
     }

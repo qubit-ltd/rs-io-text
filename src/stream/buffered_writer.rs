@@ -11,6 +11,7 @@ use std::{
 };
 
 use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder};
+use qubit_io::nz;
 
 use crate::{LineEnding, TextWrite};
 
@@ -70,7 +71,8 @@ where
     /// output needed for one input character when that can be computed.
     #[must_use]
     pub fn with_capacity(inner: W, encoder: E, capacity: usize) -> Self {
-        let min_output_capacity = encoder.max_output_len(1).unwrap_or(1).max(1);
+        let one = nz(1).get();
+        let min_output_capacity = encoder.max_output_len(one).unwrap_or(one).max(one);
         let capacity = capacity.max(min_output_capacity);
         Self {
             output: TranscodeEncodeOutput::with_capacity(inner, capacity),

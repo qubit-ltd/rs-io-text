@@ -24,6 +24,7 @@ name = "qubit-codec-text"
 version = "0.1.0"
 dependencies = [
  "qubit-codec",
+ "qubit-io",
  "thiserror",
 ]
 
@@ -37,6 +38,7 @@ version = "0.1.0"
 dependencies = [
  "qubit-codec",
  "qubit-codec-text",
+ "qubit-io",
 ]
 
 [[package]]
