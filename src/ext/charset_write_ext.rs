@@ -5,11 +5,18 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{self, Write};
+use std::io::{
+    self,
+    Write,
+};
 
 use qubit_codec_text::CharsetCodec;
 
-use crate::{CharsetTextWriter, CodingErrorPolicy, TextWrite};
+use crate::{
+    CharsetTextWriter,
+    CodingErrorPolicy,
+    TextWrite,
+};
 
 /// Extension methods for writing charset-encoded text to byte streams.
 pub trait CharsetWriteExt: Write + Sized {

@@ -7,14 +7,27 @@
 // =============================================================================
 use std::{
     error::Error as StdError,
-    io::{self, Read},
+    io::{
+        self,
+        Read,
+    },
 };
 
-use qubit_codec::{TranscodeDecodeInput, TranscodeDecoder};
+use qubit_codec::{
+    TranscodeDecodeInput,
+    TranscodeDecoder,
+};
 use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::{nz, UncheckedSlice};
+use qubit_io::{
+    UncheckedSlice,
+    nz,
+};
 
-use crate::{CodingErrorPolicy, TextLineRead, TextRead};
+use crate::{
+    CodingErrorPolicy,
+    TextLineRead,
+    TextRead,
+};
 
 /// Default byte buffer capacity used by buffered text readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -76,7 +89,12 @@ where
     /// Returns a buffered text reader. The byte buffer is raised to at least
     /// four bytes so built-in Unicode byte codecs can retain incomplete tails.
     #[must_use]
-    pub fn with_capacity(inner: R, decoder: D, policy: CodingErrorPolicy, capacity: usize) -> Self {
+    pub fn with_capacity(
+        inner: R,
+        decoder: D,
+        policy: CodingErrorPolicy,
+        capacity: usize,
+    ) -> Self {
         let capacity = capacity.max(MIN_TEXT_BUFFER_CAPACITY);
         Self {
             input: TranscodeDecodeInput::with_capacity(inner, capacity),
@@ -169,13 +187,9 @@ where
             )),
             CodingErrorPolicy::Replace => {
                 self.consume_all_input();
-                if self.chars.is_empty() {
-                    self.chars.push(CharsetDecodePolicy::DEFAULT_REPLACEMENT);
-                } else {
-                    unsafe {
-                        *UncheckedSlice::get_mut(self.chars.as_mut_slice(), 0) =
-                            CharsetDecodePolicy::DEFAULT_REPLACEMENT;
-                    }
+                unsafe {
+                    *UncheckedSlice::get_mut(self.chars.as_mut_slice(), 0) =
+                        CharsetDecodePolicy::DEFAULT_REPLACEMENT;
                 }
                 self.char_position = 0;
                 self.char_limit = 1;
@@ -268,12 +282,18 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
+        let ch = unsafe {
+            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
+        };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max {
             match self.read_char()? {
@@ -287,7 +307,10 @@ where
         Ok(count)
     }
 
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while let Some(ch) = self.read_char()? {
             output.push(ch);

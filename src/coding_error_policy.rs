@@ -28,7 +28,9 @@ impl CodingErrorPolicy {
     pub(crate) const fn decode_policy(self) -> CharsetDecodePolicy {
         match self {
             Self::Strict => CharsetDecodePolicy::report(),
-            Self::Replace => CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
+            Self::Replace => CharsetDecodePolicy::replace(
+                CharsetDecodePolicy::DEFAULT_REPLACEMENT,
+            ),
         }
     }
 }

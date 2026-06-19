@@ -1,6 +1,10 @@
 use std::convert::Infallible;
 
-use qubit_io_text::{StringTextReader, TextLineRead, TextRead};
+use qubit_io_text::{
+    StringTextReader,
+    TextLineRead,
+    TextRead,
+};
 
 #[test]
 fn test_from_string_reads_owned_text() -> Result<(), Infallible> {
@@ -24,6 +28,18 @@ fn test_read_chars_reads_owned_text() -> Result<(), Infallible> {
     assert_eq!(vec!['a', 'b'], chars);
     assert_eq!(1, reader.read_chars(&mut chars, 8)?);
     assert_eq!(vec!['a', 'b', '中'], chars);
+    Ok(())
+}
+
+#[test]
+fn test_read_to_string_appends_remaining_owned_text() -> Result<(), Infallible>
+{
+    let mut reader = StringTextReader::new("ab中".to_owned());
+    let mut output = String::from("prefix:");
+
+    assert_eq!(3, reader.read_to_string(&mut output)?);
+    assert_eq!("prefix:ab中", output);
+    assert_eq!(5, reader.position());
     Ok(())
 }
 

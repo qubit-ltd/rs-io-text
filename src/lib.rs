@@ -23,14 +23,37 @@ mod stream;
 mod traits;
 
 pub use adapters::{
-    BufferedCharsetTextReader, BufferedCharsetTextWriter, CharsetTextReader, CharsetTextWriter,
-    StrTextReader, StringTextReader, StringTextWriter, Utf8TextReader, Utf8TextWriter,
+    BufferedCharsetTextReader,
+    BufferedCharsetTextWriter,
+    CharsetTextReader,
+    CharsetTextWriter,
+    StrTextReader,
+    StringTextReader,
+    StringTextWriter,
+    Utf8TextReader,
+    Utf8TextWriter,
 };
 pub use coding_error_policy::CodingErrorPolicy;
-pub use ext::{CharsetReadExt, CharsetWriteExt};
+pub use ext::{
+    CharsetReadExt,
+    CharsetWriteExt,
+};
 pub use line_ending::LineEnding;
 pub use qubit_codec_text::{
-    AsciiCodec, ByteOrder, CharsetCodec, Latin1Codec, Utf8Codec, Utf16ByteCodec, Utf32ByteCodec,
+    AsciiCodec,
+    ByteOrder,
+    CharsetCodec,
+    Latin1Codec,
+    Utf8Codec,
+    Utf16ByteCodec,
+    Utf32ByteCodec,
 };
-pub use stream::{BufferedReader, BufferedWriter};
-pub use traits::{TextLineRead, TextRead, TextWrite};
+pub use stream::{
+    BufferedReader,
+    BufferedWriter,
+};
+pub use traits::{
+    TextLineRead,
+    TextRead,
+    TextWrite,
+};
