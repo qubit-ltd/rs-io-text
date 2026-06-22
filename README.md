@@ -76,7 +76,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-io-text = "0.1"
+qubit-io-text = "0.2"
 ```
 
 ## Quick Start

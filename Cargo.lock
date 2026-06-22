@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "qubit-io",
  "thiserror",
@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec-text"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qubit-codec",
  "qubit-io",
@@ -36,7 +36,7 @@ checksum = "6cde24f475eb93bdfa1cf69c008a001255e43fb54578769eeacba56252773b9a"
 
 [[package]]
 name = "qubit-io-text"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qubit-codec",
  "qubit-codec-text",

@@ -1,6 +1,6 @@
 [package]
 name = "qubit-io-text"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.94"
 authors = ["Haixing Hu <starfish.hu@gmail.com>"]
@@ -32,8 +32,8 @@ doctest = true
 
 [dependencies]
 qubit-io = "0.10.0"
-qubit-codec = { path = "../rs-codec", version = "0.8.0" }
-qubit-codec-text = { path = "../rs-codec-text", version = "0.1.0" }
+qubit-codec = { path = "../rs-codec", version = "0.9.0" }
+qubit-codec-text = { path = "../rs-codec-text", version = "0.2.0" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

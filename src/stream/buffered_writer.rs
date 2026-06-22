@@ -7,22 +7,13 @@
 // =============================================================================
 use std::{
     error::Error as StdError,
-    io::{
-        self,
-        Write,
-    },
+    io::{self, Write},
 };
 
-use qubit_codec::{
-    TranscodeEncodeOutput,
-    TranscodeEncoder,
-};
+use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder};
 use qubit_io::nz;
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, TextWrite};
 
 /// Default byte buffer capacity used by buffered text writers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -81,8 +72,7 @@ where
     #[must_use]
     pub fn with_capacity(inner: W, encoder: E, capacity: usize) -> Self {
         let one = nz(1).get();
-        let min_output_capacity =
-            encoder.max_output_len(one).unwrap_or(one).max(one);
+        let min_output_capacity = encoder.max_output_len(one).unwrap_or(one).max(one);
         let capacity = capacity.max(min_output_capacity);
         Self {
             output: TranscodeEncodeOutput::with_capacity(inner, capacity),
@@ -167,15 +157,13 @@ where
     ///
     /// Returns encoding errors or I/O errors from the wrapped writer.
     fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
-        let written = unsafe {
-            self.output.transcode_from(
-                &mut self.encoder,
-                &mut encode_error_to_io,
-                chars,
-                0,
-                chars.len(),
-            )?
-        };
+        let written = self.output.transcode_from(
+            &mut self.encoder,
+            &mut encode_error_to_io,
+            chars,
+            0,
+            chars.len(),
+        )?;
         if written != chars.len() {
             return Err(io::Error::other(
                 "text encoder did not consume the complete character input",
