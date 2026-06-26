@@ -14,7 +14,10 @@ Text-oriented I/O traits and adapters for Rust.
 `qubit-io-text` provides:
 
 - `TextRead`, `TextLineRead`, and `TextWrite` traits for Unicode text sources and sinks;
-- in-memory adapters such as `StrTextReader`, `StringTextReader`, and `StringTextWriter`;
+- in-memory adapters such as `StrTextReader`, `StringInput`,
+  `StringOutput`, `StringTextReader`, and `StringTextWriter`;
+- `InputTextReader` and `OutputTextWriter` adapters for
+  `qubit_io::Input<Item = char>` and `qubit_io::Output<Item = char>`;
 - UTF-8 byte stream adapters: `Utf8TextReader` and `Utf8TextWriter`;
 - charset adapters backed by `qubit-codec-text`: `CharsetTextReader` and
   `CharsetTextWriter`;
@@ -48,6 +51,10 @@ reference documentation is available on [docs.rs](https://docs.rs/qubit-io-text)
 ### In-Memory Adapters
 
 - **`StrTextReader`**: reads from borrowed `str`.
+- **`StringInput` / `StringOutput`**: adapt `String` storage to
+  `qubit_io` character input and output.
+- **`InputTextReader` / `OutputTextWriter`**: adapt character-level
+  `qubit_io` input and output to `TextRead` and `TextWrite`.
 - **`StringTextReader`**: reads from owned `String`.
 - **`StringTextWriter`**: writes into an owned or borrowed `String` buffer.
 
@@ -137,6 +144,8 @@ assert_eq!("中🙂", text);
 | Type | Purpose |
 |------|---------|
 | `StrTextReader` | Borrowed `str` reader |
+| `StringInput` / `StringOutput` | `String`-backed `Input<Item = char>` and `Output<Item = char>` adapters |
+| `InputTextReader` / `OutputTextWriter` | Bridge character-level `qubit_io` input and output to text traits |
 | `StringTextReader` | Owned `String` reader |
 | `StringTextWriter` | `String`-backed writer |
 | `Utf8TextReader` / `Utf8TextWriter` | UTF-8 byte stream adapters |

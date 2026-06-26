@@ -11,6 +11,7 @@ UTF-8 byte streams, and byte-oriented `qubit-codec-text` charsets.
 | Traits | `TextRead`, `TextLineRead`, `TextWrite` | abstract Unicode text sources and sinks |
 | In-memory readers | `StrTextReader`, `StringTextReader` | read text from borrowed or owned strings |
 | In-memory writer | `StringTextWriter` | write text into a borrowed `String` with line-ending policy |
+| Character I/O bridge | `StringInput`, `StringOutput`, `InputTextReader`, `OutputTextWriter` | compose `qubit_io` character input/output with text traits |
 | UTF-8 streams | `Utf8TextReader`, `Utf8TextWriter` | adapt `Read` and `Write` byte streams as UTF-8 text |
 | Charset streams | `CharsetTextReader`, `CharsetTextWriter` | adapt byte-oriented `qubit-codec-text` codecs |
 | Extension traits | `CharsetReadExt`, `CharsetWriteExt` | create charset text streams from `Read` and `Write` values |
@@ -26,7 +27,8 @@ qubit-io-text = "0.1"
 ## Writing Text
 
 `TextWrite` is implemented for `String`, `StringTextWriter`, `Utf8TextWriter`,
-and `CharsetTextWriter`.
+`CharsetTextWriter`, and `OutputTextWriter<O>` when
+`O: qubit_io::Output<Item = char>`.
 
 ```rust
 use qubit_io_text::TextWrite;
@@ -54,8 +56,12 @@ let mut writer = StringTextWriter::new(&mut output).with_line_ending(LineEnding:
 writer.write_line("first")?;
 
 assert_eq!("first\r\n", output);
-# Ok::<(), std::convert::Infallible>(())
+# Ok::<(), std::io::Error>(())
 ```
+
+`TextRead` is implemented for `InputTextReader<I>` when
+`I: qubit_io::Input<Item = char>`. `StringInput` is the in-memory character
+input used by `StringTextReader`.
 
 ## UTF-8 Byte Streams
 

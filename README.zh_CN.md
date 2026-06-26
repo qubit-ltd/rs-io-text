@@ -14,7 +14,11 @@
 `qubit-io-text` 提供：
 
 - 面向 Unicode 文本 source / sink 的 `TextRead`、`TextLineRead` 和 `TextWrite`；
-- `StrTextReader`、`StringTextReader`、`StringTextWriter` 等内存 adapter；
+- `StrTextReader`、`StringInput`、`StringOutput`、`StringTextReader`、
+  `StringTextWriter` 等内存 adapter；
+- 面向 `qubit_io::Input<Item = char>` 和
+  `qubit_io::Output<Item = char>` 的 `InputTextReader` 与
+  `OutputTextWriter`；
 - UTF-8 byte stream adapter：`Utf8TextReader` 和 `Utf8TextWriter`；
 - 基于 `qubit-codec-text` 的 charset adapter：`CharsetTextReader` 和
   `CharsetTextWriter`；
@@ -44,6 +48,10 @@
 ### 内存 Adapter
 
 - **`StrTextReader`**：从借用的 `str` 读取。
+- **`StringInput` / `StringOutput`**：把 `String` 存储适配为
+  `qubit_io` 字符输入和输出。
+- **`InputTextReader` / `OutputTextWriter`**：把字符级 `qubit_io`
+  input / output 适配到 `TextRead` 和 `TextWrite`。
 - **`StringTextReader`**：从 owned `String` 读取。
 - **`StringTextWriter`**：写入 owned 或 borrowed `String` 缓冲区。
 
@@ -133,6 +141,8 @@ assert_eq!("中🙂", text);
 | 类型 | 用途 |
 |------|------|
 | `StrTextReader` | 借用 `str` reader |
+| `StringInput` / `StringOutput` | 基于 `String` 的 `Input<Item = char>` 与 `Output<Item = char>` adapter |
+| `InputTextReader` / `OutputTextWriter` | 把字符级 `qubit_io` input / output 桥接到文本 trait |
 | `StringTextReader` | Owned `String` reader |
 | `StringTextWriter` | 基于 `String` 的 writer |
 | `Utf8TextReader` / `Utf8TextWriter` | UTF-8 byte stream adapter |

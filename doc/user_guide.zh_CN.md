@@ -11,6 +11,7 @@
 | Trait | `TextRead`、`TextLineRead`、`TextWrite` | 抽象 Unicode 文本 source / sink |
 | 内存 reader | `StrTextReader`、`StringTextReader` | 从借用或拥有字符串读取文本 |
 | 内存 writer | `StringTextWriter` | 按换行策略写入借用 `String` |
+| 字符 I/O 桥接 | `StringInput`、`StringOutput`、`InputTextReader`、`OutputTextWriter` | 组合 `qubit_io` 字符 input/output 与文本 trait |
 | UTF-8 stream | `Utf8TextReader`、`Utf8TextWriter` | 将 `Read` / `Write` byte stream 适配为 UTF-8 文本 |
 | Charset stream | `CharsetTextReader`、`CharsetTextWriter` | 适配 byte-oriented `qubit-codec-text` codec |
 | 扩展 trait | `CharsetReadExt`、`CharsetWriteExt` | 从 `Read` 和 `Write` 创建 charset text stream |
@@ -25,7 +26,8 @@ qubit-io-text = "0.1"
 
 ## 写入文本
 
-`String`、`StringTextWriter`、`Utf8TextWriter` 和 `CharsetTextWriter` 都实现了
+`String`、`StringTextWriter`、`Utf8TextWriter`、`CharsetTextWriter`，以及
+满足 `O: qubit_io::Output<Item = char>` 的 `OutputTextWriter<O>` 都实现了
 `TextWrite`。
 
 ```rust
@@ -54,8 +56,11 @@ let mut writer = StringTextWriter::new(&mut output).with_line_ending(LineEnding:
 writer.write_line("first")?;
 
 assert_eq!("first\r\n", output);
-# Ok::<(), std::convert::Infallible>(())
+# Ok::<(), std::io::Error>(())
 ```
+
+当 `I: qubit_io::Input<Item = char>` 时，`InputTextReader<I>` 实现
+`TextRead`。`StringInput` 是 `StringTextReader` 使用的内存字符输入。
 
 ## UTF-8 Byte Stream
 
