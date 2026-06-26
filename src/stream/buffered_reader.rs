@@ -5,28 +5,13 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{
-    error::Error as StdError,
-    io,
-};
+use std::{error::Error as StdError, io};
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeInput,
-    TranscodeDecoder,
-};
+use qubit_codec::{CapacityError, TranscodeDecodeInput, TranscodeDecoder};
 use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::{
-    Input,
-    UncheckedSlice,
-    nz,
-};
+use qubit_io::{Input, UncheckedSlice, nz};
 
-use crate::{
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
-};
+use crate::{CodingErrorPolicy, TextLineRead, TextRead};
 
 /// Default byte buffer capacity used by buffered text readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -88,12 +73,7 @@ where
     /// Returns a buffered text reader. The byte buffer is raised to at least
     /// four bytes so built-in Unicode byte codecs can retain incomplete tails.
     #[must_use]
-    pub fn with_capacity(
-        inner: R,
-        decoder: D,
-        policy: CodingErrorPolicy,
-        capacity: usize,
-    ) -> Self {
+    pub fn with_capacity(inner: R, decoder: D, policy: CodingErrorPolicy, capacity: usize) -> Self {
         let capacity = capacity.max(MIN_TEXT_BUFFER_CAPACITY);
         Self {
             input: TranscodeDecodeInput::with_capacity(inner, capacity),
@@ -277,18 +257,12 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe {
-            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
-        };
+        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max {
             match self.read_char()? {
@@ -302,10 +276,7 @@ where
         Ok(count)
     }
 
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         while let Some(ch) = self.read_char()? {
             output.push(ch);

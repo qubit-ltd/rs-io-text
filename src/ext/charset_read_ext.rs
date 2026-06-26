@@ -10,11 +10,7 @@ use std::io;
 use qubit_codec_text::CharsetCodec;
 use qubit_io::Input;
 
-use crate::{
-    CharsetTextReader,
-    CodingErrorPolicy,
-    TextRead,
-};
+use crate::{CharsetTextReader, CodingErrorPolicy, TextRead};
 
 /// Extension methods for reading charset-encoded text from byte streams.
 pub trait CharsetReadExt: Input<Item = u8> + Sized {
@@ -59,7 +55,7 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        CharsetTextReader::with_capacity(self, codec, policy, capacity)
+        CharsetTextReader::new_with_buffer_capacity(self, codec, policy, capacity)
     }
 
     /// Reads all remaining bytes as charset-encoded text.
@@ -85,8 +81,7 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut reader =
-            CharsetTextReader::new(BorrowedInput::new(self), codec, policy);
+        let mut reader = CharsetTextReader::new(BorrowedInput::new(self), codec, policy);
         let mut output = String::new();
         reader.read_to_string(&mut output)?;
         Ok(output)

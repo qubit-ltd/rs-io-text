@@ -57,11 +57,7 @@ pub(crate) fn read_chars_at(
 ///
 /// # Returns
 /// The number of characters appended.
-pub(crate) fn read_to_string_at(
-    text: &str,
-    position: &mut usize,
-    output: &mut String,
-) -> usize {
+pub(crate) fn read_to_string_at(text: &str, position: &mut usize, output: &mut String) -> usize {
     let remaining = &text[*position..];
     let count = remaining.chars().count();
     output.push_str(remaining);
@@ -78,11 +74,7 @@ pub(crate) fn read_to_string_at(
 ///
 /// # Returns
 /// `true` when a line was appended, or `false` at EOF.
-pub(crate) fn read_line_at(
-    text: &str,
-    position: &mut usize,
-    output: &mut String,
-) -> bool {
+pub(crate) fn read_line_at(text: &str, position: &mut usize, output: &mut String) -> bool {
     if *position >= text.len() {
         return false;
     }

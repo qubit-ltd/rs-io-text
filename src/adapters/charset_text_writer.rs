@@ -7,19 +7,10 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodePolicy,
-    CharsetEncoder,
-};
+use qubit_codec_text::{CharsetCodec, CharsetEncodePolicy, CharsetEncoder};
 use qubit_io::Output;
 
-use crate::{
-    BufferedWriter,
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-};
+use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
@@ -27,24 +18,24 @@ use crate::{
 /// constructs the appropriate [`CharsetEncoder`] from the supplied codec and
 /// unmappable-character policy.
 #[derive(Debug)]
-pub struct CharsetTextWriter<W, C>
+pub struct CharsetTextWriter<O, C>
 where
-    W: Output<Item = u8>,
+    O: Output<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
-    writer: BufferedWriter<W, CharsetEncoder<C>>,
+    writer: BufferedWriter<O, CharsetEncoder<C>>,
 }
 
-impl<W, C> CharsetTextWriter<W, C>
+impl<O, C> CharsetTextWriter<O, C>
 where
-    W: Output<Item = u8>,
+    O: Output<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates a charset text writer with the default buffer capacity.
     ///
     /// # Parameters
     ///
-    /// - `inner`: Byte writer to receive encoded bytes.
+    /// - `output`: Byte writer to receive encoded bytes.
     /// - `codec`: Byte-oriented charset codec used for outgoing text.
     /// - `policy`: Unencodable text handling policy.
     ///
@@ -58,10 +49,11 @@ where
     /// replacement character or the fallback `?` replacement. That indicates a
     /// broken codec invariant, not recoverable input data.
     #[must_use]
-    pub fn new(inner: W, codec: C, policy: CodingErrorPolicy) -> Self {
+    #[inline]
+    pub fn new(output: O, codec: C, policy: CodingErrorPolicy) -> Self {
         let encoder = create_encoder(codec, policy);
         Self {
-            writer: BufferedWriter::new(inner, encoder),
+            writer: BufferedWriter::new(output, encoder),
         }
     }
 
@@ -69,10 +61,10 @@ where
     ///
     /// # Parameters
     ///
-    /// - `inner`: Byte writer to receive encoded bytes.
+    /// - `output`: Byte writer to receive encoded bytes.
     /// - `codec`: Byte-oriented charset codec used for outgoing text.
     /// - `policy`: Unencodable text handling policy.
-    /// - `capacity`: Requested internal byte buffer capacity.
+    /// - `buffer_capacity`: Requested internal byte buffer capacity.
     ///
     /// # Returns
     ///
@@ -83,15 +75,16 @@ where
     /// In replacement mode, panics if no replacement character can be encoded
     /// by the codec.
     #[must_use]
-    pub fn with_capacity(
-        inner: W,
+    #[inline]
+    pub fn new_with_buffer_capacity(
+        output: O,
         codec: C,
         policy: CodingErrorPolicy,
-        capacity: usize,
+        buffer_capacity: usize,
     ) -> Self {
         let encoder = create_encoder(codec, policy);
         Self {
-            writer: BufferedWriter::with_capacity(inner, encoder, capacity),
+            writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
         }
     }
 
@@ -105,6 +98,7 @@ where
     ///
     /// Returns this writer with the configured line ending.
     #[must_use]
+    #[inline]
     pub fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
         self.writer = self.writer.with_line_ending(line_ending);
         self
@@ -116,27 +110,8 @@ where
     ///
     /// Returns the wrapped byte writer. Pending bytes may still be buffered.
     #[must_use]
-    pub const fn get_ref(&self) -> &W {
-        self.writer.inner()
-    }
-
-    /// Returns a mutable reference to the wrapped byte writer.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped byte writer. Flush first if it must observe all
-    /// prior text writes.
-    pub fn get_mut(&mut self) -> &mut W {
-        self.writer.inner_mut()
-    }
-
-    /// Returns a shared reference to the wrapped byte writer.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped byte writer.
-    #[must_use]
-    pub const fn inner(&self) -> &W {
+    #[inline(always)]
+    pub const fn output(&self) -> &O {
         self.writer.inner()
     }
 
@@ -145,7 +120,8 @@ where
     /// # Returns
     ///
     /// Returns the wrapped byte writer.
-    pub fn inner_mut(&mut self) -> &mut W {
+    #[inline(always)]
+    pub fn output_mut(&mut self) -> &mut O {
         self.writer.inner_mut()
     }
 
@@ -156,6 +132,7 @@ where
     /// Returns encoding finalization errors or I/O errors from the wrapped
     /// writer. After a successful finish, later write calls return
     /// [`io::ErrorKind::InvalidInput`].
+    #[inline]
     pub fn finish(&mut self) -> io::Result<()> {
         self.writer.finish()
     }
@@ -169,14 +146,15 @@ where
     /// # Errors
     ///
     /// Returns encoding finalization or I/O errors.
-    pub fn into_inner(self) -> io::Result<W> {
+    #[inline]
+    pub fn into_output(self) -> io::Result<O> {
         self.writer.into_inner()
     }
 }
 
-impl<W, C> TextWrite for CharsetTextWriter<W, C>
+impl<O, C> TextWrite for CharsetTextWriter<O, C>
 where
-    W: Output<Item = u8>,
+    O: Output<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
@@ -191,18 +169,22 @@ where
         self.writer.write_char(ch)
     }
 
+    #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         self.writer.write_chars(chars)
     }
 
+    #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
         self.writer.write_str(text)
     }
 
+    #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.writer.write_line(line)
     }
 
+    #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.writer.flush()
     }
@@ -228,17 +210,14 @@ where
     C: CharsetCodec<Unit = u8>,
 {
     match policy {
-        CodingErrorPolicy::Strict => CharsetEncoder::with_policy(
-            codec,
-            CharsetEncodePolicy::report(),
-        )
-        .expect(
-            "reporting encode policy does not require an encodable replacement",
-        ),
+        CodingErrorPolicy::Strict => {
+            CharsetEncoder::with_policy(codec, CharsetEncodePolicy::report())
+                .expect("reporting encode policy does not require an encodable replacement")
+        }
         CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
     }
 }
 
 /// Buffered alias preserved for API compatibility with existing naming
 /// patterns.
-pub type BufferedCharsetTextWriter<W, C> = CharsetTextWriter<W, C>;
+pub type BufferedCharsetTextWriter<O, C> = CharsetTextWriter<O, C>;

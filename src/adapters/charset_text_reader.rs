@@ -7,18 +7,10 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecoder,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecoder};
 use qubit_io::Input;
 
-use crate::{
-    BufferedReader,
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
-};
+use crate::{BufferedReader, CodingErrorPolicy, TextLineRead, TextRead};
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
@@ -26,37 +18,37 @@ use crate::{
 /// constructs the appropriate [`CharsetDecoder`] from the supplied codec and
 /// malformed-input policy.
 #[derive(Debug)]
-pub struct CharsetTextReader<R, C>
+pub struct CharsetTextReader<I, C>
 where
-    R: Input<Item = u8>,
+    I: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
-    reader: BufferedReader<R, CharsetDecoder<C>>,
+    reader: BufferedReader<I, CharsetDecoder<C>>,
 }
 
-impl<R, C> CharsetTextReader<R, C>
+impl<I, C> CharsetTextReader<I, C>
 where
-    R: Input<Item = u8>,
+    I: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates a charset text reader with the default buffer capacity.
     ///
     /// # Parameters
     ///
-    /// - `inner`: Byte reader to decode lazily.
+    /// - `input`: Byte reader to decode lazily.
     /// - `codec`: Byte-oriented charset codec used by the input.
     /// - `policy`: Malformed input handling policy.
     ///
     /// # Returns
     ///
     /// Returns a streaming text reader. Construction does not read from
-    /// `inner`; I/O and decode errors are reported by read methods.
+    /// `input`; I/O and decode errors are reported by read methods.
     #[must_use]
-    pub fn new(inner: R, codec: C, policy: CodingErrorPolicy) -> Self {
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+    #[inline]
+    pub fn new(input: I, codec: C, policy: CodingErrorPolicy) -> Self {
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
-            reader: BufferedReader::new(inner, decoder, policy),
+            reader: BufferedReader::new(input, decoder, policy),
         }
     }
 
@@ -64,28 +56,26 @@ where
     ///
     /// # Parameters
     ///
-    /// - `inner`: Byte reader to decode lazily.
+    /// - `input`: Byte reader to decode lazily.
     /// - `codec`: Byte-oriented charset codec used by the input.
     /// - `policy`: Malformed input handling policy.
-    /// - `capacity`: Requested internal byte buffer capacity.
+    /// - `buffer_capacity`: Requested internal byte buffer capacity.
     ///
     /// # Returns
     ///
     /// Returns a streaming text reader. The generic buffered text layer raises
     /// too-small capacities enough to retain built-in charset tails.
     #[must_use]
-    pub fn with_capacity(
-        inner: R,
+    #[inline]
+    pub fn new_with_buffer_capacity(
+        input: I,
         codec: C,
         policy: CodingErrorPolicy,
-        capacity: usize,
+        buffer_capacity: usize,
     ) -> Self {
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
-            reader: BufferedReader::with_capacity(
-                inner, decoder, policy, capacity,
-            ),
+            reader: BufferedReader::with_capacity(input, decoder, policy, buffer_capacity),
         }
     }
 
@@ -96,7 +86,8 @@ where
     /// Returns the wrapped byte reader. It may already be positioned beyond
     /// bytes retained in this reader's internal buffer.
     #[must_use]
-    pub const fn get_ref(&self) -> &R {
+    #[inline(always)]
+    pub const fn input(&self) -> &I {
         self.reader.inner()
     }
 
@@ -104,28 +95,11 @@ where
     ///
     /// # Returns
     ///
+    /// Returns the wrapped byte reader.
     /// Returns the wrapped byte reader. Mutating it directly can invalidate the
     /// logical stream position represented by buffered bytes.
-    pub fn get_mut(&mut self) -> &mut R {
-        self.reader.inner_mut()
-    }
-
-    /// Returns a shared reference to the wrapped byte reader.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped byte reader.
-    #[must_use]
-    pub const fn inner(&self) -> &R {
-        self.reader.inner()
-    }
-
-    /// Returns a mutable reference to the wrapped byte reader.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped byte reader.
-    pub fn inner_mut(&mut self) -> &mut R {
+    #[inline(always)]
+    pub fn input_mut(&mut self) -> &mut I {
         self.reader.inner_mut()
     }
 
@@ -136,47 +110,45 @@ where
     /// Returns the underlying reader. Any encoded bytes or decoded characters
     /// already buffered by this reader are discarded.
     #[must_use]
-    pub fn into_inner(self) -> R {
+    #[inline]
+    pub fn into_input(self) -> I {
         self.reader.into_inner()
     }
 }
 
-impl<R, C> TextRead for CharsetTextReader<R, C>
+impl<I, C> TextRead for CharsetTextReader<I, C>
 where
-    R: Input<Item = u8>,
+    I: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
 
+    #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         self.reader.read_char()
     }
 
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    #[inline]
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    #[inline]
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }
 
-impl<R, C> TextLineRead for CharsetTextReader<R, C>
+impl<I, C> TextLineRead for CharsetTextReader<I, C>
 where
-    R: Input<Item = u8>,
+    I: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
+    #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         self.reader.read_line(output)
     }
 }
 
 /// Buffered alias preserved for API compatibility with older naming patterns.
-pub type BufferedCharsetTextReader<R, C> = CharsetTextReader<R, C>;
+pub type BufferedCharsetTextReader<I, C> = CharsetTextReader<I, C>;
