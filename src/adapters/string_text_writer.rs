@@ -7,16 +7,12 @@
 // =============================================================================
 use std::convert::Infallible;
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, OutputTextWriter, StringOutput, TextWrite};
 
 /// Text writer over a borrowed [`String`] with configurable line endings.
 #[derive(Debug)]
 pub struct StringTextWriter<'a> {
-    output: &'a mut String,
-    line_ending: LineEnding,
+    writer: OutputTextWriter<StringOutput<'a>>,
 }
 
 impl<'a> StringTextWriter<'a> {
@@ -28,10 +24,9 @@ impl<'a> StringTextWriter<'a> {
     /// # Returns
     /// A string text writer using LF line endings.
     #[must_use]
-    pub const fn new(output: &'a mut String) -> Self {
+    pub fn new(output: &'a mut String) -> Self {
         Self {
-            output,
-            line_ending: LineEnding::Lf,
+            writer: OutputTextWriter::new(StringOutput::new(output)),
         }
     }
 
@@ -44,7 +39,7 @@ impl<'a> StringTextWriter<'a> {
     /// This writer with the configured line ending.
     #[must_use]
     pub const fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
-        self.line_ending = line_ending;
+        self.writer = self.writer.with_line_ending(line_ending);
         self
     }
 
@@ -54,7 +49,7 @@ impl<'a> StringTextWriter<'a> {
     /// A shared reference to the destination string.
     #[must_use]
     pub fn get_ref(&self) -> &String {
-        self.output
+        self.writer.get_ref().get_ref()
     }
 
     /// Returns the wrapped string mutably.
@@ -62,46 +57,41 @@ impl<'a> StringTextWriter<'a> {
     /// # Returns
     /// A mutable reference to the destination string.
     pub fn get_mut(&mut self) -> &mut String {
-        self.output
+        self.writer.get_mut().get_mut()
     }
 }
 
 impl TextWrite for StringTextWriter<'_> {
-    type Error = Infallible;
+    type Error = std::io::Error;
 
     #[inline]
     fn line_ending(&self) -> LineEnding {
-        self.line_ending
+        self.writer.line_ending()
     }
 
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
-        self.output.push(ch);
-        Ok(())
+        self.writer.write_char(ch)
     }
 
     #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
-        self.output.extend(chars.iter().copied());
-        Ok(())
+        self.writer.write_chars(chars)
     }
 
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
-        self.output.push_str(text);
-        Ok(())
+        self.writer.write_str(text)
     }
 
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
-        self.output.push_str(line);
-        self.output.push_str(self.line_ending.as_str());
-        Ok(())
+        self.writer.write_line(line)
     }
 
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
+        self.writer.flush()
     }
 }
 

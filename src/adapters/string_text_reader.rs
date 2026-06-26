@@ -5,24 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::convert::Infallible;
-
-use crate::{
-    TextLineRead,
-    TextRead,
-    adapters::text_cursor::{
-        read_char_at,
-        read_chars_at,
-        read_line_at,
-        read_to_string_at,
-    },
-};
+use crate::{InputTextReader, StringInput, TextLineRead, TextRead};
 
 /// Text reader over an owned string.
 #[derive(Debug)]
 pub struct StringTextReader {
-    text: String,
-    position: usize,
+    reader: InputTextReader<StringInput>,
 }
 
 impl StringTextReader {
@@ -34,8 +22,10 @@ impl StringTextReader {
     /// # Returns
     /// A reader positioned at the start of the text.
     #[must_use]
-    pub const fn new(text: String) -> Self {
-        Self { text, position: 0 }
+    pub fn new(text: String) -> Self {
+        Self {
+            reader: InputTextReader::new(StringInput::new(text)),
+        }
     }
 
     /// Returns the current byte position in the underlying string.
@@ -44,7 +34,7 @@ impl StringTextReader {
     /// The current byte position.
     #[must_use]
     pub const fn position(&self) -> usize {
-        self.position
+        self.reader.get_ref().position()
     }
 
     /// Returns the owned string.
@@ -53,39 +43,32 @@ impl StringTextReader {
     /// The original string owned by this reader.
     #[must_use]
     pub fn into_inner(self) -> String {
-        self.text
+        self.reader.into_inner().into_inner()
     }
 }
 
 impl TextRead for StringTextReader {
-    type Error = Infallible;
+    type Error = std::io::Error;
 
     #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
-        Ok(read_char_at(&self.text, &mut self.position))
+        self.reader.read_char()
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
-        Ok(read_chars_at(&self.text, &mut self.position, output, max))
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+        self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
-        Ok(read_to_string_at(&self.text, &mut self.position, output))
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+        self.reader.read_to_string(output)
     }
 }
 
 impl TextLineRead for StringTextReader {
     #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
-        Ok(read_line_at(&self.text, &mut self.position, output))
+        self.reader.read_line(output)
     }
 }
