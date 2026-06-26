@@ -5,14 +5,19 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{self, Read};
+use std::io;
 
 use qubit_codec_text::CharsetCodec;
+use qubit_io::Input;
 
-use crate::{CharsetTextReader, CodingErrorPolicy, TextRead};
+use crate::{
+    CharsetTextReader,
+    CodingErrorPolicy,
+    TextRead,
+};
 
 /// Extension methods for reading charset-encoded text from byte streams.
-pub trait CharsetReadExt: Read + Sized {
+pub trait CharsetReadExt: Input<Item = u8> + Sized {
     /// Wraps this byte reader as a charset text reader.
     ///
     /// # Parameters
@@ -80,11 +85,49 @@ pub trait CharsetReadExt: Read + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut reader = CharsetTextReader::new(self, codec, policy);
+        let mut reader =
+            CharsetTextReader::new(BorrowedInput::new(self), codec, policy);
         let mut output = String::new();
         reader.read_to_string(&mut output)?;
         Ok(output)
     }
 }
 
-impl<R> CharsetReadExt for R where R: Read + Sized {}
+impl<R> CharsetReadExt for R where R: Input<Item = u8> + Sized {}
+
+/// Borrowed input adapter used by one-shot extension methods.
+struct BorrowedInput<'a, I>
+where
+    I: Input<Item = u8> + ?Sized,
+{
+    inner: &'a mut I,
+}
+
+impl<'a, I> BorrowedInput<'a, I>
+where
+    I: Input<Item = u8> + ?Sized,
+{
+    /// Creates an adapter that forwards reads to a borrowed input.
+    fn new(inner: &'a mut I) -> Self {
+        Self { inner }
+    }
+}
+
+impl<I> Input for BorrowedInput<'_, I>
+where
+    I: Input<Item = u8> + ?Sized,
+{
+    type Item = u8;
+
+    /// Forwards an unchecked byte read to the borrowed input.
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> io::Result<usize> {
+        // SAFETY: The caller guarantees the destination range for this
+        // adapter; the same guarantee is forwarded to the wrapped input.
+        unsafe { self.inner.read_unchecked(output, index, count) }
+    }
+}

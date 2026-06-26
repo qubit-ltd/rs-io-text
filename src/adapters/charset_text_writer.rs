@@ -5,11 +5,21 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{self, Write};
+use std::io;
 
-use qubit_codec_text::{CharsetCodec, CharsetEncodePolicy, CharsetEncoder};
+use qubit_codec_text::{
+    CharsetCodec,
+    CharsetEncodePolicy,
+    CharsetEncoder,
+};
+use qubit_io::Output;
 
-use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
+use crate::{
+    BufferedWriter,
+    CodingErrorPolicy,
+    LineEnding,
+    TextWrite,
+};
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
@@ -19,7 +29,7 @@ use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
 #[derive(Debug)]
 pub struct CharsetTextWriter<W, C>
 where
-    W: Write,
+    W: Output<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     writer: BufferedWriter<W, CharsetEncoder<C>>,
@@ -27,7 +37,7 @@ where
 
 impl<W, C> CharsetTextWriter<W, C>
 where
-    W: Write,
+    W: Output<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates a charset text writer with the default buffer capacity.
@@ -73,7 +83,12 @@ where
     /// In replacement mode, panics if no replacement character can be encoded
     /// by the codec.
     #[must_use]
-    pub fn with_capacity(inner: W, codec: C, policy: CodingErrorPolicy, capacity: usize) -> Self {
+    pub fn with_capacity(
+        inner: W,
+        codec: C,
+        policy: CodingErrorPolicy,
+        capacity: usize,
+    ) -> Self {
         let encoder = create_encoder(codec, policy);
         Self {
             writer: BufferedWriter::with_capacity(inner, encoder, capacity),
@@ -161,7 +176,7 @@ where
 
 impl<W, C> TextWrite for CharsetTextWriter<W, C>
 where
-    W: Write,
+    W: Output<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
@@ -213,10 +228,13 @@ where
     C: CharsetCodec<Unit = u8>,
 {
     match policy {
-        CodingErrorPolicy::Strict => {
-            CharsetEncoder::with_policy(codec, CharsetEncodePolicy::report())
-                .expect("reporting encode policy does not require an encodable replacement")
-        }
+        CodingErrorPolicy::Strict => CharsetEncoder::with_policy(
+            codec,
+            CharsetEncodePolicy::report(),
+        )
+        .expect(
+            "reporting encode policy does not require an encodable replacement",
+        ),
         CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
     }
 }

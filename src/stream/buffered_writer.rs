@@ -7,13 +7,22 @@
 // =============================================================================
 use std::{
     error::Error as StdError,
-    io::{self, Write},
+    io,
 };
 
-use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder};
-use qubit_io::nz;
+use qubit_codec::{
+    TranscodeEncodeOutput,
+    TranscodeEncoder,
+};
+use qubit_io::{
+    Output,
+    nz,
+};
 
-use crate::{LineEnding, TextWrite};
+use crate::{
+    LineEnding,
+    TextWrite,
+};
 
 /// Default byte buffer capacity used by buffered text writers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -28,7 +37,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 #[derive(Debug)]
 pub struct BufferedWriter<W, E>
 where
-    W: Write,
+    W: Output<Item = u8>,
 {
     output: TranscodeEncodeOutput<W>,
     encoder: E,
@@ -39,7 +48,7 @@ where
 
 impl<W, E> BufferedWriter<W, E>
 where
-    W: Write,
+    W: Output<Item = u8>,
     E: TranscodeEncoder<char, u8>,
 {
     /// Creates a buffered text writer with the default byte buffer capacity.
@@ -72,7 +81,10 @@ where
     #[must_use]
     pub fn with_capacity(inner: W, encoder: E, capacity: usize) -> Self {
         let one = nz(1).get();
-        let min_output_capacity = encoder.max_output_len(one).unwrap_or(one).max(one);
+        let min_output_capacity = encoder
+            .max_transcode_output_len(one)
+            .unwrap_or(one)
+            .max(one);
         let capacity = capacity.max(min_output_capacity);
         Self {
             output: TranscodeEncodeOutput::with_capacity(inner, capacity),
@@ -143,7 +155,7 @@ where
 
 impl<W, E> BufferedWriter<W, E>
 where
-    W: Write,
+    W: Output<Item = u8>,
     E: TranscodeEncoder<char, u8>,
     E::Error: StdError + Send + Sync + 'static,
 {
@@ -222,7 +234,7 @@ where
 
 impl<W, E> TextWrite for BufferedWriter<W, E>
 where
-    W: Write,
+    W: Output<Item = u8>,
     E: TranscodeEncoder<char, u8>,
     E::Error: StdError + Send + Sync + 'static,
 {

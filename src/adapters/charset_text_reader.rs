@@ -5,11 +5,20 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{self, Read};
+use std::io;
 
-use qubit_codec_text::{CharsetCodec, CharsetDecoder};
+use qubit_codec_text::{
+    CharsetCodec,
+    CharsetDecoder,
+};
+use qubit_io::Input;
 
-use crate::{BufferedReader, CodingErrorPolicy, TextLineRead, TextRead};
+use crate::{
+    BufferedReader,
+    CodingErrorPolicy,
+    TextLineRead,
+    TextRead,
+};
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
@@ -19,7 +28,7 @@ use crate::{BufferedReader, CodingErrorPolicy, TextLineRead, TextRead};
 #[derive(Debug)]
 pub struct CharsetTextReader<R, C>
 where
-    R: Read,
+    R: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     reader: BufferedReader<R, CharsetDecoder<C>>,
@@ -27,7 +36,7 @@ where
 
 impl<R, C> CharsetTextReader<R, C>
 where
-    R: Read,
+    R: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates a charset text reader with the default buffer capacity.
@@ -44,7 +53,8 @@ where
     /// `inner`; I/O and decode errors are reported by read methods.
     #[must_use]
     pub fn new(inner: R, codec: C, policy: CodingErrorPolicy) -> Self {
-        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
+        let decoder =
+            CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
             reader: BufferedReader::new(inner, decoder, policy),
         }
@@ -64,10 +74,18 @@ where
     /// Returns a streaming text reader. The generic buffered text layer raises
     /// too-small capacities enough to retain built-in charset tails.
     #[must_use]
-    pub fn with_capacity(inner: R, codec: C, policy: CodingErrorPolicy, capacity: usize) -> Self {
-        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
+    pub fn with_capacity(
+        inner: R,
+        codec: C,
+        policy: CodingErrorPolicy,
+        capacity: usize,
+    ) -> Self {
+        let decoder =
+            CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
-            reader: BufferedReader::with_capacity(inner, decoder, policy, capacity),
+            reader: BufferedReader::with_capacity(
+                inner, decoder, policy, capacity,
+            ),
         }
     }
 
@@ -125,7 +143,7 @@ where
 
 impl<R, C> TextRead for CharsetTextReader<R, C>
 where
-    R: Read,
+    R: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
@@ -134,18 +152,25 @@ where
         self.reader.read_char()
     }
 
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }
 
 impl<R, C> TextLineRead for CharsetTextReader<R, C>
 where
-    R: Read,
+    R: Input<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
