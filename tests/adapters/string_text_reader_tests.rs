@@ -1,13 +1,7 @@
-use std::convert::Infallible;
-
-use qubit_io_text::{
-    StringTextReader,
-    TextLineRead,
-    TextRead,
-};
+use qubit_io_text::{StringTextReader, TextLineRead, TextRead};
 
 #[test]
-fn test_from_string_reads_owned_text() -> Result<(), Infallible> {
+fn test_from_string_reads_owned_text() -> std::io::Result<()> {
     let mut reader = StringTextReader::new("alpha\nβeta".to_owned());
     let mut line = String::new();
 
@@ -20,7 +14,7 @@ fn test_from_string_reads_owned_text() -> Result<(), Infallible> {
 }
 
 #[test]
-fn test_read_chars_reads_owned_text() -> Result<(), Infallible> {
+fn test_read_chars_reads_owned_text() -> std::io::Result<()> {
     let mut reader = StringTextReader::new("ab中".to_owned());
     let mut chars = Vec::new();
 
@@ -32,8 +26,7 @@ fn test_read_chars_reads_owned_text() -> Result<(), Infallible> {
 }
 
 #[test]
-fn test_read_to_string_appends_remaining_owned_text() -> Result<(), Infallible>
-{
+fn test_read_to_string_appends_remaining_owned_text() -> std::io::Result<()> {
     let mut reader = StringTextReader::new("ab中".to_owned());
     let mut output = String::from("prefix:");
 
