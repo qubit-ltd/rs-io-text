@@ -9,7 +9,10 @@ use std::io;
 
 use qubit_io::Input;
 
-use crate::{TextLineRead, TextRead};
+use crate::{
+    TextLineRead,
+    TextRead,
+};
 
 /// Text reader over a `qubit_io::Input<Item = char>`.
 #[derive(Debug)]
@@ -79,7 +82,11 @@ where
         }
     }
 
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max {
             match self.read_char()? {
@@ -93,7 +100,10 @@ where
         Ok(count)
     }
 
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while let Some(ch) = self.read_char()? {
             output.push(ch);

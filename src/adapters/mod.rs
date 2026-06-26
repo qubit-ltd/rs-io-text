@@ -7,6 +7,8 @@
 // =============================================================================
 //! Text reader and writer adapters.
 
+mod charset_string_decoder;
+mod charset_string_encoder;
 mod charset_text_reader;
 mod charset_text_writer;
 mod input_text_reader;
@@ -20,8 +22,16 @@ mod text_cursor;
 mod utf8_text_reader;
 mod utf8_text_writer;
 
-pub use charset_text_reader::{BufferedCharsetTextReader, CharsetTextReader};
-pub use charset_text_writer::{BufferedCharsetTextWriter, CharsetTextWriter};
+pub use charset_string_decoder::CharsetStringDecoder;
+pub use charset_string_encoder::CharsetStringEncoder;
+pub use charset_text_reader::{
+    BufferedCharsetTextReader,
+    CharsetTextReader,
+};
+pub use charset_text_writer::{
+    BufferedCharsetTextWriter,
+    CharsetTextWriter,
+};
 pub use input_text_reader::InputTextReader;
 pub use output_text_writer::OutputTextWriter;
 pub use str_text_reader::StrTextReader;

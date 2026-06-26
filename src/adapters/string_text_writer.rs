@@ -7,7 +7,12 @@
 // =============================================================================
 use std::convert::Infallible;
 
-use crate::{LineEnding, OutputTextWriter, StringOutput, TextWrite};
+use crate::{
+    LineEnding,
+    OutputTextWriter,
+    StringOutput,
+    TextWrite,
+};
 
 /// Text writer over a borrowed [`String`] with configurable line endings.
 #[derive(Debug)]

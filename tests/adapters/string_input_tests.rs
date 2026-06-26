@@ -1,4 +1,7 @@
-use qubit_io::{Input, InputExt};
+use qubit_io::{
+    Input,
+    InputExt,
+};
 use qubit_io_text::StringInput;
 
 #[test]
@@ -16,6 +19,13 @@ fn test_read_reads_chars_from_owned_string() -> std::io::Result<()> {
     assert_eq!("a中🙂".len(), input.position());
     assert_eq!(0, input.read(&mut output[..2])?);
     Ok(())
+}
+
+#[test]
+fn test_get_ref_returns_owned_string() {
+    let input = StringInput::new("a中".to_owned());
+
+    assert_eq!("a中", input.get_ref());
 }
 
 #[test]

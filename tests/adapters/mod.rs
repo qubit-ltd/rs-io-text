@@ -1,3 +1,5 @@
+mod charset_string_decoder_tests;
+mod charset_string_encoder_tests;
 mod charset_text_reader_tests;
 mod charset_text_writer_tests;
 mod input_text_reader_tests;

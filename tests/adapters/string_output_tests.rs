@@ -1,4 +1,7 @@
-use qubit_io::{Output, OutputExt};
+use qubit_io::{
+    Output,
+    OutputExt,
+};
 use qubit_io_text::StringOutput;
 
 #[test]
