@@ -7,23 +7,19 @@
 // =============================================================================
 use std::io::Result;
 
-use qubit_io::{
-    Output,
-    UncheckedSlice,
-    try_reserve_string,
-};
+use qubit_io::{Output, UncheckedSlice, try_reserve_string};
 
 /// Character output over a borrowed [`String`].
 ///
-/// `StringOutput` exposes a mutable string as a
+/// `StringCharOutput` exposes a mutable string as a
 /// `qubit_io::Output<Item = char>`. Writes append Unicode scalar values to the
 /// wrapped string, and flushing is a no-op.
 #[derive(Debug)]
-pub struct StringOutput<'a> {
+pub struct StringCharOutput<'a> {
     output: &'a mut String,
 }
 
-impl<'a> StringOutput<'a> {
+impl<'a> StringCharOutput<'a> {
     /// Creates a character output over `output`.
     ///
     /// # Parameters
@@ -54,7 +50,7 @@ impl<'a> StringOutput<'a> {
     }
 }
 
-impl Output for StringOutput<'_> {
+impl Output for StringCharOutput<'_> {
     type Item = char;
 
     /// Writes characters from an indexed input range.

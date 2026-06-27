@@ -1,15 +1,7 @@
-use std::io::{
-    Error,
-    ErrorKind,
-};
+use std::io::{Error, ErrorKind};
 
 use qubit_io::Input;
-use qubit_io_text::{
-    InputTextReader,
-    StringInput,
-    TextLineRead,
-    TextRead,
-};
+use qubit_io_text::{InputTextReader, StringCharInput, TextLineRead, TextRead};
 
 #[derive(Debug)]
 struct FailingCharInput;
@@ -37,7 +29,7 @@ where
 
 #[test]
 fn test_read_char_reads_from_char_input() -> std::io::Result<()> {
-    let input = StringInput::new("a中".to_owned());
+    let input = StringCharInput::new("a中".to_owned());
     let mut reader = InputTextReader::new(input);
 
     assert_eq!(Some('a'), reader.read_char()?);
@@ -49,7 +41,7 @@ fn test_read_char_reads_from_char_input() -> std::io::Result<()> {
 
 #[test]
 fn test_accessors_expose_wrapped_input() -> std::io::Result<()> {
-    let input = StringInput::new("abc".to_owned());
+    let input = StringCharInput::new("abc".to_owned());
     let mut reader = InputTextReader::new(input);
 
     assert_eq!("abc", reader.get_ref().get_ref());
@@ -62,7 +54,7 @@ fn test_accessors_expose_wrapped_input() -> std::io::Result<()> {
 
 #[test]
 fn test_read_chars_appends_up_to_max() -> std::io::Result<()> {
-    let input = StringInput::new("ab中".to_owned());
+    let input = StringCharInput::new("ab中".to_owned());
     let mut reader = InputTextReader::new(input);
     let mut output = vec!['x'];
 
@@ -75,7 +67,7 @@ fn test_read_chars_appends_up_to_max() -> std::io::Result<()> {
 
 #[test]
 fn test_read_to_string_appends_remaining_chars() -> std::io::Result<()> {
-    let input = StringInput::new("a中".to_owned());
+    let input = StringCharInput::new("a中".to_owned());
     let mut reader = InputTextReader::new(input);
     let mut output = String::from("seed:");
 
@@ -100,27 +92,21 @@ fn test_read_methods_propagate_input_errors() {
     assert_other_error(InputTextReader::new(FailingCharInput).read_char());
 
     let mut chars = vec!['x'];
-    assert_other_error(
-        InputTextReader::new(FailingCharInput).read_chars(&mut chars, 1),
-    );
+    assert_other_error(InputTextReader::new(FailingCharInput).read_chars(&mut chars, 1));
     assert_eq!(vec!['x'], chars);
 
     let mut text = String::from("seed:");
-    assert_other_error(
-        InputTextReader::new(FailingCharInput).read_to_string(&mut text),
-    );
+    assert_other_error(InputTextReader::new(FailingCharInput).read_to_string(&mut text));
     assert_eq!("seed:", text);
 
     let mut line = String::from("seed:");
-    assert_other_error(
-        InputTextReader::new(FailingCharInput).read_line(&mut line),
-    );
+    assert_other_error(InputTextReader::new(FailingCharInput).read_line(&mut line));
     assert_eq!("seed:", line);
 }
 
 #[test]
 fn test_read_line_keeps_line_ending() -> std::io::Result<()> {
-    let input = StringInput::new("alpha\nβeta".to_owned());
+    let input = StringCharInput::new("alpha\nβeta".to_owned());
     let mut reader = InputTextReader::new(input);
     let mut line = String::new();
 

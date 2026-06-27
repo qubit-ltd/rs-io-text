@@ -1,12 +1,9 @@
-use qubit_io::{
-    Input,
-    InputExt,
-};
-use qubit_io_text::StringInput;
+use qubit_io::{Input, InputExt};
+use qubit_io_text::StringCharInput;
 
 #[test]
 fn test_read_reads_chars_from_owned_string() -> std::io::Result<()> {
-    let mut input = StringInput::new("a中🙂".to_owned());
+    let mut input = StringCharInput::new("a中🙂".to_owned());
     let mut output = ['\0'; 4];
 
     assert_eq!(0, input.position());
@@ -23,14 +20,14 @@ fn test_read_reads_chars_from_owned_string() -> std::io::Result<()> {
 
 #[test]
 fn test_get_ref_returns_owned_string() {
-    let input = StringInput::new("a中".to_owned());
+    let input = StringCharInput::new("a中".to_owned());
 
     assert_eq!("a中", input.get_ref());
 }
 
 #[test]
 fn test_read_unchecked_writes_into_indexed_range() -> std::io::Result<()> {
-    let mut input = StringInput::new("ab中".to_owned());
+    let mut input = StringCharInput::new("ab中".to_owned());
     let mut output = ['.'; 5];
 
     let read = unsafe { input.read_unchecked(&mut output, 1, 3)? };
@@ -43,7 +40,7 @@ fn test_read_unchecked_writes_into_indexed_range() -> std::io::Result<()> {
 
 #[test]
 fn test_read_exact_or_eof_reads_remaining_chars() -> std::io::Result<()> {
-    let mut input = StringInput::new("中🙂".to_owned());
+    let mut input = StringCharInput::new("中🙂".to_owned());
     let mut output = ['\0'; 4];
 
     let read = input.read_exact_or_eof(&mut output)?;

@@ -7,23 +7,20 @@
 // =============================================================================
 use std::io::Result;
 
-use qubit_io::{
-    Input,
-    UncheckedSlice,
-};
+use qubit_io::{Input, UncheckedSlice};
 
 /// Character input over an owned [`String`].
 ///
-/// `StringInput` exposes the owned text as a `qubit_io::Input<Item = char>`.
+/// `StringCharInput` exposes the owned text as a `qubit_io::Input<Item = char>`.
 /// The current position is stored as a UTF-8 byte offset and is always advanced
 /// on character boundaries.
 #[derive(Debug)]
-pub struct StringInput {
+pub struct StringCharInput {
     text: String,
     position: usize,
 }
 
-impl StringInput {
+impl StringCharInput {
     /// Creates a character input over owned text.
     ///
     /// # Parameters
@@ -64,7 +61,7 @@ impl StringInput {
     }
 }
 
-impl Input for StringInput {
+impl Input for StringCharInput {
     type Item = char;
 
     /// Reads characters into an indexed output range.

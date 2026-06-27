@@ -1,15 +1,7 @@
-use std::io::{
-    Error,
-    ErrorKind,
-};
+use std::io::{Error, ErrorKind};
 
 use qubit_io::Output;
-use qubit_io_text::{
-    LineEnding,
-    OutputTextWriter,
-    StringOutput,
-    TextWrite,
-};
+use qubit_io_text::{LineEnding, OutputTextWriter, StringCharOutput, TextWrite};
 
 #[derive(Debug)]
 struct FailingCharOutput;
@@ -43,9 +35,8 @@ where
 fn test_write_text_to_char_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
-        let output = StringOutput::new(&mut text);
-        let mut writer =
-            OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
+        let output = StringCharOutput::new(&mut text);
+        let mut writer = OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
 
         writer.write_char('中')?;
         writer.write_chars(&['a', '🙂'])?;
@@ -62,7 +53,7 @@ fn test_write_text_to_char_output() -> std::io::Result<()> {
 fn test_accessors_expose_wrapped_output() -> std::io::Result<()> {
     let mut text = String::from("prefix");
     {
-        let output = StringOutput::new(&mut text);
+        let output = StringCharOutput::new(&mut text);
         let mut writer = OutputTextWriter::new(output);
 
         assert_eq!("prefix", writer.get_ref().get_ref());
@@ -79,7 +70,7 @@ fn test_accessors_expose_wrapped_output() -> std::io::Result<()> {
 fn test_into_inner_returns_wrapped_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
-        let output = StringOutput::new(&mut text);
+        let output = StringCharOutput::new(&mut text);
         let mut writer = OutputTextWriter::new(output);
 
         writer.write_str("value")?;
@@ -101,12 +92,8 @@ fn test_write_str_empty_does_not_write() -> std::io::Result<()> {
 
 #[test]
 fn test_write_methods_propagate_output_errors() {
-    assert_other_error(
-        OutputTextWriter::new(FailingCharOutput).write_str(&"a".repeat(256)),
-    );
-    assert_other_error(
-        OutputTextWriter::new(FailingCharOutput).write_line("x"),
-    );
+    assert_other_error(OutputTextWriter::new(FailingCharOutput).write_str(&"a".repeat(256)));
+    assert_other_error(OutputTextWriter::new(FailingCharOutput).write_line("x"));
     assert_other_error(OutputTextWriter::new(FailingCharOutput).write_line(""));
 }
 
@@ -115,7 +102,7 @@ fn test_write_str_flushes_full_character_chunks() -> std::io::Result<()> {
     let long_text = "a".repeat(300);
     let mut text = String::new();
     {
-        let output = StringOutput::new(&mut text);
+        let output = StringCharOutput::new(&mut text);
         let mut writer = OutputTextWriter::new(output);
 
         writer.write_str(&long_text)?;

@@ -7,17 +7,12 @@
 // =============================================================================
 use std::convert::Infallible;
 
-use crate::{
-    LineEnding,
-    OutputTextWriter,
-    StringOutput,
-    TextWrite,
-};
+use crate::{LineEnding, OutputTextWriter, StringCharOutput, TextWrite};
 
 /// Text writer over a borrowed [`String`] with configurable line endings.
 #[derive(Debug)]
 pub struct StringTextWriter<'a> {
-    writer: OutputTextWriter<StringOutput<'a>>,
+    writer: OutputTextWriter<StringCharOutput<'a>>,
 }
 
 impl<'a> StringTextWriter<'a> {
@@ -31,7 +26,7 @@ impl<'a> StringTextWriter<'a> {
     #[must_use]
     pub fn new(output: &'a mut String) -> Self {
         Self {
-            writer: OutputTextWriter::new(StringOutput::new(output)),
+            writer: OutputTextWriter::new(StringCharOutput::new(output)),
         }
     }
 

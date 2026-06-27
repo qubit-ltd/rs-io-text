@@ -5,17 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use crate::{
-    InputTextReader,
-    StringInput,
-    TextLineRead,
-    TextRead,
-};
+use crate::{InputTextReader, StringCharInput, TextLineRead, TextRead};
 
 /// Text reader over an owned string.
 #[derive(Debug)]
 pub struct StringTextReader {
-    reader: InputTextReader<StringInput>,
+    reader: InputTextReader<StringCharInput>,
 }
 
 impl StringTextReader {
@@ -29,7 +24,7 @@ impl StringTextReader {
     #[must_use]
     pub fn new(text: String) -> Self {
         Self {
-            reader: InputTextReader::new(StringInput::new(text)),
+            reader: InputTextReader::new(StringCharInput::new(text)),
         }
     }
 
@@ -61,19 +56,12 @@ impl TextRead for StringTextReader {
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }
