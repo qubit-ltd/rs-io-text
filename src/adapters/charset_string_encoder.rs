@@ -9,18 +9,9 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::{CapacityError, TranscodeError, TranscodeStatus, Transcoder};
 use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodeError,
-    CharsetEncodePolicy,
-    CharsetEncoder,
-    UnmappableAction,
+    CharsetCodec, CharsetEncodeError, CharsetEncodePolicy, CharsetEncoder, UnmappableAction,
 };
 use qubit_io::try_reserve_vec;
 
@@ -83,10 +74,7 @@ where
     ///
     /// Returns [`CharsetEncodeError`] when `policy` uses replacement and the
     /// replacement character cannot be encoded by `codec`.
-    pub fn with_policy(
-        codec: C,
-        policy: CharsetEncodePolicy,
-    ) -> Result<Self, CharsetEncodeError> {
+    pub fn with_policy(codec: C, policy: CharsetEncodePolicy) -> Result<Self, CharsetEncodeError> {
         Ok(Self {
             encoder: CharsetEncoder::with_policy(codec, policy)?,
         })
@@ -137,8 +125,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
-        COVERAGE_RESERVE_FAIL_AFTER
-            .with(|state| state.set(successful_attempts));
+        COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Clears coverage-only reserve failure hooks.
@@ -181,15 +168,15 @@ where
             return Err(TranscodeError::output_length_overflow());
         }
         output.resize_with(capacity, C::Unit::default);
-        let written = self.encode_chars_into(&chars, &mut output, 0).map_err(
-            |error| {
+        let written = self
+            .encode_chars_into(&chars, &mut output, 0)
+            .map_err(|error| {
                 if matches!(error, TranscodeError::InsufficientOutput { .. }) {
                     TranscodeError::output_length_overflow()
                 } else {
                     error
                 }
-            },
-        )?;
+            })?;
         output.truncate(written);
         Ok(output)
     }
@@ -251,16 +238,11 @@ where
         let required = self
             .required_encode_output_len(input.len())
             .map_err(TranscodeError::from)?;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
 
         let mut output_cursor = output_index;
         output_cursor += self.encoder.reset(output, output_cursor)?;
-        let progress =
-            self.encoder.transcode(input, 0, output, output_cursor)?;
+        let progress = self.encoder.transcode(input, 0, output, output_cursor)?;
         output_cursor += progress.written();
         if let TranscodeStatus::NeedOutput {
             output_index,
@@ -291,10 +273,7 @@ where
     /// # Errors
     ///
     /// Returns [`CapacityError`] when any component bound overflows.
-    fn required_encode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn required_encode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.encoder.max_total_output_len(input_len)
     }
 }
@@ -336,9 +315,7 @@ fn coverage_should_fail_reserve() -> bool {
 ///
 /// Returns [`TranscodeError::OutputLengthOverflow`] when the input character
 /// buffer cannot be reserved.
-fn collect_chars(
-    input: &str,
-) -> Result<Vec<char>, TranscodeError<CharsetEncodeError>> {
+fn collect_chars(input: &str) -> Result<Vec<char>, TranscodeError<CharsetEncodeError>> {
     let char_count = input.chars().count();
     let mut chars = Vec::new();
     let reserve_failed = try_reserve_vec(&mut chars, char_count).is_err();

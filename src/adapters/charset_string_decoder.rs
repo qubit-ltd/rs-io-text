@@ -9,25 +9,12 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::{CapacityError, TranscodeError, TranscodeStatus, Transcoder};
 use qubit_codec_text::{
-    Charset,
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodeErrorKind,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-    MalformedAction,
+    Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind, CharsetDecodePolicy,
+    CharsetDecoder, MalformedAction,
 };
-use qubit_io::{
-    try_reserve_string,
-    try_reserve_vec,
-};
+use qubit_io::{try_reserve_string, try_reserve_vec};
 
 /// Convenience decoder for complete inputs that should become a [`String`].
 ///
@@ -130,8 +117,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
-        COVERAGE_RESERVE_FAIL_AFTER
-            .with(|state| state.set(successful_attempts));
+        COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Clears coverage-only reserve failure hooks.
@@ -194,8 +180,7 @@ where
             .required_char_output_len(input_len)
             .map_err(TranscodeError::from)?;
         let mut chars = Vec::new();
-        let reserve_failed =
-            try_reserve_vec(&mut chars, char_capacity).is_err();
+        let reserve_failed = try_reserve_vec(&mut chars, char_capacity).is_err();
         #[cfg(coverage)]
         let reserve_failed = reserve_failed || coverage_should_fail_reserve();
         if reserve_failed {
@@ -227,10 +212,7 @@ where
     /// # Errors
     ///
     /// Returns [`CapacityError`] when char-count arithmetic overflows.
-    fn required_char_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn required_char_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.decoder.max_total_output_len(input_len)
     }
 
@@ -256,12 +238,9 @@ where
         output: &mut [char],
     ) -> Result<usize, TranscodeError<CharsetDecodeError>> {
         let mut output_cursor = self.decoder.reset(output, 0)?;
-        let progress = self.decoder.transcode(
-            input,
-            input_index,
-            output,
-            output_cursor,
-        )?;
+        let progress = self
+            .decoder
+            .transcode(input, input_index, output, output_cursor)?;
         output_cursor += progress.written();
         if let TranscodeStatus::NeedInput {
             input_index,

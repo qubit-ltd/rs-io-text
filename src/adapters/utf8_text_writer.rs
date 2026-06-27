@@ -5,15 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    Write,
-};
+use std::io::{self, Write};
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, TextWrite};
 
 /// Text writer that encodes text as UTF-8 bytes.
 #[derive(Debug)]

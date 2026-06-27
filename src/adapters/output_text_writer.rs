@@ -7,15 +7,9 @@
 // =============================================================================
 use std::io;
 
-use qubit_io::{
-    Output,
-    OutputExt,
-};
+use qubit_io::{Output, OutputExt};
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, TextWrite};
 
 /// Default character chunk capacity for string writes.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
