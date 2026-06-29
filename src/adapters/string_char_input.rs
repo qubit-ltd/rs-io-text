@@ -11,9 +11,9 @@ use qubit_io::{Input, UncheckedSlice};
 
 /// Character input over an owned [`String`].
 ///
-/// `StringCharInput` exposes the owned text as a `qubit_io::Input<Item = char>`.
-/// The current position is stored as a UTF-8 byte offset and is always advanced
-/// on character boundaries.
+/// `StringCharInput` exposes the owned text as a `qubit_io::Input<Item =
+/// char>`. The current position is stored as a UTF-8 byte offset and is always
+/// advanced on character boundaries.
 #[derive(Debug)]
 pub struct StringCharInput {
     text: String,

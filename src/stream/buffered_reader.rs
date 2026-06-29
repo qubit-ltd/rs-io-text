@@ -138,8 +138,8 @@ where
 
     /// Consumes all currently buffered encoded input.
     fn consume_all_input(&mut self) {
-        let available = self.input.available();
-        self.input.consume(available);
+        let unread = self.input.unread_len();
+        self.input.consume(unread);
     }
 }
 
@@ -238,7 +238,7 @@ where
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        if self.input.available() == 0 {
+        if self.input.unread_len() == 0 {
             return self.finish_decoder();
         }
         self.handle_incomplete_eof()

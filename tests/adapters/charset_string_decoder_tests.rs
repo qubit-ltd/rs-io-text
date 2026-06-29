@@ -1,6 +1,6 @@
 use core::num::NonZeroUsize;
 
-use qubit_codec::{Codec, TranscodeError};
+use qubit_codec::Codec;
 use qubit_codec_text::{
     Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind, CharsetDecodePolicy,
     CharsetDecodeResult, CharsetEncodeError, CharsetEncodeErrorKind, CharsetEncodeResult,
@@ -235,9 +235,10 @@ fn test_charset_string_decoder_decode_to_string_into_reports_invalid_input_index
         .expect_err("input index outside slice should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error
+        CharsetDecodeErrorKind::InvalidInputIndex { input_len: 1 },
+        error.kind(),
     );
+    assert_eq!(2, error.index());
     assert_eq!("unchanged", output);
 }
 
@@ -260,24 +261,19 @@ fn test_charset_string_decoder_decode_to_string_reports_incomplete_tail() {
         .decode_to_string(&[0xe4, 0xb8])
         .expect_err("closed input with incomplete UTF-8 tail should fail");
 
-    match error {
-        TranscodeError::Domain(error) => {
-            assert_eq!(
-                CharsetDecodeErrorKind::IncompleteSequence {
-                    required: 3,
-                    available: 2,
-                },
-                error.kind()
-            );
-            assert_eq!(0, error.index());
-        }
-        other => panic!("expected decode domain error, got {other:?}"),
-    }
+    assert_eq!(
+        CharsetDecodeErrorKind::IncompleteSequence {
+            required: 3,
+            available: 2,
+        },
+        error.kind(),
+    );
+    assert_eq!(0, error.index());
 }
 
 #[cfg(coverage)]
 mod coverage_tests {
-    use qubit_codec::TranscodeError;
+    use qubit_codec_text::CharsetDecodeErrorKind;
     use qubit_io_text::{CharsetStringDecoder, Utf8Codec};
 
     fn reset_coverage_hooks() {
@@ -294,7 +290,7 @@ mod coverage_tests {
             .decode_to_string(b"A")
             .expect_err("char buffer reserve failure should be reported");
 
-        assert_eq!(TranscodeError::OutputLengthOverflow, error);
+        assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
     }
 
@@ -309,7 +305,7 @@ mod coverage_tests {
             .decode_to_string_into(b"A", 0, &mut output)
             .expect_err("string reserve failure should be reported");
 
-        assert_eq!(TranscodeError::OutputLengthOverflow, error);
+        assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
         assert_eq!("seed:", output);
         reset_coverage_hooks();
     }
@@ -325,13 +321,8 @@ fn test_charset_string_decoder_decode_to_string_offsets_domain_errors() {
         .decode_to_string_into(b"xxA", 2, &mut output)
         .expect_err("decode error should be reported at the absolute input index");
 
-    match error {
-        TranscodeError::Domain(error) => {
-            assert_eq!(CharsetDecodeErrorKind::malformed_unknown(), error.kind());
-            assert_eq!(2, error.index());
-        }
-        other => panic!("expected decode domain error, got {other:?}"),
-    }
+    assert_eq!(CharsetDecodeErrorKind::malformed_unknown(), error.kind());
+    assert_eq!(2, error.index());
 }
 
 #[test]
@@ -342,7 +333,7 @@ fn test_charset_string_decoder_decode_to_string_reports_finish_capacity_overflow
         .decode_to_string(b"A")
         .expect_err("finish capacity overflow should be reported");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
 }
 
 #[test]
@@ -353,7 +344,7 @@ fn test_charset_string_decoder_decode_to_string_reports_char_reserve_overflow() 
         .decode_to_string(b"")
         .expect_err("huge reset bound should fail char buffer reservation");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
 }
 
 #[test]
@@ -364,11 +355,6 @@ fn test_charset_string_decoder_decode_to_string_propagates_finish_errors() {
         .decode_to_string(b"A")
         .expect_err("decode flush errors should be propagated");
 
-    match error {
-        TranscodeError::Domain(error) => {
-            assert_eq!(CharsetDecodeErrorKind::malformed_unknown(), error.kind());
-            assert_eq!(1, error.index());
-        }
-        other => panic!("expected decode domain error, got {other:?}"),
-    }
+    assert_eq!(CharsetDecodeErrorKind::malformed_unknown(), error.kind());
+    assert_eq!(1, error.index());
 }

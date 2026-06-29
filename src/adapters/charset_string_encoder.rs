@@ -9,9 +9,10 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{CapacityError, TranscodeError, TranscodeStatus, Transcoder};
+use qubit_codec::{CapacityError, TranscodeStatus, Transcoder};
 use qubit_codec_text::{
-    CharsetCodec, CharsetEncodeError, CharsetEncodePolicy, CharsetEncoder, UnmappableAction,
+    CharsetCodec, CharsetEncodeError, CharsetEncodeErrorKind, CharsetEncodePolicy, CharsetEncoder,
+    UnmappableAction,
 };
 use qubit_io::try_reserve_vec;
 
@@ -147,32 +148,30 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError`] when collecting input characters, sizing the
-    /// output, reset, encoding, or finish fails.
-    pub fn encode_str(
-        &mut self,
-        input: &str,
-    ) -> Result<Vec<C::Unit>, TranscodeError<CharsetEncodeError>>
+    /// Returns [`CharsetEncodeError`] when collecting input characters, sizing
+    /// the output, reset, encoding, or finish fails.
+    pub fn encode_str(&mut self, input: &str) -> Result<Vec<C::Unit>, CharsetEncodeError>
     where
         C::Unit: Default,
     {
-        let chars = collect_chars(input)?;
+        let charset = self.encoder.charset();
+        let chars = collect_chars(input, charset)?;
         let capacity = self
             .required_encode_output_len(chars.len())
-            .map_err(TranscodeError::from)?;
+            .map_err(|_| output_length_overflow(charset))?;
         let mut output = Vec::new();
         let reserve_failed = try_reserve_vec(&mut output, capacity).is_err();
         #[cfg(coverage)]
         let reserve_failed = reserve_failed || coverage_should_fail_reserve();
         if reserve_failed {
-            return Err(TranscodeError::output_length_overflow());
+            return Err(output_length_overflow(charset));
         }
         output.resize_with(capacity, C::Unit::default);
         let written = self
             .encode_chars_into(&chars, &mut output, 0)
             .map_err(|error| {
-                if matches!(error, TranscodeError::InsufficientOutput { .. }) {
-                    TranscodeError::output_length_overflow()
+                if matches!(error.kind(), CharsetEncodeErrorKind::BufferTooSmall { .. }) {
+                    output_length_overflow(charset)
                 } else {
                     error
                 }
@@ -198,17 +197,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError::InvalidOutputIndex`] when `output_index` is
-    /// outside `output`, [`TranscodeError::InsufficientOutput`] when the slice
-    /// cannot hold the complete encoded stream, or [`TranscodeError::Domain`]
-    /// when reset, encoding, or finish fails.
+    /// Returns [`CharsetEncodeError`] when `output_index` is outside `output`,
+    /// the slice cannot hold the complete encoded stream, or encoding fails.
     pub fn encode_str_into(
         &mut self,
         input: &str,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<CharsetEncodeError>> {
-        let chars = collect_chars(input)?;
+    ) -> Result<usize, CharsetEncodeError> {
+        let chars = collect_chars(input, self.encoder.charset())?;
         self.encode_chars_into(&chars, output, output_index)
     }
 
@@ -233,12 +230,31 @@ where
         input: &[char],
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<CharsetEncodeError>> {
-        TranscodeError::ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, CharsetEncodeError> {
+        let charset = self.encoder.charset();
+        if output_index > output.len() {
+            return Err(CharsetEncodeError::new(
+                charset,
+                CharsetEncodeErrorKind::InvalidOutputIndex {
+                    output_len: output.len(),
+                },
+                output_index,
+            ));
+        }
         let required = self
             .required_encode_output_len(input.len())
-            .map_err(TranscodeError::from)?;
-        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
+            .map_err(|_| output_length_overflow(charset))?;
+        let available = output.len() - output_index;
+        if available < required {
+            return Err(CharsetEncodeError::new(
+                charset,
+                CharsetEncodeErrorKind::BufferTooSmall {
+                    required,
+                    available,
+                },
+                output_index,
+            ));
+        }
 
         let mut output_cursor = output_index;
         output_cursor += self.encoder.reset(output, output_cursor)?;
@@ -250,10 +266,13 @@ where
             available,
         } = progress.status()
         {
-            return Err(TranscodeError::insufficient_output(
+            return Err(CharsetEncodeError::new(
+                charset,
+                CharsetEncodeErrorKind::BufferTooSmall {
+                    required: required.get(),
+                    available,
+                },
                 output_index,
-                required.get(),
-                available,
             ));
         }
         output_cursor += self.encoder.finish(output, output_cursor)?;
@@ -300,6 +319,15 @@ fn coverage_should_fail_reserve() -> bool {
     })
 }
 
+#[inline]
+fn output_length_overflow(charset: qubit_codec_text::Charset) -> CharsetEncodeError {
+    CharsetEncodeError::new(
+        charset,
+        CharsetEncodeErrorKind::OutputLengthOverflow,
+        usize::MAX,
+    )
+}
+
 /// Collects a UTF-8 string into the character slice representation expected by
 /// the transcode layer.
 ///
@@ -313,16 +341,19 @@ fn coverage_should_fail_reserve() -> bool {
 ///
 /// # Errors
 ///
-/// Returns [`TranscodeError::OutputLengthOverflow`] when the input character
-/// buffer cannot be reserved.
-fn collect_chars(input: &str) -> Result<Vec<char>, TranscodeError<CharsetEncodeError>> {
+/// Returns [`CharsetEncodeError`] when the input character buffer cannot be
+/// reserved.
+fn collect_chars(
+    input: &str,
+    charset: qubit_codec_text::Charset,
+) -> Result<Vec<char>, CharsetEncodeError> {
     let char_count = input.chars().count();
     let mut chars = Vec::new();
     let reserve_failed = try_reserve_vec(&mut chars, char_count).is_err();
     #[cfg(coverage)]
     let reserve_failed = reserve_failed || coverage_should_fail_reserve();
     if reserve_failed {
-        return Err(TranscodeError::output_length_overflow());
+        return Err(output_length_overflow(charset));
     }
     chars.extend(input.chars());
     Ok(chars)

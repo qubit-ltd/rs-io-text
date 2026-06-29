@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-use qubit_io::Output;
+use qubit_io::{BufferedOutput, Output};
 use qubit_io_text::{LineEnding, OutputTextWriter, StringCharOutput, TextWrite};
 
 #[derive(Debug)]
@@ -50,14 +50,14 @@ fn test_write_text_to_char_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_accessors_expose_wrapped_output() -> std::io::Result<()> {
+fn test_accessors_expose_buffered_output() -> std::io::Result<()> {
     let mut text = String::from("prefix");
     {
         let output = StringCharOutput::new(&mut text);
         let mut writer = OutputTextWriter::new(output);
 
-        assert_eq!("prefix", writer.get_ref().get_ref());
-        writer.get_mut().get_mut().push(':');
+        assert!(writer.get_ref().is_buffered());
+        writer.get_mut().write_fully(&[':'])?;
         writer.write_str("value")?;
         assert_eq!(LineEnding::Lf, writer.line_ending());
     }
@@ -67,15 +67,81 @@ fn test_accessors_expose_wrapped_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_into_inner_returns_wrapped_output() -> std::io::Result<()> {
+fn test_new_accepts_already_buffered_output() -> std::io::Result<()> {
+    let mut text = String::new();
+    {
+        let output = BufferedOutput::new(StringCharOutput::new(&mut text));
+        let mut writer = OutputTextWriter::new(output);
+        let debug = format!("{writer:?}");
+
+        assert!(debug.contains("OutputTextWriter"));
+        assert!(debug.contains("is_buffered"));
+        writer.write_line("buffered")?;
+        writer.flush()?;
+    }
+
+    assert_eq!("buffered\n", text);
+    Ok(())
+}
+
+#[test]
+fn test_from_boxed_wraps_unbuffered_output() -> std::io::Result<()> {
+    let mut text = String::new();
+    {
+        let output: Box<dyn Output<Item = char> + '_> = Box::new(StringCharOutput::new(&mut text));
+        let mut writer = OutputTextWriter::from_boxed(output);
+
+        assert!(writer.get_ref().is_buffered());
+        writer.write_chars(&['b', 'o', 'x'])?;
+        writer.flush()?;
+    }
+
+    assert_eq!("box", text);
+    Ok(())
+}
+
+#[test]
+fn test_from_boxed_keeps_buffered_output() -> std::io::Result<()> {
+    let mut text = String::new();
+    {
+        let output: Box<dyn Output<Item = char> + '_> =
+            Box::new(BufferedOutput::new(StringCharOutput::new(&mut text)));
+        let mut writer = OutputTextWriter::from_boxed(output).with_line_ending(LineEnding::Cr);
+
+        assert!(writer.get_ref().is_buffered());
+        writer.write_line("box")?;
+        let output = writer.into_inner()?;
+        drop(output);
+    }
+
+    assert_eq!("box\r", text);
+    Ok(())
+}
+
+#[test]
+fn test_into_inner_propagates_flush_error() {
+    let mut writer = OutputTextWriter::new(FailingCharOutput);
+
+    writer
+        .write_str("pending")
+        .expect("buffered write may succeed before flush");
+    let error = match writer.into_inner() {
+        Ok(_) => panic!("into_inner should propagate flush error"),
+        Err(error) => error,
+    };
+    assert_eq!(ErrorKind::Other, error.kind());
+}
+
+#[test]
+fn test_into_inner_flushes_wrapped_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
         let output = StringCharOutput::new(&mut text);
         let mut writer = OutputTextWriter::new(output);
 
         writer.write_str("value")?;
-        let output = writer.into_inner();
-        assert_eq!("value", output.get_ref());
+        let output = writer.into_inner()?;
+        drop(output);
     }
 
     assert_eq!("value", text);
@@ -92,9 +158,23 @@ fn test_write_str_empty_does_not_write() -> std::io::Result<()> {
 
 #[test]
 fn test_write_methods_propagate_output_errors() {
-    assert_other_error(OutputTextWriter::new(FailingCharOutput).write_str(&"a".repeat(256)));
-    assert_other_error(OutputTextWriter::new(FailingCharOutput).write_line("x"));
-    assert_other_error(OutputTextWriter::new(FailingCharOutput).write_line(""));
+    let mut writer = OutputTextWriter::new(FailingCharOutput);
+    writer
+        .write_str(&"a".repeat(256))
+        .expect("buffered write may succeed before flush");
+    assert_other_error(writer.flush());
+
+    let mut writer = OutputTextWriter::new(FailingCharOutput);
+    writer
+        .write_line("x")
+        .expect("buffered line write may succeed before flush");
+    assert_other_error(writer.flush());
+
+    let mut writer = OutputTextWriter::new(FailingCharOutput);
+    writer
+        .write_line("")
+        .expect("buffered empty line write may succeed before flush");
+    assert_other_error(writer.flush());
 }
 
 #[test]

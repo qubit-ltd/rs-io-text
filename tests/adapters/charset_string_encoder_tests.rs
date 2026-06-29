@@ -1,6 +1,6 @@
 use core::num::NonZeroUsize;
 
-use qubit_codec::{Codec, TranscodeError};
+use qubit_codec::Codec;
 use qubit_codec_text::{
     AsciiCodec, Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind,
     CharsetEncodeError, CharsetEncodeErrorKind, CharsetEncodePolicy, CharsetEncodeResult,
@@ -345,9 +345,10 @@ fn test_charset_string_encoder_encode_str_into_reports_invalid_output_index() {
         .expect_err("output index outside slice should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 2, len: 1 },
-        error
+        CharsetEncodeErrorKind::InvalidOutputIndex { output_len: 1 },
+        error.kind(),
     );
+    assert_eq!(2, error.index());
 }
 
 #[test]
@@ -361,13 +362,13 @@ fn test_charset_string_encoder_encode_str_into_reports_insufficient_output() {
         .expect_err("caller slice is too small for complete output");
 
     assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
+        CharsetEncodeErrorKind::BufferTooSmall {
             required,
             available: output.len(),
         },
-        error
+        error.kind(),
     );
+    assert_eq!(0, error.index());
 }
 
 #[test]
@@ -378,7 +379,7 @@ fn test_charset_string_encoder_encode_str_reports_need_output_as_overflow() {
         .encode_str("A")
         .expect_err("underreported output bound should be reported");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
 }
 
 #[test]
@@ -389,7 +390,7 @@ fn test_charset_string_encoder_encode_str_reports_output_reserve_overflow() {
         .encode_str("A")
         .expect_err("huge output bound should fail output reservation");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
 }
 
 #[test]
@@ -400,7 +401,7 @@ fn test_charset_string_encoder_encode_str_reports_output_capacity_overflow() {
         .encode_str("AA")
         .expect_err("huge output bound should overflow capacity arithmetic");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
 }
 
 #[test]
@@ -412,7 +413,7 @@ fn test_charset_string_encoder_encode_str_into_reports_output_capacity_overflow(
         .encode_str_into("AA", &mut output, 0)
         .expect_err("huge output bound should overflow capacity arithmetic");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
 }
 
 #[test]
@@ -423,16 +424,11 @@ fn test_charset_string_encoder_encode_str_propagates_reset_errors() {
         .encode_str("A")
         .expect_err("encode reset errors should be propagated");
 
-    match error {
-        TranscodeError::Domain(error) => {
-            assert_eq!(
-                CharsetEncodeErrorKind::UnmappableCharacter { value: 0 },
-                error.kind()
-            );
-            assert_eq!(0, error.index());
-        }
-        other => panic!("expected encode domain error, got {other:?}"),
-    }
+    assert_eq!(
+        CharsetEncodeErrorKind::UnmappableCharacter { value: 0 },
+        error.kind(),
+    );
+    assert_eq!(0, error.index());
 }
 
 #[test]
@@ -443,16 +439,11 @@ fn test_charset_string_encoder_encode_str_propagates_finish_errors() {
         .encode_str("A")
         .expect_err("encode flush errors should be propagated");
 
-    match error {
-        TranscodeError::Domain(error) => {
-            assert_eq!(
-                CharsetEncodeErrorKind::UnmappableCharacter { value: 1 },
-                error.kind()
-            );
-            assert_eq!(1, error.index());
-        }
-        other => panic!("expected encode domain error, got {other:?}"),
-    }
+    assert_eq!(
+        CharsetEncodeErrorKind::UnmappableCharacter { value: 1 },
+        error.kind(),
+    );
+    assert_eq!(1, error.index());
 }
 
 #[test]
@@ -465,16 +456,11 @@ fn test_charset_string_encoder_encode_str_reports_global_error_index() {
         .encode_str(&input)
         .expect_err("encode error should report global character index");
 
-    match error {
-        TranscodeError::Domain(error) => {
-            assert_eq!(
-                CharsetEncodeErrorKind::UnmappableCharacter { value: 'é' as u32 },
-                error.kind()
-            );
-            assert_eq!(300, error.index());
-        }
-        other => panic!("expected encode domain error, got {other:?}"),
-    }
+    assert_eq!(
+        CharsetEncodeErrorKind::UnmappableCharacter { value: 'é' as u32 },
+        error.kind(),
+    );
+    assert_eq!(300, error.index());
 }
 
 #[test]
@@ -490,7 +476,7 @@ fn test_charset_string_encoder_encode_str_applies_default_policy() {
 
 #[cfg(coverage)]
 mod coverage_tests {
-    use qubit_codec::TranscodeError;
+    use qubit_codec_text::CharsetEncodeErrorKind;
     use qubit_io_text::{CharsetStringEncoder, Utf8Codec};
 
     fn reset_coverage_hooks() {
@@ -507,7 +493,7 @@ mod coverage_tests {
             .encode_str("A")
             .expect_err("character collection reserve failure should be reported");
 
-        assert_eq!(TranscodeError::OutputLengthOverflow, error);
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
     }
 
@@ -521,7 +507,7 @@ mod coverage_tests {
             .encode_str("A")
             .expect_err("output reserve failure should be reported");
 
-        assert_eq!(TranscodeError::OutputLengthOverflow, error);
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
     }
 
@@ -536,7 +522,7 @@ mod coverage_tests {
             .encode_str_into("A", &mut output, 0)
             .expect_err("character collection reserve failure should be reported");
 
-        assert_eq!(TranscodeError::OutputLengthOverflow, error);
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
     }
 }

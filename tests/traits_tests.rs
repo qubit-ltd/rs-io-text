@@ -1,7 +1,4 @@
-use qubit_io_text::{
-    TextRead,
-    TextWrite,
-};
+use qubit_io_text::{TextRead, TextWrite};
 
 #[derive(Debug, Eq, PartialEq)]
 struct ReadError;
@@ -15,18 +12,11 @@ impl TextRead for FailingTextReader {
         Err(ReadError)
     }
 
-    fn read_chars(
-        &mut self,
-        _output: &mut Vec<char>,
-        _max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, _output: &mut Vec<char>, _max: usize) -> Result<usize, Self::Error> {
         Err(ReadError)
     }
 
-    fn read_to_string(
-        &mut self,
-        _output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, _output: &mut String) -> Result<usize, Self::Error> {
         Err(ReadError)
     }
 }
@@ -40,18 +30,11 @@ impl TextRead for EmptyTextReader {
         Ok(None)
     }
 
-    fn read_chars(
-        &mut self,
-        _output: &mut Vec<char>,
-        _max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, _output: &mut Vec<char>, _max: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
-    fn read_to_string(
-        &mut self,
-        _output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, _output: &mut String) -> Result<usize, Self::Error> {
         Ok(0)
     }
 }

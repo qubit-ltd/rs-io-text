@@ -1,4 +1,4 @@
-use qubit_io::{Input, InputExt};
+use qubit_io::Input;
 use qubit_io_text::StringCharInput;
 
 #[test]
@@ -39,11 +39,11 @@ fn test_read_unchecked_writes_into_indexed_range() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_exact_or_eof_reads_remaining_chars() -> std::io::Result<()> {
+fn test_read_fully_reads_remaining_chars() -> std::io::Result<()> {
     let mut input = StringCharInput::new("中🙂".to_owned());
     let mut output = ['\0'; 4];
 
-    let read = input.read_exact_or_eof(&mut output)?;
+    let read = input.read_fully(&mut output)?;
 
     assert_eq!(2, read);
     assert_eq!(['中', '🙂'], output[..2]);

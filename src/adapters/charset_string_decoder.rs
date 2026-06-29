@@ -9,7 +9,7 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{CapacityError, TranscodeError, TranscodeStatus, Transcoder};
+use qubit_codec::{CapacityError, TranscodeStatus, Transcoder};
 use qubit_codec_text::{
     Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind, CharsetDecodePolicy,
     CharsetDecoder, MalformedAction,
@@ -139,12 +139,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError`] when decoding fails, output sizing overflows,
-    /// or the complete input ends with an incomplete sequence.
-    pub fn decode_to_string(
-        &mut self,
-        input: &[C::Unit],
-    ) -> Result<String, TranscodeError<CharsetDecodeError>> {
+    /// Returns [`CharsetDecodeError`] when decoding fails, output sizing
+    /// overflows, or the complete input ends with an incomplete sequence.
+    pub fn decode_to_string(&mut self, input: &[C::Unit]) -> Result<String, CharsetDecodeError> {
         let mut output = String::new();
         self.decode_to_string_into(input, 0, &mut output)?;
         Ok(output)
@@ -165,35 +162,50 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError::InvalidInputIndex`] when `input_index` is
-    /// outside `input`, [`TranscodeError::Domain`] when decoding fails, or
-    /// [`TranscodeError::OutputLengthOverflow`] when output sizing overflows.
+    /// Returns [`CharsetDecodeError`] when `input_index` is outside `input`,
+    /// decoding fails, or output sizing overflows.
     pub fn decode_to_string_into(
         &mut self,
         input: &[C::Unit],
         input_index: usize,
         output: &mut String,
-    ) -> Result<(), TranscodeError<CharsetDecodeError>> {
-        TranscodeError::ensure_input_index(input.len(), input_index)?;
+    ) -> Result<(), CharsetDecodeError> {
+        if input_index > input.len() {
+            return Err(CharsetDecodeError::new(
+                self.charset,
+                CharsetDecodeErrorKind::InvalidInputIndex {
+                    input_len: input.len(),
+                },
+                input_index,
+            ));
+        }
         let input_len = input.len() - input_index;
         let char_capacity = self
             .required_char_output_len(input_len)
-            .map_err(TranscodeError::from)?;
+            .map_err(|_| output_length_overflow(self.charset))?;
         let mut chars = Vec::new();
         let reserve_failed = try_reserve_vec(&mut chars, char_capacity).is_err();
         #[cfg(coverage)]
         let reserve_failed = reserve_failed || coverage_should_fail_reserve();
         if reserve_failed {
-            return Err(TranscodeError::output_length_overflow());
+            return Err(output_length_overflow(self.charset));
         }
         chars.resize(char_capacity, '\0');
-        let written = self.decode_units_into(input, input_index, &mut chars)?;
+        let written = self
+            .decode_units_into(input, input_index, &mut chars)
+            .map_err(|error| {
+                if matches!(error.kind(), CharsetDecodeErrorKind::BufferTooSmall { .. },) {
+                    output_length_overflow(self.charset)
+                } else {
+                    error
+                }
+            })?;
         let byte_capacity = required_string_capacity(&chars[..written]);
         let reserve_failed = try_reserve_string(output, byte_capacity).is_err();
         #[cfg(coverage)]
         let reserve_failed = reserve_failed || coverage_should_fail_reserve();
         if reserve_failed {
-            return Err(TranscodeError::output_length_overflow());
+            return Err(output_length_overflow(self.charset));
         }
         output.extend(chars[..written].iter());
         Ok(())
@@ -236,27 +248,36 @@ where
         input: &[C::Unit],
         input_index: usize,
         output: &mut [char],
-    ) -> Result<usize, TranscodeError<CharsetDecodeError>> {
+    ) -> Result<usize, CharsetDecodeError> {
         let mut output_cursor = self.decoder.reset(output, 0)?;
         let progress = self
             .decoder
             .transcode(input, input_index, output, output_cursor)?;
         output_cursor += progress.written();
-        if let TranscodeStatus::NeedInput {
-            input_index,
-            required,
-            available,
-        } = progress.status()
-        {
-            let kind = CharsetDecodeErrorKind::IncompleteSequence {
-                required: required.get(),
-                available,
-            };
-            return Err(TranscodeError::Domain(CharsetDecodeError::new(
-                self.charset,
-                kind,
+        match progress.status() {
+            TranscodeStatus::Complete => {}
+            TranscodeStatus::NeedInput {
                 input_index,
-            )));
+                required,
+                available,
+            } => {
+                let kind = CharsetDecodeErrorKind::IncompleteSequence {
+                    required: required.get(),
+                    available,
+                };
+                return Err(CharsetDecodeError::new(self.charset, kind, input_index));
+            }
+            TranscodeStatus::NeedOutput {
+                output_index,
+                required,
+                available,
+            } => {
+                let kind = CharsetDecodeErrorKind::BufferTooSmall {
+                    required: required.get(),
+                    available,
+                };
+                return Err(CharsetDecodeError::new(self.charset, kind, output_index));
+            }
         }
         output_cursor += self.decoder.finish(output, output_cursor)?;
         Ok(output_cursor)
@@ -283,6 +304,15 @@ fn coverage_should_fail_reserve() -> bool {
         state.set(remaining - 1);
         false
     })
+}
+
+#[inline]
+fn output_length_overflow(charset: Charset) -> CharsetDecodeError {
+    CharsetDecodeError::new(
+        charset,
+        CharsetDecodeErrorKind::OutputLengthOverflow,
+        usize::MAX,
+    )
 }
 
 /// Returns the UTF-8 byte capacity required for a decoded character slice.

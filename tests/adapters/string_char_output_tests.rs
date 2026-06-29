@@ -1,4 +1,4 @@
-use qubit_io::{Output, OutputExt};
+use qubit_io::Output;
 use qubit_io_text::StringCharOutput;
 
 #[test]
@@ -7,11 +7,12 @@ fn test_write_appends_chars_to_borrowed_string() -> std::io::Result<()> {
     {
         let mut output = StringCharOutput::new(&mut text);
 
+        output.get_mut().push('>');
         assert_eq!(2, output.write(&['中', '🙂'])?);
         output.flush()?;
     }
 
-    assert_eq!("prefix:中🙂", text);
+    assert_eq!("prefix:>中🙂", text);
     Ok(())
 }
 
@@ -29,11 +30,11 @@ fn test_write_unchecked_reads_from_indexed_range() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_write_all_writes_complete_char_slice() -> std::io::Result<()> {
+fn test_write_fully_writes_complete_char_slice() -> std::io::Result<()> {
     let mut text = String::new();
     let mut output = StringCharOutput::new(&mut text);
 
-    output.write_all(&['a', '中', '🙂'])?;
+    output.write_fully(&['a', '中', '🙂'])?;
 
     assert_eq!("a中🙂", output.get_ref());
     Ok(())

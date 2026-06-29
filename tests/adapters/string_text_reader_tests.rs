@@ -26,6 +26,17 @@ fn test_read_chars_reads_owned_text() -> std::io::Result<()> {
 }
 
 #[test]
+fn test_read_chars_with_zero_max_does_not_advance() -> std::io::Result<()> {
+    let mut reader = StringTextReader::new("ab".to_owned());
+    let mut chars = vec!['x'];
+
+    assert_eq!(0, reader.read_chars(&mut chars, 0)?);
+    assert_eq!(vec!['x'], chars);
+    assert_eq!(0, reader.position());
+    Ok(())
+}
+
+#[test]
 fn test_read_to_string_appends_remaining_owned_text() -> std::io::Result<()> {
     let mut reader = StringTextReader::new("ab中".to_owned());
     let mut output = String::from("prefix:");
@@ -33,6 +44,17 @@ fn test_read_to_string_appends_remaining_owned_text() -> std::io::Result<()> {
     assert_eq!(3, reader.read_to_string(&mut output)?);
     assert_eq!("prefix:ab中", output);
     assert_eq!(5, reader.position());
+    assert_eq!(0, reader.read_to_string(&mut output)?);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_returns_false_at_eof() -> std::io::Result<()> {
+    let mut reader = StringTextReader::new(String::new());
+    let mut line = String::from("seed");
+
+    assert!(!reader.read_line(&mut line)?);
+    assert_eq!("seed", line);
     Ok(())
 }
 
