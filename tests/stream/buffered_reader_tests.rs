@@ -34,22 +34,7 @@ use qubit_io_text::{
 struct FinishCharDecoder;
 
 impl Transcoder<u8, char> for FinishCharDecoder {
-    type Error = std::io::Error;
     type DomainError = std::io::Error;
-
-    fn map_failure(
-        &self,
-        failure: qubit_codec::TranscodeFailure,
-    ) -> Self::Error {
-        transcode_error_to_io_error(failure.into())
-    }
-
-    fn map_domain_error(
-        &self,
-        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        transcode_error_to_io_error(error.into())
-    }
 
     fn max_transcode_output_len(
         &self,
@@ -66,8 +51,11 @@ impl Transcoder<u8, char> for FinishCharDecoder {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -77,7 +65,7 @@ impl Transcoder<u8, char> for FinishCharDecoder {
         input_index: usize,
         _output: &mut [char],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
@@ -85,8 +73,11 @@ impl Transcoder<u8, char> for FinishCharDecoder {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         output[output_index] = '!';
         Ok(1)
     }
@@ -98,22 +89,7 @@ impl TranscodeDecoder<u8, char> for FinishCharDecoder {}
 struct OverflowFinishDecoder;
 
 impl Transcoder<u8, char> for OverflowFinishDecoder {
-    type Error = std::io::Error;
     type DomainError = std::io::Error;
-
-    fn map_failure(
-        &self,
-        failure: qubit_codec::TranscodeFailure,
-    ) -> Self::Error {
-        transcode_error_to_io_error(failure.into())
-    }
-
-    fn map_domain_error(
-        &self,
-        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        transcode_error_to_io_error(error.into())
-    }
 
     fn max_transcode_output_len(
         &self,
@@ -130,8 +106,11 @@ impl Transcoder<u8, char> for OverflowFinishDecoder {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -141,7 +120,7 @@ impl Transcoder<u8, char> for OverflowFinishDecoder {
         input_index: usize,
         _output: &mut [char],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
@@ -149,30 +128,12 @@ impl Transcoder<u8, char> for OverflowFinishDecoder {
         &mut self,
         _output: &mut [char],
         _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
         unreachable!("capacity planning fails before finish")
     }
 }
 
 impl TranscodeDecoder<u8, char> for OverflowFinishDecoder {}
-
-fn ensure_output_index(
-    output_len: usize,
-    output_index: usize,
-) -> std::io::Result<()> {
-    if output_index > output_len {
-        return Err(transcode_error_to_io_error(
-            TranscodeError::invalid_output_index(output_index, output_len),
-        ));
-    }
-    Ok(())
-}
-
-fn transcode_error_to_io_error(
-    error: TranscodeError<std::io::Error>,
-) -> std::io::Error {
-    std::io::Error::new(ErrorKind::InvalidData, error)
-}
 
 #[test]
 fn test_buffered_reader_decodes_utf8_across_single_byte_refills()

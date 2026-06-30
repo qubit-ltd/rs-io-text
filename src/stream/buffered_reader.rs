@@ -167,7 +167,7 @@ impl<R, D> BufferedReader<R, D>
 where
     R: Input<Item = u8>,
     D: TranscodeDecoder<u8, char>,
-    D::Error: StdError + Send + Sync + 'static,
+    D::DomainError: StdError + Send + Sync + 'static,
 {
     /// Handles an incomplete encoded tail after EOF.
     ///
@@ -269,7 +269,7 @@ impl<R, D> TextRead for BufferedReader<R, D>
 where
     R: Input<Item = u8>,
     D: TranscodeDecoder<u8, char>,
-    D::Error: StdError + Send + Sync + 'static,
+    D::DomainError: StdError + Send + Sync + 'static,
 {
     type Error = io::Error;
 
@@ -319,7 +319,7 @@ impl<R, D> TextLineRead for BufferedReader<R, D>
 where
     R: Input<Item = u8>,
     D: TranscodeDecoder<u8, char>,
-    D::Error: StdError + Send + Sync + 'static,
+    D::DomainError: StdError + Send + Sync + 'static,
 {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let mut read = false;

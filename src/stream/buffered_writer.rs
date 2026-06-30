@@ -157,7 +157,7 @@ impl<W, E> BufferedWriter<W, E>
 where
     W: Output<Item = u8>,
     E: TranscodeEncoder<char, u8>,
-    E::Error: StdError + Send + Sync + 'static,
+    E::DomainError: StdError + Send + Sync + 'static,
 {
     /// Encodes a character slice into the shared output buffer.
     ///
@@ -236,7 +236,7 @@ impl<W, E> TextWrite for BufferedWriter<W, E>
 where
     W: Output<Item = u8>,
     E: TranscodeEncoder<char, u8>,
-    E::Error: StdError + Send + Sync + 'static,
+    E::DomainError: StdError + Send + Sync + 'static,
 {
     type Error = io::Error;
 

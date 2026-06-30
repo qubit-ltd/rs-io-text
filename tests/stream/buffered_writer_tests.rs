@@ -34,22 +34,7 @@ use qubit_io_text::{
 struct PartialEncoder;
 
 impl Transcoder<char, u8> for PartialEncoder {
-    type Error = std::io::Error;
     type DomainError = std::io::Error;
-
-    fn map_failure(
-        &self,
-        failure: qubit_codec::TranscodeFailure,
-    ) -> Self::Error {
-        transcode_error_to_io_error(failure.into())
-    }
-
-    fn map_domain_error(
-        &self,
-        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        transcode_error_to_io_error(error.into())
-    }
 
     fn max_transcode_output_len(
         &self,
@@ -62,8 +47,11 @@ impl Transcoder<char, u8> for PartialEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -73,7 +61,7 @@ impl Transcoder<char, u8> for PartialEncoder {
         _input_index: usize,
         _output: &mut [u8],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
         Ok(TranscodeProgress::complete(0, 0))
     }
 
@@ -81,8 +69,11 @@ impl Transcoder<char, u8> for PartialEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 }
@@ -93,22 +84,7 @@ impl TranscodeEncoder<char, u8> for PartialEncoder {}
 struct FinishByteEncoder;
 
 impl Transcoder<char, u8> for FinishByteEncoder {
-    type Error = std::io::Error;
     type DomainError = std::io::Error;
-
-    fn map_failure(
-        &self,
-        failure: qubit_codec::TranscodeFailure,
-    ) -> Self::Error {
-        transcode_error_to_io_error(failure.into())
-    }
-
-    fn map_domain_error(
-        &self,
-        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        transcode_error_to_io_error(error.into())
-    }
 
     fn max_transcode_output_len(
         &self,
@@ -125,8 +101,11 @@ impl Transcoder<char, u8> for FinishByteEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -136,8 +115,11 @@ impl Transcoder<char, u8> for FinishByteEncoder {
         input_index: usize,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         let mut read = 0;
         let mut written = 0;
         while input_index + read < input.len()
@@ -154,32 +136,17 @@ impl Transcoder<char, u8> for FinishByteEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        ensure_output_index(output.len(), output_index)?;
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         output[output_index] = b'!';
         Ok(1)
     }
 }
 
 impl TranscodeEncoder<char, u8> for FinishByteEncoder {}
-
-fn ensure_output_index(
-    output_len: usize,
-    output_index: usize,
-) -> std::io::Result<()> {
-    if output_index > output_len {
-        return Err(transcode_error_to_io_error(
-            TranscodeError::invalid_output_index(output_index, output_len),
-        ));
-    }
-    Ok(())
-}
-
-fn transcode_error_to_io_error(
-    error: TranscodeError<std::io::Error>,
-) -> std::io::Error {
-    std::io::Error::new(ErrorKind::InvalidData, error)
-}
 
 #[test]
 fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
