@@ -6,11 +6,29 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{Cursor, ErrorKind};
+use std::io::{
+    Cursor,
+    ErrorKind,
+};
 
-use qubit_codec::{CapacityError, TranscodeDecoder, TranscodeError, TranscodeProgress, Transcoder};
-use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder};
-use qubit_io_text::{BufferedReader, CodingErrorPolicy, TextLineRead, TextRead, Utf8Codec};
+use qubit_codec::{
+    CapacityError,
+    TranscodeDecoder,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
+};
+use qubit_codec_text::{
+    CharsetDecodePolicy,
+    CharsetDecoder,
+};
+use qubit_io_text::{
+    BufferedReader,
+    CodingErrorPolicy,
+    TextLineRead,
+    TextRead,
+    Utf8Codec,
+};
 
 #[derive(Debug, Default)]
 struct FinishCharDecoder;
@@ -19,11 +37,24 @@ impl Transcoder<u8, char> for FinishCharDecoder {
     type Error = std::io::Error;
     type DomainError = std::io::Error;
 
-    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
-        transcode_error_to_io_error(error)
+    fn map_failure(
+        &self,
+        failure: qubit_codec::TranscodeFailure,
+    ) -> Self::Error {
+        transcode_error_to_io_error(failure.into())
     }
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        transcode_error_to_io_error(error.into())
+    }
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -31,7 +62,11 @@ impl Transcoder<u8, char> for FinishCharDecoder {
         Ok(8)
     }
 
-    fn reset(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
@@ -46,7 +81,11 @@ impl Transcoder<u8, char> for FinishCharDecoder {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
-    fn finish(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         ensure_output_index(output.len(), output_index)?;
         output[output_index] = '!';
         Ok(1)
@@ -62,11 +101,24 @@ impl Transcoder<u8, char> for OverflowFinishDecoder {
     type Error = std::io::Error;
     type DomainError = std::io::Error;
 
-    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
-        transcode_error_to_io_error(error)
+    fn map_failure(
+        &self,
+        failure: qubit_codec::TranscodeFailure,
+    ) -> Self::Error {
+        transcode_error_to_io_error(failure.into())
     }
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        transcode_error_to_io_error(error.into())
+    }
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -74,7 +126,11 @@ impl Transcoder<u8, char> for OverflowFinishDecoder {
         Err(CapacityError::OutputLengthOverflow)
     }
 
-    fn reset(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
@@ -89,14 +145,21 @@ impl Transcoder<u8, char> for OverflowFinishDecoder {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
-    fn finish(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("capacity planning fails before finish")
     }
 }
 
 impl TranscodeDecoder<u8, char> for OverflowFinishDecoder {}
 
-fn ensure_output_index(output_len: usize, output_index: usize) -> std::io::Result<()> {
+fn ensure_output_index(
+    output_len: usize,
+    output_index: usize,
+) -> std::io::Result<()> {
     if output_index > output_len {
         return Err(transcode_error_to_io_error(
             TranscodeError::invalid_output_index(output_index, output_len),
@@ -105,16 +168,24 @@ fn ensure_output_index(output_len: usize, output_index: usize) -> std::io::Resul
     Ok(())
 }
 
-fn transcode_error_to_io_error(error: TranscodeError<std::io::Error>) -> std::io::Error {
+fn transcode_error_to_io_error(
+    error: TranscodeError<std::io::Error>,
+) -> std::io::Error {
     std::io::Error::new(ErrorKind::InvalidData, error)
 }
 
 #[test]
-fn test_buffered_reader_decodes_utf8_across_single_byte_refills() -> std::io::Result<()> {
+fn test_buffered_reader_decodes_utf8_across_single_byte_refills()
+-> std::io::Result<()> {
     let bytes = "Aé🙂".as_bytes().to_vec();
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader =
-        BufferedReader::with_capacity(Cursor::new(bytes), decoder, CodingErrorPolicy::Strict, 1);
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(bytes),
+        decoder,
+        CodingErrorPolicy::Strict,
+        1,
+    );
 
     let mut output = String::new();
     let count = reader.read_to_string(&mut output)?;
@@ -126,7 +197,8 @@ fn test_buffered_reader_decodes_utf8_across_single_byte_refills() -> std::io::Re
 
 #[test]
 fn test_buffered_reader_accessors_and_into_inner() -> std::io::Result<()> {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut reader = BufferedReader::new(
         Cursor::new("abc\n".as_bytes().to_vec()),
         decoder,
@@ -146,8 +218,10 @@ fn test_buffered_reader_accessors_and_into_inner() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_buffered_reader_read_chars_with_zero_limit_does_not_read() -> std::io::Result<()> {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+fn test_buffered_reader_read_chars_with_zero_limit_does_not_read()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut reader = BufferedReader::new(
         Cursor::new("abc".as_bytes().to_vec()),
         decoder,
@@ -193,7 +267,10 @@ fn test_buffered_reader_reports_finish_capacity_errors() {
 
 #[test]
 fn test_buffered_reader_replaces_incomplete_eof_tail() -> std::io::Result<()> {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::replace('\u{FFFD}'));
+    let decoder = CharsetDecoder::with_policy(
+        Utf8Codec,
+        CharsetDecodePolicy::replace('\u{FFFD}'),
+    );
     let mut reader = BufferedReader::with_capacity(
         Cursor::new(vec![0xE2, 0x82]),
         decoder,
@@ -211,7 +288,8 @@ fn test_buffered_reader_replaces_incomplete_eof_tail() -> std::io::Result<()> {
 
 #[test]
 fn test_buffered_reader_reports_strict_incomplete_eof_tail() {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut reader = BufferedReader::with_capacity(
         Cursor::new(vec![0xE2, 0x82]),
         decoder,

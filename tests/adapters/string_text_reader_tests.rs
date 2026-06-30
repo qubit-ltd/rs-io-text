@@ -1,4 +1,8 @@
-use qubit_io_text::{StringTextReader, TextLineRead, TextRead};
+use qubit_io_text::{
+    StringTextReader,
+    TextLineRead,
+    TextRead,
+};
 
 #[test]
 fn test_from_string_reads_owned_text() -> std::io::Result<()> {

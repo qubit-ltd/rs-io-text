@@ -1,7 +1,18 @@
-use std::io::{Error, ErrorKind};
+use std::io::{
+    Error,
+    ErrorKind,
+};
 
-use qubit_io::{BufferedInput, Input};
-use qubit_io_text::{InputTextReader, StringCharInput, TextLineRead, TextRead};
+use qubit_io::{
+    BufferedInput,
+    Input,
+};
+use qubit_io_text::{
+    InputTextReader,
+    StringCharInput,
+    TextLineRead,
+    TextRead,
+};
 
 #[derive(Debug)]
 struct FailingCharInput;
@@ -64,7 +75,8 @@ fn test_new_accepts_already_buffered_input() -> std::io::Result<()> {
 
 #[test]
 fn test_from_boxed_wraps_unbuffered_input() -> std::io::Result<()> {
-    let input: Box<dyn Input<Item = char>> = Box::new(StringCharInput::new("boxed".to_owned()));
+    let input: Box<dyn Input<Item = char>> =
+        Box::new(StringCharInput::new("boxed".to_owned()));
     let mut reader = InputTextReader::from_boxed(input);
     let mut output = String::new();
 
@@ -170,15 +182,21 @@ fn test_read_methods_propagate_input_errors() {
     assert_other_error(InputTextReader::new(FailingCharInput).read_char());
 
     let mut chars = vec!['x'];
-    assert_other_error(InputTextReader::new(FailingCharInput).read_chars(&mut chars, 1));
+    assert_other_error(
+        InputTextReader::new(FailingCharInput).read_chars(&mut chars, 1),
+    );
     assert_eq!(vec!['x'], chars);
 
     let mut text = String::from("seed:");
-    assert_other_error(InputTextReader::new(FailingCharInput).read_to_string(&mut text));
+    assert_other_error(
+        InputTextReader::new(FailingCharInput).read_to_string(&mut text),
+    );
     assert_eq!("seed:", text);
 
     let mut line = String::from("seed:");
-    assert_other_error(InputTextReader::new(FailingCharInput).read_line(&mut line));
+    assert_other_error(
+        InputTextReader::new(FailingCharInput).read_line(&mut line),
+    );
     assert_eq!("seed:", line);
 }
 
@@ -212,7 +230,8 @@ fn test_read_line_without_newline_reads_direct_chunk() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_line_preserves_batched_tail_for_next_read() -> std::io::Result<()> {
+fn test_read_line_preserves_batched_tail_for_next_read() -> std::io::Result<()>
+{
     let input = StringCharInput::new("a\nb\nc".to_owned());
     let mut reader = InputTextReader::new(input);
     let mut line = String::new();
