@@ -5,12 +5,25 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{error::Error as StdError, fmt::Debug, io};
+use std::{
+    error::Error as StdError,
+    fmt::Debug,
+    io,
+};
 
-use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder};
-use qubit_io::{Output, nz};
+use qubit_codec::{
+    TranscodeEncodeOutput,
+    TranscodeEncoder,
+};
+use qubit_io::{
+    Output,
+    nz,
+};
 
-use crate::{LineEnding, TextWrite};
+use crate::{
+    LineEnding,
+    TextWrite,
+};
 
 /// Default byte buffer capacity used by buffered text writers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;

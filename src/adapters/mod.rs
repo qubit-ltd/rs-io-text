@@ -25,8 +25,14 @@ mod utf8_text_writer;
 
 pub use charset_string_decoder::CharsetStringDecoder;
 pub use charset_string_encoder::CharsetStringEncoder;
-pub use charset_text_reader::{BufferedCharsetTextReader, CharsetTextReader};
-pub use charset_text_writer::{BufferedCharsetTextWriter, CharsetTextWriter};
+pub use charset_text_reader::{
+    BufferedCharsetTextReader,
+    CharsetTextReader,
+};
+pub use charset_text_writer::{
+    BufferedCharsetTextWriter,
+    CharsetTextWriter,
+};
 pub use input_text_reader::InputTextReader;
 pub use output_text_writer::OutputTextWriter;
 pub use str_char_input::StrCharInput;

@@ -7,7 +7,11 @@
 // =============================================================================
 use qubit_io::Input;
 
-use crate::{StringCharInput, TextLineRead, TextRead};
+use crate::{
+    StringCharInput,
+    TextLineRead,
+    TextRead,
+};
 
 /// Default character chunk capacity for owned string reads.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -66,7 +70,11 @@ impl TextRead for StringTextReader {
     }
 
     #[inline]
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         while count < max {
@@ -82,7 +90,10 @@ impl TextRead for StringTextReader {
     }
 
     #[inline]
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         loop {

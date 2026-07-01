@@ -9,9 +9,15 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::io;
 
-use qubit_io::{BufferedInput, Input};
+use qubit_io::{
+    BufferedInput,
+    Input,
+};
 
-use crate::{TextLineRead, TextRead};
+use crate::{
+    TextLineRead,
+    TextRead,
+};
 
 /// Default character chunk capacity for text reads.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -93,7 +99,11 @@ impl<'a> InputTextReader<'a> {
         self.input
     }
 
-    fn drain_pending_chars(&mut self, output: &mut Vec<char>, max: usize) -> usize {
+    fn drain_pending_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> usize {
         let mut count = 0;
         while count < max {
             let Some(ch) = self.pending.pop_front() else {
@@ -141,7 +151,11 @@ impl TextRead for InputTextReader<'_> {
         }
     }
 
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         let mut count = self.drain_pending_chars(output, max);
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         while count < max {
@@ -156,7 +170,10 @@ impl TextRead for InputTextReader<'_> {
         Ok(count)
     }
 
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         let mut count = self.drain_pending_string(output);
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         loop {
@@ -185,7 +202,8 @@ impl TextLineRead for InputTextReader<'_> {
                 return Ok(read_any);
             }
             read_any = true;
-            if let Some(index) = chars[..read].iter().position(|ch| *ch == '\n') {
+            if let Some(index) = chars[..read].iter().position(|ch| *ch == '\n')
+            {
                 output.extend(chars[..=index].iter().copied());
                 self.pending.extend(chars[index + 1..read].iter().copied());
                 return Ok(true);
