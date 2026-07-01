@@ -8,15 +8,9 @@
 use std::fmt;
 use std::io;
 
-use qubit_io::{
-    BufferedOutput,
-    Output,
-};
+use qubit_io::{BufferedOutput, Output};
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, TextWrite};
 
 /// Default character chunk capacity for string writes.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -108,9 +102,7 @@ impl<'a> OutputTextWriter<'a> {
     ///
     /// # Errors
     /// Returns any error produced while flushing buffered characters.
-    pub fn into_inner(
-        mut self,
-    ) -> io::Result<Box<dyn Output<Item = char> + 'a>> {
+    pub fn into_inner(mut self) -> io::Result<Box<dyn Output<Item = char> + 'a>> {
         self.output.flush()?;
         Ok(self.output)
     }

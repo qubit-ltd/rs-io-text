@@ -5,24 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{
-    error::Error as StdError,
-    io,
-};
+use std::{error::Error as StdError, fmt::Debug, io};
 
-use qubit_codec::{
-    TranscodeEncodeOutput,
-    TranscodeEncoder,
-};
-use qubit_io::{
-    Output,
-    nz,
-};
+use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder};
+use qubit_io::{Output, nz};
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, TextWrite};
 
 /// Default byte buffer capacity used by buffered text writers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -158,6 +146,7 @@ where
     W: Output<Item = u8>,
     E: TranscodeEncoder<char, u8>,
     E::DomainError: StdError + Send + Sync + 'static,
+    E::FailureValue: Debug + Send + Sync + 'static,
 {
     /// Encodes a character slice into the shared output buffer.
     ///
@@ -237,6 +226,7 @@ where
     W: Output<Item = u8>,
     E: TranscodeEncoder<char, u8>,
     E::DomainError: StdError + Send + Sync + 'static,
+    E::FailureValue: Debug + Send + Sync + 'static,
 {
     type Error = io::Error;
 

@@ -1,14 +1,6 @@
-use std::io::{
-    self,
-    ErrorKind,
-    Write,
-};
+use std::io::{self, ErrorKind, Write};
 
-use qubit_io_text::{
-    LineEnding,
-    TextWrite,
-    Utf8TextWriter,
-};
+use qubit_io_text::{LineEnding, TextWrite, Utf8TextWriter};
 
 struct FailingWriter;
 
@@ -26,8 +18,7 @@ impl Write for FailingWriter {
 fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
-        let mut writer =
-            Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
+        let mut writer = Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
 
         writer.write_char('中')?;
         writer.write_chars(&['x', 'y'])?;

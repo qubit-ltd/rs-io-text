@@ -7,18 +7,10 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecoder,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecoder};
 use qubit_io::Input;
 
-use crate::{
-    BufferedReader,
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
-};
+use crate::{BufferedReader, CodingErrorPolicy, TextLineRead, TextRead};
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
@@ -54,8 +46,7 @@ where
     #[must_use]
     #[inline]
     pub fn new(input: I, codec: C, policy: CodingErrorPolicy) -> Self {
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
             reader: BufferedReader::new(input, decoder, policy),
         }
@@ -82,15 +73,9 @@ where
         policy: CodingErrorPolicy,
         buffer_capacity: usize,
     ) -> Self {
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
-            reader: BufferedReader::with_capacity(
-                input,
-                decoder,
-                policy,
-                buffer_capacity,
-            ),
+            reader: BufferedReader::with_capacity(input, decoder, policy, buffer_capacity),
         }
     }
 
@@ -144,19 +129,12 @@ where
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }

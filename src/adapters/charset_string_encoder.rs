@@ -9,17 +9,9 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::{CapacityError, TranscodeError, TranscodeStatus, Transcoder};
 use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodeError,
-    CharsetEncodeErrorKind,
-    CharsetEncodePolicy,
-    CharsetEncoder,
+    CharsetCodec, CharsetEncodeError, CharsetEncodeErrorKind, CharsetEncodePolicy, CharsetEncoder,
     UnmappableAction,
 };
 use qubit_io::try_reserve_vec;
@@ -83,10 +75,7 @@ where
     ///
     /// Returns [`CharsetEncodeError`] when `policy` uses replacement and the
     /// replacement character cannot be encoded by `codec`.
-    pub fn with_policy(
-        codec: C,
-        policy: CharsetEncodePolicy,
-    ) -> Result<Self, CharsetEncodeError> {
+    pub fn with_policy(codec: C, policy: CharsetEncodePolicy) -> Result<Self, CharsetEncodeError> {
         Ok(Self {
             encoder: CharsetEncoder::with_policy(codec, policy)?,
         })
@@ -137,8 +126,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
-        COVERAGE_RESERVE_FAIL_AFTER
-            .with(|state| state.set(successful_attempts));
+        COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Clears coverage-only reserve failure hooks.
@@ -162,10 +150,7 @@ where
     ///
     /// Returns [`CharsetEncodeError`] when collecting input characters, sizing
     /// the output, reset, encoding, or finish fails.
-    pub fn encode_str(
-        &mut self,
-        input: &str,
-    ) -> Result<Vec<C::Unit>, CharsetEncodeError>
+    pub fn encode_str(&mut self, input: &str) -> Result<Vec<C::Unit>, CharsetEncodeError>
     where
         C::Unit: Default,
     {
@@ -182,18 +167,15 @@ where
             return Err(output_length_overflow(charset));
         }
         output.resize_with(capacity, C::Unit::default);
-        let written = self.encode_chars_into(&chars, &mut output, 0).map_err(
-            |error| {
-                if matches!(
-                    error.kind(),
-                    CharsetEncodeErrorKind::BufferTooSmall { .. }
-                ) {
+        let written = self
+            .encode_chars_into(&chars, &mut output, 0)
+            .map_err(|error| {
+                if matches!(error.kind(), CharsetEncodeErrorKind::BufferTooSmall { .. }) {
                     output_length_overflow(charset)
                 } else {
                     error
                 }
-            },
-        )?;
+            })?;
         output.truncate(written);
         Ok(output)
     }
@@ -275,9 +257,14 @@ where
         }
 
         let mut output_cursor = output_index;
-        output_cursor += self.encoder.reset(output, output_cursor)?;
-        let progress =
-            self.encoder.transcode(input, 0, output, output_cursor)?;
+        output_cursor += self
+            .encoder
+            .reset(output, output_cursor)
+            .map_err(|error| map_encode_error(charset, error))?;
+        let progress = self
+            .encoder
+            .transcode(input, 0, output, output_cursor)
+            .map_err(|error| map_encode_error(charset, error))?;
         output_cursor += progress.written();
         if let TranscodeStatus::NeedOutput {
             output_index,
@@ -294,7 +281,10 @@ where
                 output_index,
             ));
         }
-        output_cursor += self.encoder.finish(output, output_cursor)?;
+        output_cursor += self
+            .encoder
+            .finish(output, output_cursor)
+            .map_err(|error| map_encode_error(charset, error))?;
         Ok(output_cursor - output_index)
     }
 
@@ -311,11 +301,20 @@ where
     /// # Errors
     ///
     /// Returns [`CapacityError`] when any component bound overflows.
-    fn required_encode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn required_encode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.encoder.max_total_output_len(input_len)
+    }
+}
+
+fn map_encode_error(
+    charset: qubit_codec_text::Charset,
+    error: TranscodeError<CharsetEncodeError, char>,
+) -> CharsetEncodeError {
+    match error {
+        TranscodeError::Failure(failure) => {
+            CharsetEncodeError::map_transcode_failure(charset, failure)
+        }
+        TranscodeError::Domain(error) => error.source,
     }
 }
 
@@ -342,9 +341,7 @@ fn coverage_should_fail_reserve() -> bool {
 }
 
 #[inline]
-fn output_length_overflow(
-    charset: qubit_codec_text::Charset,
-) -> CharsetEncodeError {
+fn output_length_overflow(charset: qubit_codec_text::Charset) -> CharsetEncodeError {
     CharsetEncodeError::new(
         charset,
         CharsetEncodeErrorKind::OutputLengthOverflow,

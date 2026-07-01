@@ -2,21 +2,11 @@ use core::num::NonZeroUsize;
 
 use qubit_codec::Codec;
 use qubit_codec_text::{
-    AsciiCodec,
-    Charset,
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodeErrorKind,
-    CharsetEncodeError,
-    CharsetEncodeErrorKind,
-    CharsetEncodePolicy,
-    CharsetEncodeResult,
+    AsciiCodec, Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind,
+    CharsetEncodeError, CharsetEncodeErrorKind, CharsetEncodePolicy, CharsetEncodeResult,
     UnmappableAction,
 };
-use qubit_io_text::{
-    CharsetStringEncoder,
-    Utf8Codec,
-};
+use qubit_io_text::{CharsetStringEncoder, Utf8Codec};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct NonDefaultUnit(u8);
@@ -48,13 +38,9 @@ impl Codec for NonDefaultUnitCodec {
         &mut self,
         _input: &[NonDefaultUnit],
         input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         let kind = CharsetDecodeErrorKind::malformed_unknown();
-        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index)
-            .into_codec_failure())
+        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index).into_codec_failure())
     }
 
     unsafe fn encode(
@@ -62,9 +48,9 @@ impl Codec for NonDefaultUnitCodec {
         value: &char,
         output: &mut [NonDefaultUnit],
         output_index: usize,
-    ) -> CharsetEncodeResult<NonZeroUsize> {
+    ) -> CharsetEncodeResult<usize> {
         output[output_index] = NonDefaultUnit(*value as u8);
-        Ok(NonZeroUsize::MIN)
+        Ok(1)
     }
 }
 
@@ -104,13 +90,9 @@ impl Codec for HugeEncodeBoundsCodec {
         &mut self,
         _input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         let kind = CharsetDecodeErrorKind::malformed_unknown();
-        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index)
-            .into_codec_failure())
+        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index).into_codec_failure())
     }
 
     unsafe fn encode(
@@ -118,9 +100,9 @@ impl Codec for HugeEncodeBoundsCodec {
         value: &char,
         output: &mut [u8],
         output_index: usize,
-    ) -> CharsetEncodeResult<NonZeroUsize> {
+    ) -> CharsetEncodeResult<usize> {
         output[output_index] = *value as u8;
-        Ok(NonZeroUsize::MIN)
+        Ok(1)
     }
 }
 
@@ -156,21 +138,17 @@ impl Codec for UnderreportedEncodeLenCodec {
         value.is_ascii()
     }
 
-    fn encode_len(&self, _value: &char) -> NonZeroUsize {
-        qubit_io::nz!(2)
+    fn encode_len(&self, _value: &char) -> usize {
+        2
     }
 
     unsafe fn decode(
         &mut self,
         _input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         let kind = CharsetDecodeErrorKind::malformed_unknown();
-        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index)
-            .into_codec_failure())
+        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index).into_codec_failure())
     }
 
     unsafe fn encode(
@@ -178,10 +156,10 @@ impl Codec for UnderreportedEncodeLenCodec {
         value: &char,
         output: &mut [u8],
         output_index: usize,
-    ) -> CharsetEncodeResult<NonZeroUsize> {
+    ) -> CharsetEncodeResult<usize> {
         output[output_index] = *value as u8;
         output[output_index + 1] = *value as u8;
-        Ok(qubit_io::nz!(2))
+        Ok(2)
     }
 }
 
@@ -205,13 +183,9 @@ impl Codec for EncodeResetErrorCodec {
         &mut self,
         _input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         let kind = CharsetDecodeErrorKind::malformed_unknown();
-        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index)
-            .into_codec_failure())
+        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index).into_codec_failure())
     }
 
     unsafe fn encode_reset(
@@ -230,9 +204,9 @@ impl Codec for EncodeResetErrorCodec {
         value: &char,
         output: &mut [u8],
         output_index: usize,
-    ) -> CharsetEncodeResult<NonZeroUsize> {
+    ) -> CharsetEncodeResult<usize> {
         output[output_index] = *value as u8;
-        Ok(NonZeroUsize::MIN)
+        Ok(1)
     }
 }
 
@@ -256,13 +230,9 @@ impl Codec for EncodeFlushErrorCodec {
         &mut self,
         _input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         let kind = CharsetDecodeErrorKind::malformed_unknown();
-        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index)
-            .into_codec_failure())
+        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index).into_codec_failure())
     }
 
     unsafe fn encode(
@@ -270,9 +240,9 @@ impl Codec for EncodeFlushErrorCodec {
         value: &char,
         output: &mut [u8],
         output_index: usize,
-    ) -> CharsetEncodeResult<NonZeroUsize> {
+    ) -> CharsetEncodeResult<usize> {
         output[output_index] = *value as u8;
-        Ok(NonZeroUsize::MIN)
+        Ok(1)
     }
 
     unsafe fn encode_flush(
@@ -321,10 +291,7 @@ fn test_charset_string_encoder_exposes_configuration_and_wrapped_encoder() {
 
 #[test]
 fn test_charset_string_encoder_with_policy_rejects_unencodable_replacement() {
-    let result = CharsetStringEncoder::with_policy(
-        AsciiCodec,
-        CharsetEncodePolicy::replace('中'),
-    );
+    let result = CharsetStringEncoder::with_policy(AsciiCodec, CharsetEncodePolicy::replace('中'));
     let Err(error) = result else {
         panic!("unencodable replacement should be rejected");
     };
@@ -355,11 +322,9 @@ fn test_charset_string_encoder_encode_str_into_writes_at_output_index() {
 
 #[test]
 fn test_charset_string_encoder_encode_str_into_supports_non_default_units() {
-    let mut encoder = CharsetStringEncoder::with_policy(
-        NonDefaultUnitCodec,
-        CharsetEncodePolicy::report(),
-    )
-    .expect("report policy does not require replacement units");
+    let mut encoder =
+        CharsetStringEncoder::with_policy(NonDefaultUnitCodec, CharsetEncodePolicy::report())
+            .expect("report policy does not require replacement units");
     let mut output = [NonDefaultUnit(0), NonDefaultUnit(0)];
 
     let written = encoder
@@ -390,8 +355,7 @@ fn test_charset_string_encoder_encode_str_into_reports_invalid_output_index() {
 fn test_charset_string_encoder_encode_str_into_reports_insufficient_output() {
     let mut encoder = CharsetStringEncoder::new(Utf8Codec);
     let mut output = [0_u8; 3];
-    let required =
-        <Utf8Codec as Codec>::MAX_UNITS_PER_VALUE.get() * "A中".chars().count();
+    let required = <Utf8Codec as Codec>::MAX_UNITS_PER_VALUE.get() * "A中".chars().count();
 
     let error = encoder
         .encode_str_into("A中", &mut output, 0)
@@ -441,8 +405,7 @@ fn test_charset_string_encoder_encode_str_reports_output_capacity_overflow() {
 }
 
 #[test]
-fn test_charset_string_encoder_encode_str_into_reports_output_capacity_overflow()
- {
+fn test_charset_string_encoder_encode_str_into_reports_output_capacity_overflow() {
     let mut encoder = CharsetStringEncoder::new(HugeEncodeBoundsCodec);
     let mut output = [0_u8; 1];
 
@@ -485,11 +448,8 @@ fn test_charset_string_encoder_encode_str_propagates_finish_errors() {
 
 #[test]
 fn test_charset_string_encoder_encode_str_reports_global_error_index() {
-    let mut encoder = CharsetStringEncoder::with_policy(
-        AsciiCodec,
-        CharsetEncodePolicy::report(),
-    )
-    .expect("report policy should be constructible");
+    let mut encoder = CharsetStringEncoder::with_policy(AsciiCodec, CharsetEncodePolicy::report())
+        .expect("report policy should be constructible");
     let input = format!("{}é", "A".repeat(300));
 
     let error = encoder
@@ -517,10 +477,7 @@ fn test_charset_string_encoder_encode_str_applies_default_policy() {
 #[cfg(coverage)]
 mod coverage_tests {
     use qubit_codec_text::CharsetEncodeErrorKind;
-    use qubit_io_text::{
-        CharsetStringEncoder,
-        Utf8Codec,
-    };
+    use qubit_io_text::{CharsetStringEncoder, Utf8Codec};
 
     fn reset_coverage_hooks() {
         CharsetStringEncoder::<Utf8Codec>::coverage_reset_reserve_hooks();
@@ -532,9 +489,9 @@ mod coverage_tests {
         let mut encoder = CharsetStringEncoder::new(Utf8Codec);
 
         CharsetStringEncoder::<Utf8Codec>::coverage_fail_next_reserve();
-        let error = encoder.encode_str("A").expect_err(
-            "character collection reserve failure should be reported",
-        );
+        let error = encoder
+            .encode_str("A")
+            .expect_err("character collection reserve failure should be reported");
 
         assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
@@ -555,16 +512,15 @@ mod coverage_tests {
     }
 
     #[test]
-    fn test_charset_string_encoder_encode_str_into_reports_char_collect_reserve_failure()
-     {
+    fn test_charset_string_encoder_encode_str_into_reports_char_collect_reserve_failure() {
         reset_coverage_hooks();
         let mut encoder = CharsetStringEncoder::new(Utf8Codec);
         let mut output = [0_u8; 1];
 
         CharsetStringEncoder::<Utf8Codec>::coverage_fail_next_reserve();
-        let error = encoder.encode_str_into("A", &mut output, 0).expect_err(
-            "character collection reserve failure should be reported",
-        );
+        let error = encoder
+            .encode_str_into("A", &mut output, 0)
+            .expect_err("character collection reserve failure should be reported");
 
         assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
