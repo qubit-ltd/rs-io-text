@@ -167,7 +167,7 @@ where
 impl<R, D> BufferedReader<R, D>
 where
     R: Input<Item = u8>,
-    D: TranscodeDecoder<u8, char>,
+    D: TranscodeDecoder<Input = u8, Output = char>,
     D::DomainError: StdError + Send + Sync + 'static,
     D::FailureValue: Debug + Send + Sync + 'static,
 {
@@ -270,7 +270,7 @@ where
 impl<R, D> TextRead for BufferedReader<R, D>
 where
     R: Input<Item = u8>,
-    D: TranscodeDecoder<u8, char>,
+    D: TranscodeDecoder<Input = u8, Output = char>,
     D::DomainError: StdError + Send + Sync + 'static,
     D::FailureValue: Debug + Send + Sync + 'static,
 {
@@ -321,7 +321,7 @@ where
 impl<R, D> TextLineRead for BufferedReader<R, D>
 where
     R: Input<Item = u8>,
-    D: TranscodeDecoder<u8, char>,
+    D: TranscodeDecoder<Input = u8, Output = char>,
     D::DomainError: StdError + Send + Sync + 'static,
     D::FailureValue: Debug + Send + Sync + 'static,
 {

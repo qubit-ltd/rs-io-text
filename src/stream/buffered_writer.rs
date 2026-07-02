@@ -50,7 +50,7 @@ where
 impl<W, E> BufferedWriter<W, E>
 where
     W: Output<Item = u8>,
-    E: TranscodeEncoder<char, u8>,
+    E: TranscodeEncoder<Input = char, Output = u8>,
 {
     /// Creates a buffered text writer with the default byte buffer capacity.
     ///
@@ -157,7 +157,7 @@ where
 impl<W, E> BufferedWriter<W, E>
 where
     W: Output<Item = u8>,
-    E: TranscodeEncoder<char, u8>,
+    E: TranscodeEncoder<Input = char, Output = u8>,
     E::DomainError: StdError + Send + Sync + 'static,
     E::FailureValue: Debug + Send + Sync + 'static,
 {
@@ -237,7 +237,7 @@ where
 impl<W, E> TextWrite for BufferedWriter<W, E>
 where
     W: Output<Item = u8>,
-    E: TranscodeEncoder<char, u8>,
+    E: TranscodeEncoder<Input = char, Output = u8>,
     E::DomainError: StdError + Send + Sync + 'static,
     E::FailureValue: Debug + Send + Sync + 'static,
 {

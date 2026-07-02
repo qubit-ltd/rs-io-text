@@ -33,7 +33,9 @@ use qubit_io_text::{
 #[derive(Debug, Default)]
 struct PartialEncoder;
 
-impl Transcoder<char, u8> for PartialEncoder {
+impl Transcoder for PartialEncoder {
+    type Input = char;
+    type Output = u8;
     type DomainError = std::io::Error;
     type FailureValue = ();
 
@@ -79,12 +81,14 @@ impl Transcoder<char, u8> for PartialEncoder {
     }
 }
 
-impl TranscodeEncoder<char, u8> for PartialEncoder {}
+impl TranscodeEncoder for PartialEncoder {}
 
 #[derive(Debug, Default)]
 struct FinishByteEncoder;
 
-impl Transcoder<char, u8> for FinishByteEncoder {
+impl Transcoder for FinishByteEncoder {
+    type Input = char;
+    type Output = u8;
     type DomainError = std::io::Error;
     type FailureValue = ();
 
@@ -148,7 +152,7 @@ impl Transcoder<char, u8> for FinishByteEncoder {
     }
 }
 
-impl TranscodeEncoder<char, u8> for FinishByteEncoder {}
+impl TranscodeEncoder for FinishByteEncoder {}
 
 #[test]
 fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()

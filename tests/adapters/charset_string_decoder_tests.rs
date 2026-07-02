@@ -34,9 +34,9 @@ impl Codec for InvalidInputErrorCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -85,9 +85,9 @@ impl Codec for HugeDecodeResetBoundsCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_RESET_VALUES: usize = usize::MAX;
 
@@ -127,9 +127,9 @@ impl Codec for DecodeResetErrorCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
@@ -178,11 +178,11 @@ impl Codec for HugeDecodeFinishBoundsCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_DECODE_FLUSH_VALUES: usize = usize::MAX;
+    const MAX_DECODE_FINISH_VALUES: usize = usize::MAX;
 
     unsafe fn decode(
         &mut self,
@@ -223,9 +223,9 @@ impl Codec for DecodeFlushErrorCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -238,7 +238,7 @@ impl Codec for DecodeFlushErrorCodec {
         Ok(('A', NonZeroUsize::MIN))
     }
 
-    unsafe fn decode_flush(
+    unsafe fn decode_finish(
         &mut self,
         _output: &mut [char],
         output_index: usize,

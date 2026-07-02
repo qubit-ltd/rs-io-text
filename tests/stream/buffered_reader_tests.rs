@@ -33,7 +33,9 @@ use qubit_io_text::{
 #[derive(Debug, Default)]
 struct FinishCharDecoder;
 
-impl Transcoder<u8, char> for FinishCharDecoder {
+impl Transcoder for FinishCharDecoder {
+    type Input = u8;
+    type Output = char;
     type DomainError = std::io::Error;
     type FailureValue = ();
 
@@ -84,12 +86,14 @@ impl Transcoder<u8, char> for FinishCharDecoder {
     }
 }
 
-impl TranscodeDecoder<u8, char> for FinishCharDecoder {}
+impl TranscodeDecoder for FinishCharDecoder {}
 
 #[derive(Debug, Default)]
 struct OverflowFinishDecoder;
 
-impl Transcoder<u8, char> for OverflowFinishDecoder {
+impl Transcoder for OverflowFinishDecoder {
+    type Input = u8;
+    type Output = char;
     type DomainError = std::io::Error;
     type FailureValue = ();
 
@@ -135,7 +139,7 @@ impl Transcoder<u8, char> for OverflowFinishDecoder {
     }
 }
 
-impl TranscodeDecoder<u8, char> for OverflowFinishDecoder {}
+impl TranscodeDecoder for OverflowFinishDecoder {}
 
 #[test]
 fn test_buffered_reader_decodes_utf8_across_single_byte_refills()

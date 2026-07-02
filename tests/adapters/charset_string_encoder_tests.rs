@@ -36,9 +36,9 @@ impl Codec for NonDefaultUnitCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &char) -> bool {
         value.is_ascii()
@@ -92,9 +92,9 @@ impl Codec for HugeEncodeBoundsCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MAX;
+    const MAX_UNITS_PER_VALUE: usize = usize::MAX;
 
     fn can_encode_value(&self, value: &char) -> bool {
         value.is_ascii()
@@ -148,9 +148,9 @@ impl Codec for UnderreportedEncodeLenCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &char) -> bool {
         value.is_ascii()
@@ -191,9 +191,9 @@ impl Codec for EncodeResetErrorCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -242,11 +242,11 @@ impl Codec for EncodeFlushErrorCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_ENCODE_FLUSH_UNITS: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = 1;
 
     fn can_encode_value(&self, value: &char) -> bool {
         value.is_ascii()
@@ -275,7 +275,7 @@ impl Codec for EncodeFlushErrorCodec {
         Ok(1)
     }
 
-    unsafe fn encode_flush(
+    unsafe fn encode_finish(
         &mut self,
         _output: &mut [u8],
         output_index: usize,
@@ -391,7 +391,7 @@ fn test_charset_string_encoder_encode_str_into_reports_insufficient_output() {
     let mut encoder = CharsetStringEncoder::new(Utf8Codec);
     let mut output = [0_u8; 3];
     let required =
-        <Utf8Codec as Codec>::MAX_UNITS_PER_VALUE.get() * "A中".chars().count();
+        <Utf8Codec as Codec>::MAX_UNITS_PER_VALUE * "A中".chars().count();
 
     let error = encoder
         .encode_str_into("A中", &mut output, 0)

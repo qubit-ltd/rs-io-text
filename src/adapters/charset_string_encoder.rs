@@ -346,7 +346,7 @@ fn map_encode_error(
         TranscodeError::Failure(failure) => {
             CharsetEncodeError::map_transcode_failure(charset, failure)
         }
-        TranscodeError::Domain(error) => error.source,
+        TranscodeError::Domain(error) => error.into_source(),
     }
 }
 

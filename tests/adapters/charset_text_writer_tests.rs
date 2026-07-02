@@ -83,9 +83,9 @@ impl Codec for NeedOutputCodec {
     type DecodeError = CharsetDecodeError;
     type EncodeError = CharsetEncodeError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = qubit_io::nz!(2);
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     fn encode_len(&self, value: &char) -> usize {
         if *value == 'B' { 2 } else { 1 }
