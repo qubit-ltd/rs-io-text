@@ -7,7 +7,6 @@
 // =============================================================================
 use std::{
     error::Error as StdError,
-    fmt::Debug,
     io,
 };
 
@@ -168,8 +167,8 @@ impl<R, D> BufferedReader<R, D>
 where
     R: Input<Item = u8>,
     D: TranscodeDecoder<Input = u8, Output = char>,
-    D::DomainError: StdError + Send + Sync + 'static,
-    D::FailureValue: Debug + Send + Sync + 'static,
+    D::Error: StdError + Send + Sync + 'static,
+    D::DecodeError: Send + Sync + 'static,
 {
     /// Handles an incomplete encoded tail after EOF.
     ///
@@ -271,8 +270,8 @@ impl<R, D> TextRead for BufferedReader<R, D>
 where
     R: Input<Item = u8>,
     D: TranscodeDecoder<Input = u8, Output = char>,
-    D::DomainError: StdError + Send + Sync + 'static,
-    D::FailureValue: Debug + Send + Sync + 'static,
+    D::Error: StdError + Send + Sync + 'static,
+    D::DecodeError: Send + Sync + 'static,
 {
     type Error = io::Error;
 
@@ -322,8 +321,8 @@ impl<R, D> TextLineRead for BufferedReader<R, D>
 where
     R: Input<Item = u8>,
     D: TranscodeDecoder<Input = u8, Output = char>,
-    D::DomainError: StdError + Send + Sync + 'static,
-    D::FailureValue: Debug + Send + Sync + 'static,
+    D::Error: StdError + Send + Sync + 'static,
+    D::DecodeError: Send + Sync + 'static,
 {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let mut read = false;

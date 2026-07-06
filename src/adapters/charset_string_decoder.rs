@@ -11,7 +11,7 @@ use std::cell::Cell;
 
 use qubit_codec::{
     CapacityError,
-    TranscodeError,
+    TranscodeDecodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -336,13 +336,13 @@ where
 
 fn map_decode_error(
     charset: Charset,
-    error: TranscodeError<CharsetDecodeError>,
+    error: TranscodeDecodeError<CharsetDecodeError>,
 ) -> CharsetDecodeError {
     match error {
-        TranscodeError::Failure(failure) => {
+        TranscodeDecodeError::Failure(failure) => {
             CharsetDecodeError::map_transcode_failure(charset, failure)
         }
-        TranscodeError::Domain(error) => error.into_source(),
+        TranscodeDecodeError::Domain(error) => error.into_source(),
     }
 }
 

@@ -11,7 +11,7 @@ use std::cell::Cell;
 
 use qubit_codec::{
     CapacityError,
-    TranscodeError,
+    TranscodeEncodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -149,14 +149,14 @@ where
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(usize::MAX));
     }
 
-    /// Maps a framework transcode failure in coverage builds.
+    /// Maps a transcode error in coverage builds.
     #[cfg(coverage)]
     #[doc(hidden)]
-    pub fn coverage_map_encode_failure(
+    pub fn coverage_map_encode_error(
         charset: qubit_codec_text::Charset,
-        failure: qubit_codec::TranscodeFailure<char>,
+        error: TranscodeEncodeError<CharsetEncodeError, char>,
     ) -> CharsetEncodeError {
-        map_encode_error(charset, TranscodeError::Failure(failure))
+        map_encode_error(charset, error)
     }
 
     /// Encodes a complete string into an owned output buffer.
@@ -340,13 +340,16 @@ where
 
 fn map_encode_error(
     charset: qubit_codec_text::Charset,
-    error: TranscodeError<CharsetEncodeError, char>,
+    error: TranscodeEncodeError<CharsetEncodeError, char>,
 ) -> CharsetEncodeError {
     match error {
-        TranscodeError::Failure(failure) => {
+        TranscodeEncodeError::Failure(failure) => {
             CharsetEncodeError::map_transcode_failure(charset, failure)
         }
-        TranscodeError::Domain(error) => error.into_source(),
+        TranscodeEncodeError::Unencodable { input_index, value } => {
+            CharsetEncodeError::map_unencodable(charset, input_index, value)
+        }
+        TranscodeEncodeError::Domain(error) => error.into_source(),
     }
 }
 

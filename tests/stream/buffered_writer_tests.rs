@@ -13,8 +13,8 @@ use std::io::{
 
 use qubit_codec::{
     CapacityError,
+    TranscodeEncodeError,
     TranscodeEncoder,
-    TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -36,8 +36,7 @@ struct PartialEncoder;
 impl Transcoder for PartialEncoder {
     type Input = char;
     type Output = u8;
-    type DomainError = std::io::Error;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<std::io::Error, char>;
 
     fn max_transcode_output_len(
         &self,
@@ -50,11 +49,8 @@ impl Transcoder for PartialEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -64,7 +60,7 @@ impl Transcoder for PartialEncoder {
         _input_index: usize,
         _output: &mut [u8],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, Self::Error> {
         Ok(TranscodeProgress::complete(0, 0))
     }
 
@@ -72,16 +68,15 @@ impl Transcoder for PartialEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
 
-impl TranscodeEncoder for PartialEncoder {}
+impl TranscodeEncoder for PartialEncoder {
+    type EncodeError = std::io::Error;
+}
 
 #[derive(Debug, Default)]
 struct FinishByteEncoder;
@@ -89,8 +84,7 @@ struct FinishByteEncoder;
 impl Transcoder for FinishByteEncoder {
     type Input = char;
     type Output = u8;
-    type DomainError = std::io::Error;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<std::io::Error, char>;
 
     fn max_transcode_output_len(
         &self,
@@ -107,11 +101,8 @@ impl Transcoder for FinishByteEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -121,11 +112,8 @@ impl Transcoder for FinishByteEncoder {
         input_index: usize,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         let mut read = 0;
         let mut written = 0;
         while input_index + read < input.len()
@@ -142,17 +130,16 @@ impl Transcoder for FinishByteEncoder {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         output[output_index] = b'!';
         Ok(1)
     }
 }
 
-impl TranscodeEncoder for FinishByteEncoder {}
+impl TranscodeEncoder for FinishByteEncoder {
+    type EncodeError = std::io::Error;
+}
 
 #[test]
 fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
@@ -224,7 +211,7 @@ fn test_buffered_writer_reports_incomplete_encoder_consumption() {
         .write_chars(&['x'])
         .expect_err("encoders must consume complete requested input");
 
-    assert_eq!(ErrorKind::Other, error.kind());
+    assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
 #[test]

@@ -13,8 +13,8 @@ use std::io::{
 
 use qubit_codec::{
     CapacityError,
+    TranscodeDecodeError,
     TranscodeDecoder,
-    TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -36,8 +36,7 @@ struct FinishCharDecoder;
 impl Transcoder for FinishCharDecoder {
     type Input = u8;
     type Output = char;
-    type DomainError = std::io::Error;
-    type FailureValue = ();
+    type Error = TranscodeDecodeError<std::io::Error>;
 
     fn max_transcode_output_len(
         &self,
@@ -54,11 +53,8 @@ impl Transcoder for FinishCharDecoder {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -68,7 +64,7 @@ impl Transcoder for FinishCharDecoder {
         input_index: usize,
         _output: &mut [char],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, Self::Error> {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
@@ -76,17 +72,16 @@ impl Transcoder for FinishCharDecoder {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         output[output_index] = '!';
         Ok(1)
     }
 }
 
-impl TranscodeDecoder for FinishCharDecoder {}
+impl TranscodeDecoder for FinishCharDecoder {
+    type DecodeError = std::io::Error;
+}
 
 #[derive(Debug, Default)]
 struct OverflowFinishDecoder;
@@ -94,8 +89,7 @@ struct OverflowFinishDecoder;
 impl Transcoder for OverflowFinishDecoder {
     type Input = u8;
     type Output = char;
-    type DomainError = std::io::Error;
-    type FailureValue = ();
+    type Error = TranscodeDecodeError<std::io::Error>;
 
     fn max_transcode_output_len(
         &self,
@@ -112,11 +106,8 @@ impl Transcoder for OverflowFinishDecoder {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -126,7 +117,7 @@ impl Transcoder for OverflowFinishDecoder {
         input_index: usize,
         _output: &mut [char],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, Self::Error> {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
@@ -134,12 +125,14 @@ impl Transcoder for OverflowFinishDecoder {
         &mut self,
         _output: &mut [char],
         _output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ) -> Result<usize, Self::Error> {
         unreachable!("capacity planning fails before finish")
     }
 }
 
-impl TranscodeDecoder for OverflowFinishDecoder {}
+impl TranscodeDecoder for OverflowFinishDecoder {
+    type DecodeError = std::io::Error;
+}
 
 #[test]
 fn test_buffered_reader_decodes_utf8_across_single_byte_refills()

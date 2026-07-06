@@ -574,9 +574,29 @@ mod coverage_tests {
     #[test]
     fn test_charset_string_encoder_maps_transcode_failure() {
         let error =
-            CharsetStringEncoder::<Utf8Codec>::coverage_map_encode_failure(
+            CharsetStringEncoder::<Utf8Codec>::coverage_map_encode_error(
                 Charset::UTF_8,
-                qubit_codec::TranscodeFailure::UnencodableValue {
+                qubit_codec::TranscodeEncodeError::Failure(
+                    qubit_codec::TranscodeFailure::insufficient_output(3, 2, 1),
+                ),
+            );
+
+        assert_eq!(
+            CharsetEncodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1,
+            },
+            error.kind(),
+        );
+        assert_eq!(3, error.index());
+    }
+
+    #[test]
+    fn test_charset_string_encoder_maps_unencodable_transcode_error() {
+        let error =
+            CharsetStringEncoder::<Utf8Codec>::coverage_map_encode_error(
+                Charset::UTF_8,
+                qubit_codec::TranscodeEncodeError::Unencodable {
                     input_index: 3,
                     value: Some('中'),
                 },
