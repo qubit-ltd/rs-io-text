@@ -56,12 +56,13 @@ impl Transcoder for PartialEncoder {
 
     fn transcode(
         &mut self,
-        _input: &[char],
-        _input_index: usize,
+        input: &[char],
+        input_index: usize,
         _output: &mut [u8],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::complete(0, 0))
+        let read = usize::from(input_index < input.len());
+        Ok(TranscodeProgress::complete(read, 0))
     }
 
     fn finish(
@@ -141,6 +142,185 @@ impl TranscodeEncoder for FinishByteEncoder {
     type EncodeError = std::io::Error;
 }
 
+#[derive(Debug, Default)]
+struct LifecycleEncoder {
+    started: bool,
+    finished: bool,
+}
+
+impl Transcoder for LifecycleEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<std::io::Error, char>;
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        assert!(!self.started, "encoder reset must run exactly once");
+        output[output_index] = b'^';
+        self.started = true;
+        Ok(1)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[char],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        assert!(self.started, "encoder must reset before transcode");
+        let mut read = 0;
+        let mut written = 0;
+        while input_index + read < input.len()
+            && output_index + written < output.len()
+        {
+            output[output_index + written] = input[input_index + read] as u8;
+            read += 1;
+            written += 1;
+        }
+        if input_index + read == input.len() {
+            return Ok(TranscodeProgress::complete(read, written));
+        }
+        Ok(TranscodeProgress::need_output(
+            output_index + written,
+            core::num::NonZeroUsize::MIN,
+            0,
+            read,
+            written,
+        ))
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        assert!(self.started, "encoder must reset before finish");
+        assert!(!self.finished, "encoder finish must run exactly once");
+        output[output_index] = b'!';
+        self.finished = true;
+        Ok(1)
+    }
+}
+
+impl TranscodeEncoder for LifecycleEncoder {
+    type EncodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
+struct OverflowResetEncoder;
+
+impl Transcoder for OverflowResetEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<std::io::Error, char>;
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Err(CapacityError::OutputLengthOverflow)
+    }
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("capacity planning fails before reset")
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[char],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        unreachable!("capacity planning fails before transcode")
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("capacity planning fails before finish")
+    }
+}
+
+impl TranscodeEncoder for OverflowResetEncoder {
+    type EncodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
+struct OverreportedResetEncoder;
+
+impl Transcoder for OverreportedResetEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<std::io::Error, char>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(1)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[char],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        unreachable!("reset contract violation fails before transcode")
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("reset contract violation fails before finish")
+    }
+}
+
+impl TranscodeEncoder for OverreportedResetEncoder {
+    type EncodeError = std::io::Error;
+}
+
 #[test]
 fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
 -> std::io::Result<()> {
@@ -181,6 +361,10 @@ fn test_buffered_writer_accessors_empty_writes_and_finish_state()
         .write_char('B')
         .expect_err("writes after finish must be rejected");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+    let error = writer
+        .write_str("C")
+        .expect_err("string writes after finish must be rejected");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
 
     let cursor = writer.into_inner()?;
     assert_eq!(b"prefix:A", cursor.into_inner().as_slice());
@@ -208,7 +392,7 @@ fn test_buffered_writer_reports_incomplete_encoder_consumption() {
         BufferedWriter::new(Cursor::new(Vec::new()), PartialEncoder);
 
     let error = writer
-        .write_chars(&['x'])
+        .write_chars(&['x', 'y'])
         .expect_err("encoders must consume complete requested input");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -227,6 +411,39 @@ fn test_buffered_writer_emits_finish_output() -> std::io::Result<()> {
 }
 
 #[test]
+fn test_buffered_writer_runs_complete_lifecycle_on_first_write()
+-> std::io::Result<()> {
+    let mut writer = BufferedWriter::with_capacity(
+        Cursor::new(Vec::new()),
+        LifecycleEncoder::default(),
+        1,
+    );
+
+    writer.write_char('A')?;
+    writer.write_char('B')?;
+    let cursor = writer.into_inner()?;
+
+    assert_eq!(b"^AB!", cursor.into_inner().as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream()
+-> std::io::Result<()> {
+    let mut writer = BufferedWriter::with_capacity(
+        Cursor::new(Vec::new()),
+        LifecycleEncoder::default(),
+        1,
+    );
+
+    writer.finish()?;
+    let cursor = writer.into_inner()?;
+
+    assert_eq!(b"^!", cursor.into_inner().as_slice());
+    Ok(())
+}
+
+#[test]
 fn test_buffered_writer_maps_encoder_errors_to_io_errors() {
     let encoder =
         CharsetEncoder::with_policy(AsciiCodec, CharsetEncodePolicy::report())
@@ -239,6 +456,39 @@ fn test_buffered_writer_maps_encoder_errors_to_io_errors() {
         .expect_err("strict ASCII should reject non-ASCII characters");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_writer_reports_reset_capacity_errors() {
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
+
+    let error = writer
+        .write_char('A')
+        .expect_err("reset capacity errors must become I/O errors");
+
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
+#[test]
+fn test_buffered_writer_into_inner_propagates_lazy_reset_errors() {
+    let writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
+
+    let error = writer
+        .into_inner()
+        .expect_err("into_inner must propagate lazy reset errors");
+
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
+#[test]
+#[should_panic(expected = "reset wrote beyond its bound")]
+fn test_buffered_writer_rejects_overreported_reset_output() {
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), OverreportedResetEncoder);
+
+    let _ = writer.write_char('A');
 }
 
 #[test]

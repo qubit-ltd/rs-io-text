@@ -11,6 +11,7 @@ use std::{
 };
 
 use qubit_codec::{
+    CapacityError,
     TranscodeEncodeOutput,
     TranscodeEncoder,
 };
@@ -34,6 +35,8 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 ///
 /// This type owns a byte writer and a streaming encoder. Encoded bytes are
 /// buffered by [`qubit_codec::TranscodeEncodeOutput`].
+/// Encoder reset is started lazily before the first non-empty write, or before
+/// finishing an empty stream.
 #[derive(Debug)]
 pub struct BufferedWriter<W, E>
 where
@@ -43,6 +46,7 @@ where
     encoder: E,
     line_ending: LineEnding,
     char_buffer: Vec<char>,
+    started: bool,
     finished: bool,
 }
 
@@ -91,6 +95,7 @@ where
             encoder,
             line_ending: LineEnding::Lf,
             char_buffer: Vec::with_capacity(DEFAULT_CHAR_CHUNK_CAPACITY),
+            started: false,
             finished: false,
         }
     }
@@ -170,6 +175,7 @@ where
     ///
     /// Returns encoding errors or I/O errors from the wrapped writer.
     fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
+        self.ensure_started()?;
         let written = self.output.transcode_from(
             &mut self.encoder,
             &mut encode_error_to_io,
@@ -182,6 +188,40 @@ where
                 "text encoder did not consume the complete character input",
             ));
         }
+        Ok(())
+    }
+
+    /// Starts the encoder lifecycle before the first non-empty write.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity, reset, or output errors produced while emitting the
+    /// encoder's stream-start units.
+    fn ensure_started(&mut self) -> io::Result<()> {
+        if self.started {
+            return Ok(());
+        }
+        let required = self
+            .encoder
+            .max_reset_output_len()
+            .map_err(capacity_error_to_io)?;
+        self.output.ensure_spare_capacity(required)?;
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
+        assert!(
+            available >= required,
+            "insufficient reset capacity reserved in spare output buffer",
+        );
+        let written = self
+            .encoder
+            .reset(units, output_index)
+            .map_err(encode_error_to_io)?;
+        assert!(written <= required, "reset wrote beyond its bound");
+        unsafe {
+            // SAFETY: Reset output is bounded by the capacity reserved above.
+            self.output.advance(written);
+        }
+        self.started = true;
         Ok(())
     }
 
@@ -210,6 +250,7 @@ where
     /// [`io::ErrorKind::InvalidInput`].
     pub fn finish(&mut self) -> io::Result<()> {
         if !self.finished {
+            self.ensure_started()?;
             self.output
                 .finish(&mut self.encoder, &mut encode_error_to_io)?;
             self.finished = true;
@@ -290,4 +331,9 @@ where
     E: StdError + Send + Sync + 'static,
 {
     io::Error::new(io::ErrorKind::InvalidInput, error)
+}
+
+/// Converts encoder capacity planning errors into I/O errors.
+fn capacity_error_to_io(error: CapacityError) -> io::Error {
+    io::Error::new(io::ErrorKind::OutOfMemory, error)
 }

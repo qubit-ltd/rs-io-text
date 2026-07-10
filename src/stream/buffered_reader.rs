@@ -39,6 +39,8 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// This type owns a byte reader and a streaming decoder. Encoded bytes are
 /// buffered by [`qubit_codec::TranscodeDecodeInput`], while decoded
 /// characters are exposed through [`TextRead`].
+/// Decoder reset is started lazily on the first read attempt, and any values
+/// emitted by reset are returned before decoded source characters.
 #[derive(Debug)]
 pub struct BufferedReader<R, D>
 where
@@ -50,6 +52,7 @@ where
     chars: Vec<char>,
     char_position: usize,
     char_limit: usize,
+    started: bool,
     finished: bool,
 }
 
@@ -102,6 +105,7 @@ where
             chars: vec!['\0'; capacity],
             char_position: 0,
             char_limit: 0,
+            started: false,
             finished: false,
         }
     }
@@ -170,6 +174,36 @@ where
     D::Error: StdError + Send + Sync + 'static,
     D::DecodeError: Send + Sync + 'static,
 {
+    /// Starts the decoder lifecycle before the first read attempt.
+    ///
+    /// Reset-produced characters are retained in the decoded character buffer
+    /// and delivered before characters decoded from source bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity or decoder reset errors.
+    fn ensure_started(&mut self) -> io::Result<()> {
+        if self.started {
+            return Ok(());
+        }
+        let required = self
+            .decoder
+            .max_reset_output_len()
+            .map_err(capacity_error_to_io)?;
+        if self.chars.len() < required {
+            self.chars.resize(required, '\0');
+        }
+        let written = self
+            .decoder
+            .reset(self.chars.as_mut_slice(), 0)
+            .map_err(decode_error_to_io)?;
+        assert!(written <= required, "reset wrote beyond its bound");
+        self.started = true;
+        self.char_position = 0;
+        self.char_limit = written;
+        Ok(())
+    }
+
     /// Handles an incomplete encoded tail after EOF.
     ///
     /// # Returns
@@ -242,6 +276,7 @@ where
     ///
     /// Returns I/O and decoding errors from the wrapped reader or decoder.
     fn fill_chars(&mut self) -> io::Result<bool> {
+        self.ensure_started()?;
         if self.has_buffered_chars() {
             return Ok(true);
         }

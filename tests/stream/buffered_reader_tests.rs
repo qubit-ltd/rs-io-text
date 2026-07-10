@@ -15,6 +15,7 @@ use qubit_codec::{
     CapacityError,
     TranscodeDecodeError,
     TranscodeDecoder,
+    TranscodeDomainError,
     TranscodeProgress,
     Transcoder,
 };
@@ -84,6 +85,79 @@ impl TranscodeDecoder for FinishCharDecoder {
 }
 
 #[derive(Debug, Default)]
+struct LifecycleDecoder {
+    started: bool,
+    finished: bool,
+}
+
+impl Transcoder for LifecycleDecoder {
+    type Input = u8;
+    type Output = char;
+    type Error = TranscodeDecodeError<std::io::Error>;
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(5)
+    }
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        assert!(!self.started, "decoder reset must run exactly once");
+        output[output_index] = '^';
+        output[output_index + 1] = '~';
+        output[output_index + 2] = '+';
+        output[output_index + 3] = '*';
+        output[output_index + 4] = '-';
+        self.started = true;
+        Ok(5)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        assert!(self.started, "decoder must reset before transcode");
+        let input = &input[input_index..];
+        for (offset, byte) in input.iter().enumerate() {
+            output[output_index + offset] = char::from(*byte);
+        }
+        Ok(TranscodeProgress::complete(input.len(), input.len()))
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        assert!(self.started, "decoder must reset before finish");
+        assert!(!self.finished, "decoder finish must run exactly once");
+        output[output_index] = '!';
+        self.finished = true;
+        Ok(1)
+    }
+}
+
+impl TranscodeDecoder for LifecycleDecoder {
+    type DecodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
 struct OverflowFinishDecoder;
 
 impl Transcoder for OverflowFinishDecoder {
@@ -131,6 +205,54 @@ impl Transcoder for OverflowFinishDecoder {
 }
 
 impl TranscodeDecoder for OverflowFinishDecoder {
+    type DecodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
+struct ErrorFinishDecoder;
+
+impl Transcoder for ErrorFinishDecoder {
+    type Input = u8;
+    type Output = char;
+    type Error = TranscodeDecodeError<std::io::Error>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::complete(input.len() - input_index, 0))
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Err(TranscodeDecodeError::Domain(TranscodeDomainError::Finish {
+            source: std::io::Error::other("finish failed"),
+        }))
+    }
+}
+
+impl TranscodeDecoder for ErrorFinishDecoder {
     type DecodeError = std::io::Error;
 }
 
@@ -211,6 +333,40 @@ fn test_buffered_reader_emits_decoder_finish_output() -> std::io::Result<()> {
 }
 
 #[test]
+fn test_buffered_reader_runs_complete_lifecycle_on_first_read()
+-> std::io::Result<()> {
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"A".to_vec()),
+        LifecycleDecoder::default(),
+        CodingErrorPolicy::Strict,
+        1,
+    );
+
+    let mut output = String::new();
+    reader.read_to_string(&mut output)?;
+
+    assert_eq!("^~+*-A!", output);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_runs_complete_lifecycle_for_empty_stream()
+-> std::io::Result<()> {
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(Vec::new()),
+        LifecycleDecoder::default(),
+        CodingErrorPolicy::Strict,
+        1,
+    );
+
+    let mut output = String::new();
+    reader.read_to_string(&mut output)?;
+
+    assert_eq!("^~+*-!", output);
+    Ok(())
+}
+
+#[test]
 fn test_buffered_reader_reports_finish_capacity_errors() {
     let mut reader = BufferedReader::new(
         Cursor::new(Vec::new()),
@@ -223,6 +379,21 @@ fn test_buffered_reader_reports_finish_capacity_errors() {
         .expect_err("finish capacity errors must become I/O errors");
 
     assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
+#[test]
+fn test_buffered_reader_propagates_finish_errors() {
+    let mut reader = BufferedReader::new(
+        Cursor::new(Vec::new()),
+        ErrorFinishDecoder,
+        CodingErrorPolicy::Strict,
+    );
+
+    let error = reader
+        .read_char()
+        .expect_err("decoder finish errors must become I/O errors");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
 #[test]

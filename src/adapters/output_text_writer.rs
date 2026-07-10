@@ -15,6 +15,7 @@ use qubit_io::{
 
 use crate::{
     LineEnding,
+    StringCharOutput,
     TextWrite,
 };
 
@@ -43,7 +44,7 @@ impl<'a> OutputTextWriter<'a> {
         O: Output<Item = char> + 'a,
     {
         Self {
-            output: box_output(output),
+            output: BufferedOutput::ensure_boxed(output),
             line_ending: LineEnding::Lf,
         }
     }
@@ -60,13 +61,10 @@ impl<'a> OutputTextWriter<'a> {
     /// A text writer using LF line endings.
     #[must_use]
     pub fn from_boxed(output: Box<dyn Output<Item = char> + 'a>) -> Self {
-        let output = if output.is_buffered() {
-            output
-        } else {
-            Box::new(BufferedOutput::new(BoxedCharOutput { output }))
-        };
         Self {
-            output,
+            output: BufferedOutput::<StringCharOutput<'a>>::ensure_boxed_dyn(
+                output,
+            ),
             line_ending: LineEnding::Lf,
         }
     }
@@ -169,40 +167,5 @@ impl fmt::Debug for OutputTextWriter<'_> {
             .field("is_buffered", &self.output.is_buffered())
             .field("line_ending", &self.line_ending)
             .finish()
-    }
-}
-
-struct BoxedCharOutput<'a> {
-    output: Box<dyn Output<Item = char> + 'a>,
-}
-
-impl Output for BoxedCharOutput<'_> {
-    type Item = char;
-
-    #[inline]
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[char],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
-        // SAFETY: Forwarded from the caller.
-        unsafe { self.output.write_unchecked(input, index, count) }
-    }
-
-    #[inline]
-    fn flush(&mut self) -> io::Result<()> {
-        self.output.flush()
-    }
-}
-
-fn box_output<'a, O>(output: O) -> Box<dyn Output<Item = char> + 'a>
-where
-    O: Output<Item = char> + 'a,
-{
-    if output.is_buffered() {
-        Box::new(output)
-    } else {
-        Box::new(BufferedOutput::new(output))
     }
 }
