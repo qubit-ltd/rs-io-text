@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-io"
-version = "0.12.0"
+version = "0.13.0"
 
 [[package]]
 name = "qubit-io-text"
