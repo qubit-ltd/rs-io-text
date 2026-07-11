@@ -15,7 +15,6 @@ use qubit_io::{
 };
 
 use crate::{
-    StringCharInput,
     TextLineRead,
     TextRead,
 };
@@ -61,8 +60,13 @@ impl<'a> InputTextReader<'a> {
     /// A text reader wrapping `input`.
     #[must_use]
     pub fn from_boxed(input: Box<dyn Input<Item = char> + 'a>) -> Self {
+        let input = if input.is_buffered() {
+            input
+        } else {
+            Box::new(BufferedInput::new(BoxedCharInput { input }))
+        };
         Self {
-            input: BufferedInput::<StringCharInput>::ensure_boxed_dyn(input),
+            input,
             pending: VecDeque::new(),
         }
     }
@@ -216,5 +220,25 @@ impl fmt::Debug for InputTextReader<'_> {
             .field("is_buffered", &self.input.is_buffered())
             .field("pending_len", &self.pending.len())
             .finish()
+    }
+}
+
+/// Concrete forwarding wrapper for a boxed character input.
+struct BoxedCharInput<'a> {
+    input: Box<dyn Input<Item = char> + 'a>,
+}
+
+impl Input for BoxedCharInput<'_> {
+    type Item = char;
+
+    #[inline]
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+        count: usize,
+    ) -> io::Result<usize> {
+        // SAFETY: Forwarded from the trait caller.
+        unsafe { self.input.read_unchecked(output, index, count) }
     }
 }

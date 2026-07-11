@@ -15,7 +15,6 @@ use qubit_io::{
 
 use crate::{
     LineEnding,
-    StringCharOutput,
     TextWrite,
 };
 
@@ -61,10 +60,13 @@ impl<'a> OutputTextWriter<'a> {
     /// A text writer using LF line endings.
     #[must_use]
     pub fn from_boxed(output: Box<dyn Output<Item = char> + 'a>) -> Self {
+        let output = if output.is_buffered() {
+            output
+        } else {
+            Box::new(BufferedOutput::new(BoxedCharOutput { output }))
+        };
         Self {
-            output: BufferedOutput::<StringCharOutput<'a>>::ensure_boxed_dyn(
-                output,
-            ),
+            output,
             line_ending: LineEnding::Lf,
         }
     }
@@ -167,5 +169,30 @@ impl fmt::Debug for OutputTextWriter<'_> {
             .field("is_buffered", &self.output.is_buffered())
             .field("line_ending", &self.line_ending)
             .finish()
+    }
+}
+
+/// Concrete forwarding wrapper for a boxed character output.
+struct BoxedCharOutput<'a> {
+    output: Box<dyn Output<Item = char> + 'a>,
+}
+
+impl Output for BoxedCharOutput<'_> {
+    type Item = char;
+
+    #[inline]
+    unsafe fn write_unchecked(
+        &mut self,
+        input: &[char],
+        index: usize,
+        count: usize,
+    ) -> io::Result<usize> {
+        // SAFETY: Forwarded from the trait caller.
+        unsafe { self.output.write_unchecked(input, index, count) }
+    }
+
+    #[inline]
+    fn flush(&mut self) -> io::Result<()> {
+        self.output.flush()
     }
 }
