@@ -32,7 +32,7 @@ doctest = true
 
 [dependencies]
 qubit-io = "0.13.0"
-qubit-codec = { path = "../rs-codec", version = "0.10.0" }
+qubit-codec = { path = "../rs-codec", version = "0.10.0", features = ["io"] }
 qubit-codec-text = { path = "../rs-codec-text", version = "0.2.0" }
 
 [patch.crates-io]
