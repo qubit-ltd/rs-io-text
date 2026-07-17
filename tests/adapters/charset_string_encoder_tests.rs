@@ -408,14 +408,14 @@ fn test_charset_string_encoder_encode_str_into_reports_insufficient_output() {
 }
 
 #[test]
-fn test_charset_string_encoder_encode_str_reports_need_output_as_overflow() {
+#[should_panic(
+    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+)]
+fn test_charset_string_encoder_encode_str_panics_when_encode_len_exceeds_codec_maximum()
+ {
     let mut encoder = CharsetStringEncoder::new(UnderreportedEncodeLenCodec);
 
-    let error = encoder
-        .encode_str("A")
-        .expect_err("underreported output bound should be reported");
-
-    assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+    let _ = encoder.encode_str("A");
 }
 
 #[test]
