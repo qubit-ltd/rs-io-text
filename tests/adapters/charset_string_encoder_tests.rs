@@ -610,4 +610,24 @@ mod coverage_tests {
         );
         assert_eq!(3, error.index());
     }
+
+    #[test]
+    fn test_charset_string_encoder_maps_owned_buffer_error_to_overflow() {
+        let error = qubit_codec_text::CharsetEncodeError::new(
+            Charset::UTF_8,
+            CharsetEncodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1,
+            },
+            7,
+        );
+
+        let error =
+            CharsetStringEncoder::<Utf8Codec>::coverage_map_owned_encode_error(
+                Charset::UTF_8,
+                error,
+            );
+
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+    }
 }
