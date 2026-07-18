@@ -256,6 +256,104 @@ impl TranscodeDecoder for ErrorFinishDecoder {
     type DecodeError = std::io::Error;
 }
 
+#[derive(Debug, Default)]
+struct ErrorResetDecoder;
+
+impl Transcoder for ErrorResetDecoder {
+    type Input = u8;
+    type Output = char;
+    type Error = TranscodeDecodeError<std::io::Error>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Err(TranscodeDecodeError::Domain(TranscodeDomainError::Reset {
+            source: std::io::Error::other("reset failed"),
+        }))
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        unreachable!("reset failure prevents transcoding")
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("reset failure prevents finishing")
+    }
+}
+
+impl TranscodeDecoder for ErrorResetDecoder {
+    type DecodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
+struct OverflowResetDecoder;
+
+impl Transcoder for OverflowResetDecoder {
+    type Input = u8;
+    type Output = char;
+    type Error = TranscodeDecodeError<std::io::Error>;
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Err(CapacityError::OutputLengthOverflow)
+    }
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("capacity planning fails before reset")
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        unreachable!("capacity planning fails before transcoding")
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("capacity planning fails before finishing")
+    }
+}
+
+impl TranscodeDecoder for OverflowResetDecoder {
+    type DecodeError = std::io::Error;
+}
+
 #[test]
 fn test_buffered_reader_decodes_utf8_across_single_byte_refills()
 -> std::io::Result<()> {
@@ -394,6 +492,47 @@ fn test_buffered_reader_propagates_finish_errors() {
         .expect_err("decoder finish errors must become I/O errors");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
+}
+
+#[test]
+fn test_buffered_reader_propagates_reset_errors() {
+    let mut reader = BufferedReader::new(
+        Cursor::new(Vec::new()),
+        ErrorResetDecoder,
+        CodingErrorPolicy::Strict,
+    );
+
+    let error = reader
+        .read_char()
+        .expect_err("decoder reset errors must become I/O errors");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+
+    let mut reader = BufferedReader::new(
+        Cursor::new(Vec::new()),
+        ErrorResetDecoder,
+        CodingErrorPolicy::Strict,
+    );
+    let mut output = Vec::new();
+    let error = reader
+        .read_chars(&mut output, 1)
+        .expect_err("bulk reads must propagate decoder reset errors");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+}
+
+#[test]
+fn test_buffered_reader_reports_reset_capacity_errors() {
+    let mut reader = BufferedReader::new(
+        Cursor::new(Vec::new()),
+        OverflowResetDecoder,
+        CodingErrorPolicy::Strict,
+    );
+
+    let error = reader
+        .read_char()
+        .expect_err("decoder reset capacity errors must become I/O errors");
+
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
 }
 
 #[test]

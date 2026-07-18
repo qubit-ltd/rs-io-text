@@ -1,47 +1,53 @@
 # Qubit IO Text User Guide
 
-Use `qubit-io-text` when application code wants to work with Unicode text rather
-than raw bytes. The crate provides small text traits plus adapters for strings,
-UTF-8 byte streams, and byte-oriented `qubit-codec-text` charsets.
-
-## Capability Map
-
-| Area | API | Purpose |
-| --- | --- | --- |
-| Traits | `TextRead`, `TextLineRead`, `TextWrite` | abstract Unicode text sources and sinks |
-| In-memory readers | `StrTextReader`, `StringTextReader` | read text from borrowed or owned strings |
-| In-memory writer | `StringTextWriter` | write text into a borrowed `String` with line-ending policy |
-| Character I/O bridge | `StringInput`, `StringOutput`, `InputTextReader`, `OutputTextWriter` | compose `qubit_io` character input/output with text traits |
-| UTF-8 streams | `Utf8TextReader`, `Utf8TextWriter` | adapt `Read` and `Write` byte streams as UTF-8 text |
-| Charset streams | `CharsetTextReader`, `CharsetTextWriter` | adapt byte-oriented `qubit-codec-text` codecs |
-| Extension traits | `CharsetReadExt`, `CharsetWriteExt` | create charset text streams from `Read` and `Write` values |
-| Policy values | `LineEnding`, `CodingErrorPolicy` | configure line endings and malformed/unmappable handling |
+Use `qubit-io-text` when application code should operate on Unicode scalar
+values and lines instead of encoded bytes. Charset codecs are supplied by
+`qubit-codec-text`; byte and character streams are supplied by `qubit-io`.
 
 ## Installation
 
 ```toml
 [dependencies]
-qubit-io-text = "0.1"
+qubit-io-text = "0.2"
 ```
 
-## Writing Text
+## API Layers
 
-`TextWrite` is implemented for `String`, `StringTextWriter`, `Utf8TextWriter`,
-`CharsetTextWriter`, and `OutputTextWriter<O>` when
-`O: qubit_io::Output<Item = char>`.
+| Layer | Main API | Underlying I/O |
+| --- | --- | --- |
+| Synchronous text traits | `TextRead`, `TextLineRead`, `TextWrite` | Unicode `char` and `str` |
+| In-memory adapters | `StrTextReader`, `StringTextReader`, `StringTextWriter`, `StringCharInput`, `StringCharOutput` | strings |
+| Character bridges | `InputTextReader`, `OutputTextWriter` | `Input<Item = char>`, `Output<Item = char>` |
+| UTF-8 convenience | `Utf8TextReader`, `Utf8TextWriter` | `Input<Item = u8>`, `Output<Item = u8>` |
+| Synchronous charsets | `CharsetTextReader`, `CharsetTextWriter` | `Input<Item = u8>`, `Output<Item = u8>` |
+| Asynchronous charsets | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` | `AsyncInput<Item = u8>`, `AsyncOutput<Item = u8>` |
+
+The crate currently exposes asynchronous APIs on charset adapters rather than
+an async counterpart to every text trait.
+
+## Unicode Text Traits
+
+`TextRead::read_to_string` appends to the destination and returns the number of
+Unicode scalar values appended, not the number of UTF-8 bytes.
 
 ```rust
-use qubit_io_text::TextWrite;
+use qubit_io_text::{
+    StrTextReader,
+    TextRead,
+};
 
-let mut output = String::new();
-output.write_line("first")?;
-output.write_str("second")?;
+let mut reader = StrTextReader::new("中🙂");
+let mut text = String::new();
+let count = reader.read_to_string(&mut text)?;
 
-assert_eq!("first\nsecond", output);
-# Ok::<(), std::convert::Infallible>(())
+assert_eq!(2, count);
+assert_eq!(7, text.len());
+assert_eq!("中🙂", text);
+# Ok::<(), core::convert::Infallible>(())
 ```
 
-Use `StringTextWriter` when line endings must be explicit:
+`TextLineRead::read_line` appends a trailing newline when the input contains
+one. `TextWrite::write_line` adds the writer's configured `LineEnding`.
 
 ```rust
 use qubit_io_text::{
@@ -51,94 +57,53 @@ use qubit_io_text::{
 };
 
 let mut output = String::new();
-let mut writer = StringTextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
-
+let mut writer =
+    StringTextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
 writer.write_line("first")?;
 
 assert_eq!("first\r\n", output);
 # Ok::<(), std::io::Error>(())
 ```
 
-`TextRead` is implemented for `InputTextReader<I>` when
-`I: qubit_io::Input<Item = char>`. `StringInput` is the in-memory character
-input used by `StringTextReader`.
+## Synchronous Charset Streams
 
-## UTF-8 Byte Streams
+`CharsetTextReader<I, C>` decodes any `I: Input<Item = u8>`.
+`CharsetTextWriter<O, C>` encodes into any `O: Output<Item = u8>`.
 
-Use `Utf8TextWriter` and `Utf8TextReader` when the byte stream is always UTF-8.
-
-```rust
-use std::io::Cursor;
-
-use qubit_io_text::{
-    TextRead,
-    TextWrite,
-    Utf8TextReader,
-    Utf8TextWriter,
-};
-
-let mut bytes = Vec::new();
-Utf8TextWriter::new(&mut bytes).write_str("a中")?;
-
-let mut reader = Utf8TextReader::from_read(Cursor::new(bytes));
-let mut text = String::new();
-reader.read_to_string(&mut text)?;
-
-assert_eq!("a中", text);
-# Ok::<(), std::io::Error>(())
-```
-
-## Charset Adapters
-
-`CharsetTextWriter` and `CharsetTextReader` accept byte-oriented codecs from
-`qubit-codec-text`, such as `AsciiCodec`, `Latin1Codec`, `Utf8Codec`,
+Built-in codec families include `AsciiCodec`, `Latin1Codec`, `Utf8Codec`,
 `Utf16ByteCodec`, and `Utf32ByteCodec`.
-
-```rust
-use qubit_io_text::{
-    CharsetTextWriter,
-    CodingErrorPolicy,
-    TextWrite,
-    Utf8Codec,
-};
-
-let mut bytes = Vec::new();
-let mut writer = CharsetTextWriter::new(&mut bytes, Utf8Codec, CodingErrorPolicy::Strict);
-
-writer.write_str("hello")?;
-writer.flush()?;
-
-assert_eq!(b"hello", bytes.as_slice());
-# Ok::<(), std::io::Error>(())
-```
-
-Strict mode reports malformed input or unmappable output. Replacement mode uses
-the replacement behavior provided by `qubit-codec-text`.
 
 ```rust
 use std::io::Cursor;
 
 use qubit_io_text::{
     CharsetTextReader,
+    CharsetTextWriter,
     CodingErrorPolicy,
     TextRead,
+    TextWrite,
     Utf8Codec,
 };
 
-let mut reader = CharsetTextReader::new(
-    Cursor::new(vec![0xFF]),
-    Utf8Codec,
-    CodingErrorPolicy::Replace,
-);
-let mut output = String::new();
+let mut bytes = Vec::new();
+let mut writer =
+    CharsetTextWriter::new(&mut bytes, Utf8Codec, CodingErrorPolicy::Strict);
+writer.write_str("hello 中")?;
+writer.finish()?;
 
-reader.read_to_string(&mut output)?;
-assert_eq!("\u{FFFD}", output);
+let mut reader = CharsetTextReader::new(
+    Cursor::new(bytes),
+    Utf8Codec,
+    CodingErrorPolicy::Strict,
+);
+let mut text = String::new();
+reader.read_to_string(&mut text)?;
+assert_eq!("hello 中", text);
 # Ok::<(), std::io::Error>(())
 ```
 
-The same charset streams can be created from standard byte streams through
-extension traits:
+`CharsetReadExt` and `CharsetWriteExt` provide construction and one-shot
+helpers on `Input` and `Output` values:
 
 ```rust
 use std::io::Cursor;
@@ -147,43 +112,119 @@ use qubit_io_text::{
     CharsetReadExt,
     CharsetWriteExt,
     CodingErrorPolicy,
-    TextRead,
     Utf8Codec,
 };
 
-let mut reader = Cursor::new("hello".as_bytes().to_vec())
-    .charset_text_reader(Utf8Codec, CodingErrorPolicy::Strict);
-let mut text = String::new();
-reader.read_to_string(&mut text)?;
-assert_eq!("hello", text);
+let mut input = Cursor::new(b"hello".to_vec());
+let text = input.read_to_string_with_charset(
+    Utf8Codec,
+    CodingErrorPolicy::Strict,
+)?;
 
-let mut bytes = Vec::new();
-bytes.write_str_with_charset("hello", Utf8Codec, CodingErrorPolicy::Strict)?;
-assert_eq!(b"hello", bytes.as_slice());
+let mut output = Vec::new();
+output.write_str_with_charset(
+    &text,
+    Utf8Codec,
+    CodingErrorPolicy::Strict,
+)?;
 # Ok::<(), std::io::Error>(())
 ```
 
-## Reading Lines
+## Asynchronous Charset Reader
 
-Readers that implement `TextLineRead` append the line terminator when one is
-present, matching standard Rust line-reading behavior.
+`AsyncCharsetTextReader` owns its `AsyncInput`, decoder, and retained byte and
+character buffers. Construction performs no I/O.
 
 ```rust
+use qubit_io::AsyncInput;
 use qubit_io_text::{
-    StrTextReader,
-    TextLineRead,
+    AsyncCharsetTextReader,
+    CodingErrorPolicy,
+    Utf8Codec,
 };
 
-let mut reader = StrTextReader::new("first\nsecond");
-let mut line = String::new();
-
-assert!(reader.read_line(&mut line)?);
-assert_eq!("first\n", line);
-# Ok::<(), std::convert::Infallible>(())
+async fn read_document<I>(input: I) -> std::io::Result<String>
+where
+    I: AsyncInput<Item = u8> + Unpin,
+{
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CodingErrorPolicy::Strict,
+    );
+    let mut text = String::new();
+    reader.read_to_string_async(&mut text).await?;
+    Ok(text)
+}
 ```
 
-## Choosing the Right Layer
+Its operations are:
 
-- Use `qubit-codec-text` for buffer-level charset conversion.
-- Use `qubit-io-text` when text needs to flow through reader or writer traits.
-- Use `qubit-io` for generic byte stream helpers that are not text-specific.
+- `read_char_async`;
+- `read_chars_async`;
+- `read_to_string_async`;
+- `read_line_async`.
+
+The reader commits received bytes to retained storage before another suspension
+point. Cancelling a read therefore does not lose an incomplete encoded
+character. `input()` may already be positioned beyond buffered bytes;
+`into_input()` discards all buffered text state.
+
+## Asynchronous Charset Writer
+
+`AsyncCharsetTextWriter` owns its `AsyncOutput`, stateful encoder, and pending
+encoded bytes.
+
+```rust
+use qubit_io::AsyncOutput;
+use qubit_io_text::{
+    AsyncCharsetTextWriter,
+    CodingErrorPolicy,
+    LineEnding,
+    Utf8Codec,
+};
+
+async fn write_document<O>(output: O) -> std::io::Result<O>
+where
+    O: AsyncOutput<Item = u8> + Unpin,
+{
+    let mut writer = AsyncCharsetTextWriter::new(
+        output,
+        Utf8Codec,
+        CodingErrorPolicy::Strict,
+    )
+    .with_line_ending(LineEnding::CrLf);
+    writer.write_line_async("header").await?;
+    writer.write_str_async("body").await?;
+    writer.finish_async().await?;
+    writer.into_output_async().await
+}
+```
+
+The writer also provides `write_char_async`, `write_chars_async`, and
+`flush_async`. Flushing drains encoded bytes but does not finish the encoder.
+Finishing emits codec-owned trailing output, drains it, and flushes the
+underlying output. A failed `finish_async()` retains pending state and can be
+retried. In contrast, `into_output_async()` consumes the writer on error, so
+call `finish_async()` separately when recovery matters.
+
+Pending encoded bytes survive suspension and cancellation. However, a cancelled
+high-level write may already have applied a text prefix. Do not retry the whole
+string blindly unless the surrounding protocol makes duplicate prefixes safe.
+
+## Error Policy and EOF
+
+`CodingErrorPolicy::Strict` reports malformed input, incomplete encoded EOF
+tails, and unencodable output. `CodingErrorPolicy::Replace` substitutes the
+codec's replacement value.
+
+Policy is part of adapter construction so error handling cannot change halfway
+through a stateful charset stream.
+
+## UTF-8 Convenience Adapters
+
+`Utf8TextReader` and `Utf8TextWriter` are strict UTF-8 convenience wrappers
+over `Input<Item = u8>` and `Output<Item = u8>`. They delegate to the same
+buffered charset state machines as `CharsetTextReader` and
+`CharsetTextWriter`, so standard-library streams work through Qubit's blanket
+adapters without defining a second core I/O boundary.

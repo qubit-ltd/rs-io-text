@@ -26,6 +26,10 @@ use crate::{
     CodingErrorPolicy,
     TextLineRead,
     TextRead,
+    io_error::{
+        capacity_error_to_io as shared_capacity_error_to_io,
+        decode_error_to_io as shared_decode_error_to_io,
+    },
 };
 
 /// Default byte buffer capacity used by buffered text readers.
@@ -372,15 +376,15 @@ where
     }
 }
 
-/// Converts decoder errors into I/O errors.
+/// Converts decoder errors at the buffered-reader boundary.
 fn decode_error_to_io<E>(error: E) -> io::Error
 where
     E: StdError + Send + Sync + 'static,
 {
-    io::Error::new(io::ErrorKind::InvalidData, error)
+    shared_decode_error_to_io(error)
 }
 
-/// Converts codec capacity planning errors into I/O errors.
+/// Converts capacity errors at the buffered-reader boundary.
 fn capacity_error_to_io(error: CapacityError) -> io::Error {
-    io::Error::new(io::ErrorKind::OutOfMemory, error)
+    shared_capacity_error_to_io(error)
 }

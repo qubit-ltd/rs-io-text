@@ -159,6 +159,16 @@ where
         map_encode_error(charset, error)
     }
 
+    /// Maps an owned-buffer encode error in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_map_owned_encode_error(
+        charset: qubit_codec_text::Charset,
+        error: CharsetEncodeError,
+    ) -> CharsetEncodeError {
+        map_owned_encode_error(charset, error)
+    }
+
     /// Encodes a complete string into an owned output buffer.
     ///
     /// # Parameters
@@ -193,18 +203,9 @@ where
             return Err(output_length_overflow(charset));
         }
         output.resize_with(capacity, C::Unit::default);
-        let written = self.encode_chars_into(&chars, &mut output, 0).map_err(
-            |error| {
-                if matches!(
-                    error.kind(),
-                    CharsetEncodeErrorKind::BufferTooSmall { .. }
-                ) {
-                    output_length_overflow(charset)
-                } else {
-                    error
-                }
-            },
-        )?;
+        let written = self
+            .encode_chars_into(&chars, &mut output, 0)
+            .map_err(|error| map_owned_encode_error(charset, error))?;
         output.truncate(written);
         Ok(output)
     }
@@ -350,6 +351,18 @@ fn map_encode_error(
             CharsetEncodeError::map_unencodable(charset, input_index, value)
         }
         TranscodeEncodeError::Domain(error) => error.into_source(),
+    }
+}
+
+/// Maps an impossible owned-buffer capacity miss to an overflow error.
+fn map_owned_encode_error(
+    charset: qubit_codec_text::Charset,
+    error: CharsetEncodeError,
+) -> CharsetEncodeError {
+    if matches!(error.kind(), CharsetEncodeErrorKind::BufferTooSmall { .. }) {
+        output_length_overflow(charset)
+    } else {
+        error
     }
 }
 

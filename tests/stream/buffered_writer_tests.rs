@@ -13,6 +13,7 @@ use std::io::{
 
 use qubit_codec::{
     CapacityError,
+    TranscodeDomainError,
     TranscodeEncodeError,
     TranscodeEncoder,
     TranscodeProgress,
@@ -321,6 +322,106 @@ impl TranscodeEncoder for OverreportedResetEncoder {
     type EncodeError = std::io::Error;
 }
 
+#[derive(Debug, Default)]
+struct ErrorResetEncoder;
+
+impl Transcoder for ErrorResetEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<std::io::Error, char>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Err(TranscodeEncodeError::Domain(TranscodeDomainError::Reset {
+            source: std::io::Error::other("reset failed"),
+        }))
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[char],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        unreachable!("reset failure prevents transcoding")
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("reset failure prevents finishing")
+    }
+}
+
+impl TranscodeEncoder for ErrorResetEncoder {
+    type EncodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
+struct ErrorFinishEncoder;
+
+impl Transcoder for ErrorFinishEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<std::io::Error, char>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[char],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let count = input.len() - input_index;
+        for (offset, ch) in input[input_index..].iter().enumerate() {
+            output[output_index + offset] = *ch as u8;
+        }
+        Ok(TranscodeProgress::complete(count, count))
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Err(TranscodeEncodeError::Domain(TranscodeDomainError::Finish {
+            source: std::io::Error::other("finish failed"),
+        }))
+    }
+}
+
+impl TranscodeEncoder for ErrorFinishEncoder {
+    type EncodeError = std::io::Error;
+}
+
 #[test]
 fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
 -> std::io::Result<()> {
@@ -468,6 +569,37 @@ fn test_buffered_writer_reports_reset_capacity_errors() {
         .expect_err("reset capacity errors must become I/O errors");
 
     assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
+#[test]
+fn test_buffered_writer_reports_reset_domain_errors() {
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+
+    let error = writer
+        .write_char('A')
+        .expect_err("reset domain errors must become I/O errors");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let error = writer
+        .write_str(&"a".repeat(256))
+        .expect_err("chunk flush must propagate reset domain errors");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_writer_reports_finish_domain_errors() {
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
+
+    let error = writer
+        .finish()
+        .expect_err("finish domain errors must become I/O errors");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
 }
 
 #[test]

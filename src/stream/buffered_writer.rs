@@ -23,6 +23,10 @@ use qubit_io::{
 use crate::{
     LineEnding,
     TextWrite,
+    io_error::{
+        capacity_error_to_io as shared_capacity_error_to_io,
+        encode_error_to_io as shared_encode_error_to_io,
+    },
 };
 
 /// Default byte buffer capacity used by buffered text writers.
@@ -325,15 +329,15 @@ where
     }
 }
 
-/// Converts encoder errors into I/O errors.
+/// Converts encoder errors at the buffered-writer boundary.
 fn encode_error_to_io<E>(error: E) -> io::Error
 where
     E: StdError + Send + Sync + 'static,
 {
-    io::Error::new(io::ErrorKind::InvalidInput, error)
+    shared_encode_error_to_io(error)
 }
 
-/// Converts encoder capacity planning errors into I/O errors.
+/// Converts capacity errors at the buffered-writer boundary.
 fn capacity_error_to_io(error: CapacityError) -> io::Error {
-    io::Error::new(io::ErrorKind::OutOfMemory, error)
+    shared_capacity_error_to_io(error)
 }

@@ -1,16 +1,57 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use std::io::{
     self,
-    BufReader,
     Cursor,
     ErrorKind,
     Read,
 };
 
+use qubit_io::Input;
 use qubit_io_text::{
     TextLineRead,
     TextRead,
     Utf8TextReader,
 };
+
+struct InputOnlyReader {
+    bytes: Vec<u8>,
+    position: usize,
+}
+
+impl InputOnlyReader {
+    fn new(text: &str) -> Self {
+        Self {
+            bytes: text.as_bytes().to_vec(),
+            position: 0,
+        }
+    }
+}
+
+impl Input for InputOnlyReader {
+    type Item = u8;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> io::Result<usize> {
+        let available = self.bytes.len() - self.position;
+        let read = available.min(count);
+        let input_end = self.position + read;
+        let output_end = index + read;
+        output[index..output_end]
+            .copy_from_slice(&self.bytes[self.position..input_end]);
+        self.position = input_end;
+        Ok(read)
+    }
+}
 
 struct FailingReader;
 
@@ -40,14 +81,25 @@ impl Read for InterruptedOnceReader {
             self.interrupted = true;
             return Err(io::Error::from(ErrorKind::Interrupted));
         }
-        self.data.read(buf)
+        Read::read(&mut self.data, buf)
     }
+}
+
+#[test]
+fn test_new_accepts_qubit_input_without_std_read() -> std::io::Result<()> {
+    let input = InputOnlyReader::new("input中文");
+    let mut reader = Utf8TextReader::new(input);
+    let mut output = String::new();
+
+    assert_eq!(7, reader.read_to_string(&mut output)?);
+    assert_eq!("input中文", output);
+    Ok(())
 }
 
 #[test]
 fn test_read_char_and_line_from_utf8_reader() -> std::io::Result<()> {
     let input = Cursor::new("a中\nβeta".as_bytes().to_vec());
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
     let mut line = String::new();
 
     assert_eq!(Some('a'), reader.read_char()?);
@@ -64,19 +116,19 @@ fn test_read_char_and_line_from_utf8_reader() -> std::io::Result<()> {
 #[test]
 fn test_new_accessors_and_into_inner() {
     let input = Cursor::new("abc".as_bytes().to_vec());
-    let mut reader = Utf8TextReader::new(BufReader::new(input));
+    let mut reader = Utf8TextReader::with_capacity(input, 1);
 
-    assert_eq!(3, reader.get_ref().get_ref().get_ref().len());
-    assert_eq!(0, reader.get_mut().get_mut().position());
+    assert_eq!(3, reader.input().get_ref().len());
+    assert_eq!(0, reader.input_mut().position());
 
-    let inner = reader.into_inner();
-    assert_eq!(0, inner.into_inner().position());
+    let inner = reader.into_input();
+    assert_eq!(0, inner.position());
 }
 
 #[test]
 fn test_read_char_covers_utf8_widths_and_eof() -> std::io::Result<()> {
     let input = Cursor::new("aé中🙂".as_bytes().to_vec());
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
 
     assert_eq!(Some('a'), reader.read_char()?);
     assert_eq!(Some('é'), reader.read_char()?);
@@ -89,7 +141,7 @@ fn test_read_char_covers_utf8_widths_and_eof() -> std::io::Result<()> {
 #[test]
 fn test_read_chars_reads_utf8_scalars() -> std::io::Result<()> {
     let input = Cursor::new("a中🙂".as_bytes().to_vec());
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
     let mut chars = Vec::new();
 
     assert_eq!(2, reader.read_chars(&mut chars, 2)?);
@@ -102,7 +154,7 @@ fn test_read_chars_reads_utf8_scalars() -> std::io::Result<()> {
 #[test]
 fn test_read_chars_propagates_utf8_errors() {
     let input = Cursor::new(vec![0xFF]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
     let mut chars = Vec::new();
 
     let error = reader
@@ -114,7 +166,7 @@ fn test_read_chars_propagates_utf8_errors() {
 #[test]
 fn test_read_to_string_appends_valid_utf8() -> std::io::Result<()> {
     let input = Cursor::new("中🙂".as_bytes().to_vec());
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
     let mut output = String::from("prefix:");
 
     assert_eq!(2, reader.read_to_string(&mut output)?);
@@ -125,7 +177,7 @@ fn test_read_to_string_appends_valid_utf8() -> std::io::Result<()> {
 #[test]
 fn test_read_to_string_reports_invalid_utf8() {
     let input = Cursor::new(vec![0xFF]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
     let mut output = String::new();
 
     let error = reader
@@ -137,7 +189,7 @@ fn test_read_to_string_reports_invalid_utf8() {
 #[test]
 fn test_read_line_reports_invalid_utf8() {
     let input = Cursor::new(vec![0xFF]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
     let mut line = String::new();
 
     let error = reader
@@ -149,7 +201,7 @@ fn test_read_line_reports_invalid_utf8() {
 #[test]
 fn test_read_char_retries_interrupted_first_byte() -> std::io::Result<()> {
     let input = InterruptedOnceReader::new("é".as_bytes().to_vec());
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
 
     assert_eq!(Some('é'), reader.read_char()?);
     assert_eq!(None, reader.read_char()?);
@@ -158,7 +210,7 @@ fn test_read_char_retries_interrupted_first_byte() -> std::io::Result<()> {
 
 #[test]
 fn test_read_char_propagates_io_errors() {
-    let mut reader = Utf8TextReader::from_read(FailingReader);
+    let mut reader = Utf8TextReader::new(FailingReader);
 
     let error = reader
         .read_char()
@@ -169,7 +221,7 @@ fn test_read_char_propagates_io_errors() {
 #[test]
 fn test_read_char_reports_invalid_utf8() {
     let input = Cursor::new(vec![0xE4, 0xFF, 0xAD]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
 
     let error = reader
         .read_char()
@@ -180,7 +232,7 @@ fn test_read_char_reports_invalid_utf8() {
 #[test]
 fn test_read_char_reports_invalid_leading_byte() {
     let input = Cursor::new(vec![0xFF]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
 
     let error = reader
         .read_char()
@@ -189,34 +241,34 @@ fn test_read_char_reports_invalid_leading_byte() {
 }
 
 #[test]
-fn test_read_char_reports_unexpected_eof_in_utf8_sequence() {
+fn test_read_char_reports_truncated_utf8_sequence() {
     let input = Cursor::new(vec![0xE4, 0xB8]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
 
     let error = reader
         .read_char()
         .expect_err("truncated UTF-8 scalar must be rejected");
-    assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+    assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
 #[test]
-fn test_read_char_reports_unexpected_eof_for_two_byte_sequence() {
+fn test_read_char_reports_truncated_two_byte_sequence() {
     let input = Cursor::new(vec![0xC2]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
 
     let error = reader
         .read_char()
         .expect_err("truncated two-byte UTF-8 scalar must be rejected");
-    assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+    assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
 #[test]
-fn test_read_char_reports_unexpected_eof_for_four_byte_sequence() {
+fn test_read_char_reports_truncated_four_byte_sequence() {
     let input = Cursor::new(vec![0xF0, 0x9F]);
-    let mut reader = Utf8TextReader::from_read(input);
+    let mut reader = Utf8TextReader::new(input);
 
     let error = reader
         .read_char()
         .expect_err("truncated four-byte UTF-8 scalar must be rejected");
-    assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+    assert_eq!(ErrorKind::InvalidData, error.kind());
 }

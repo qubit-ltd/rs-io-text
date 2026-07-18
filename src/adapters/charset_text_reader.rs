@@ -110,7 +110,6 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the wrapped byte reader.
     /// Returns the wrapped byte reader. Mutating it directly can invalidate the
     /// logical stream position represented by buffered bytes.
     #[inline(always)]
@@ -171,6 +170,3 @@ where
         self.reader.read_line(output)
     }
 }
-
-/// Buffered alias preserved for API compatibility with older naming patterns.
-pub type BufferedCharsetTextReader<I, C> = CharsetTextReader<I, C>;

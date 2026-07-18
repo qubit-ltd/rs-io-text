@@ -9,8 +9,8 @@
 
 pub use crate::{
     AsciiCodec,
-    BufferedCharsetTextReader,
-    BufferedCharsetTextWriter,
+    AsyncCharsetTextReader,
+    AsyncCharsetTextWriter,
     BufferedReader,
     BufferedWriter,
     ByteOrder,
