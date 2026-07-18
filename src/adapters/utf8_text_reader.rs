@@ -5,212 +5,155 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    BufRead,
-    BufReader,
-    Read,
-};
+use std::io;
+
+use qubit_codec_text::Utf8Codec;
+use qubit_io::Input;
 
 use crate::{
+    CharsetTextReader,
+    CodingErrorPolicy,
     TextLineRead,
     TextRead,
 };
-use qubit_io::UncheckedSlice;
 
-/// Streaming text reader for UTF-8 byte input.
+/// Streaming UTF-8 text reader over a Qubit byte input.
+///
+/// This is the strict UTF-8 convenience form of [`CharsetTextReader`]. It
+/// shares the same buffering and decoder state machine instead of introducing
+/// a separate `std::io::Read`-based stream boundary.
 #[derive(Debug)]
-pub struct Utf8TextReader<R> {
-    inner: R,
+pub struct Utf8TextReader<I>
+where
+    I: Input<Item = u8>,
+{
+    reader: CharsetTextReader<I, Utf8Codec>,
 }
 
-impl<R> Utf8TextReader<R>
+impl<I> Utf8TextReader<I>
 where
-    R: BufRead,
+    I: Input<Item = u8>,
 {
-    /// Creates a UTF-8 text reader over a buffered byte reader.
+    /// Creates a strict UTF-8 text reader with the default buffer capacity.
     ///
     /// # Parameters
-    /// - `inner`: Buffered byte reader that yields UTF-8 data.
+    ///
+    /// - `input`: Qubit byte input to decode lazily.
     ///
     /// # Returns
-    /// A text reader wrapping `inner`.
+    ///
+    /// Returns a streaming reader. Construction does not read from `input`.
+    #[inline]
     #[must_use]
-    pub const fn new(inner: R) -> Self {
-        Self { inner }
-    }
-
-    /// Returns a shared reference to the wrapped reader.
-    ///
-    /// # Returns
-    /// The wrapped reader.
-    #[must_use]
-    pub const fn get_ref(&self) -> &R {
-        &self.inner
-    }
-
-    /// Returns a mutable reference to the wrapped reader.
-    ///
-    /// # Returns
-    /// The wrapped reader.
-    pub fn get_mut(&mut self) -> &mut R {
-        &mut self.inner
-    }
-
-    /// Returns the wrapped reader.
-    ///
-    /// # Returns
-    /// The underlying buffered reader.
-    #[must_use]
-    pub fn into_inner(self) -> R {
-        self.inner
-    }
-}
-
-impl<R> Utf8TextReader<BufReader<R>>
-where
-    R: Read,
-{
-    /// Creates a UTF-8 text reader over an unbuffered byte reader.
-    ///
-    /// # Parameters
-    /// - `reader`: Byte reader that yields UTF-8 data.
-    ///
-    /// # Returns
-    /// A text reader wrapping `reader` in [`BufReader`].
-    #[must_use]
-    pub fn from_read(reader: R) -> Self {
+    pub fn new(input: I) -> Self {
         Self {
-            inner: BufReader::new(reader),
+            reader: CharsetTextReader::new(
+                input,
+                Utf8Codec,
+                CodingErrorPolicy::Strict,
+            ),
         }
     }
+
+    /// Creates a strict UTF-8 reader with a requested byte buffer capacity.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Qubit byte input to decode lazily.
+    /// - `buffer_capacity`: Requested internal byte buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// Returns a streaming reader. The generic buffered layer raises a
+    /// too-small capacity enough to retain an incomplete UTF-8 scalar.
+    #[inline]
+    #[must_use]
+    pub fn with_capacity(input: I, buffer_capacity: usize) -> Self {
+        Self {
+            reader: CharsetTextReader::new_with_buffer_capacity(
+                input,
+                Utf8Codec,
+                CodingErrorPolicy::Strict,
+                buffer_capacity,
+            ),
+        }
+    }
+
+    /// Returns a shared reference to the wrapped byte input.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped input. It may already be positioned beyond bytes
+    /// retained in the reader's internal buffer.
+    #[inline(always)]
+    #[must_use]
+    pub const fn input(&self) -> &I {
+        self.reader.input()
+    }
+
+    /// Returns a mutable reference to the wrapped byte input.
+    ///
+    /// Mutating the input directly can invalidate the logical position
+    /// represented by buffered bytes.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped input.
+    #[inline(always)]
+    pub fn input_mut(&mut self) -> &mut I {
+        self.reader.input_mut()
+    }
+
+    /// Consumes this reader and returns the wrapped byte input.
+    ///
+    /// Any encoded bytes or decoded characters retained by this reader are
+    /// discarded.
+    ///
+    /// # Returns
+    ///
+    /// Returns the underlying byte input.
+    #[inline]
+    #[must_use]
+    pub fn into_input(self) -> I {
+        self.reader.into_input()
+    }
 }
 
-impl<R> TextRead for Utf8TextReader<R>
+impl<I> TextRead for Utf8TextReader<I>
 where
-    R: BufRead,
+    I: Input<Item = u8>,
 {
     type Error = io::Error;
 
+    #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
-        read_utf8_char(&mut self.inner)
+        self.reader.read_char()
     }
 
+    #[inline]
     fn read_chars(
         &mut self,
         output: &mut Vec<char>,
         max: usize,
     ) -> Result<usize, Self::Error> {
-        let mut count = 0;
-        while count < max {
-            match self.read_char()? {
-                Some(ch) => {
-                    output.push(ch);
-                    count += 1;
-                }
-                None => break,
-            }
-        }
-        Ok(count)
+        self.reader.read_chars(output, max)
     }
 
+    #[inline]
     fn read_to_string(
         &mut self,
         output: &mut String,
     ) -> Result<usize, Self::Error> {
-        let start = output.len();
-        self.inner.read_to_string(output)?;
-        Ok(output[start..].chars().count())
+        self.reader.read_to_string(output)
     }
 }
 
-impl<R> TextLineRead for Utf8TextReader<R>
+impl<I> TextLineRead for Utf8TextReader<I>
 where
-    R: BufRead,
+    I: Input<Item = u8>,
 {
+    #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
-        Ok(self.inner.read_line(output)? != 0)
+        self.reader.read_line(output)
     }
-}
-
-/// Reads one UTF-8 character from a byte reader.
-///
-/// # Parameters
-/// - `reader`: Reader to consume bytes from.
-///
-/// # Returns
-/// The next character, or `None` at EOF.
-///
-/// # Errors
-/// Returns an I/O error when the underlying reader fails, when EOF appears in
-/// the middle of a character, or when the byte sequence is not valid UTF-8.
-fn read_utf8_char<R>(reader: &mut R) -> io::Result<Option<char>>
-where
-    R: Read + ?Sized,
-{
-    let mut first = [0_u8; 1];
-    let read = loop {
-        match reader.read(&mut first) {
-            Ok(read) => break read,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {
-                continue;
-            }
-            Err(error) => return Err(error),
-        }
-    };
-    if read == 0 {
-        return Ok(None);
-    }
-    let first = unsafe { UncheckedSlice::read(&first, 0) };
-    let width = utf8_char_width(first)?;
-    debug_assert!(UncheckedSlice::range_fits(4, 0, width));
-    let mut buffer = [0_u8; 4];
-    unsafe {
-        UncheckedSlice::write(&mut buffer, 0, first);
-    }
-    if width > 1 {
-        debug_assert!(UncheckedSlice::range_fits(buffer.len(), 1, width - 1));
-        reader.read_exact(&mut buffer[1..width])?;
-    }
-    let text =
-        std::str::from_utf8(&buffer[..width]).map_err(invalid_utf8_error)?;
-    Ok(text.chars().next())
-}
-
-/// Returns the UTF-8 character width implied by the first byte.
-///
-/// # Parameters
-/// - `byte`: First byte of a UTF-8 sequence.
-///
-/// # Returns
-/// The expected character width in bytes.
-///
-/// # Errors
-/// Returns [`io::ErrorKind::InvalidData`] when `byte` cannot start a UTF-8
-/// sequence.
-fn utf8_char_width(byte: u8) -> io::Result<usize> {
-    match byte {
-        0x00..=0x7F => Ok(1),
-        0xC2..=0xDF => Ok(2),
-        0xE0..=0xEF => Ok(3),
-        0xF0..=0xF4 => Ok(4),
-        _ => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("invalid UTF-8 leading byte: 0x{byte:02X}"),
-        )),
-    }
-}
-
-/// Converts a UTF-8 validation error to an I/O error.
-///
-/// # Parameters
-/// - `error`: UTF-8 validation error.
-///
-/// # Returns
-/// An [`io::Error`] with [`io::ErrorKind::InvalidData`].
-fn invalid_utf8_error(error: std::str::Utf8Error) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::InvalidData,
-        format!("invalid UTF-8 text: {error}"),
-    )
 }

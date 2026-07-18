@@ -218,7 +218,10 @@ where
 ///
 /// Panics only when replacement mode cannot build a replacement encoder for
 /// the supplied codec, matching [`CharsetEncoder::new`] semantics.
-fn create_encoder<C>(codec: C, policy: CodingErrorPolicy) -> CharsetEncoder<C>
+pub(crate) fn create_encoder<C>(
+    codec: C,
+    policy: CodingErrorPolicy,
+) -> CharsetEncoder<C>
 where
     C: CharsetCodec<Unit = u8>,
 {
@@ -233,7 +236,3 @@ where
         CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
     }
 }
-
-/// Buffered alias preserved for API compatibility with existing naming
-/// patterns.
-pub type BufferedCharsetTextWriter<O, C> = CharsetTextWriter<O, C>;

@@ -7,24 +7,27 @@
 // =============================================================================
 //! # Qubit Text IO
 //!
-//! Text-oriented I/O traits and adapters for Rust.
+//! Synchronous and asynchronous text I/O traits and adapters for Rust.
 //!
 //! This crate defines small traits for code that produces or consumes Unicode
 //! text without choosing the final byte encoding or storage destination. It
 //! also provides adapters for in-memory text, UTF-8 byte streams, and
-//! byte-oriented [`qubit_codec_text`] charsets.
+//! byte-oriented [`qubit_codec_text`] charsets. [`AsyncCharsetTextReader`] and
+//! [`AsyncCharsetTextWriter`] drive the same charset state machines through
+//! runtime-neutral [`qubit_io::AsyncInput`] and [`qubit_io::AsyncOutput`].
 
 mod adapters;
 mod coding_error_policy;
 mod ext;
+mod io_error;
 mod line_ending;
 pub mod prelude;
 mod stream;
 mod traits;
 
 pub use adapters::{
-    BufferedCharsetTextReader,
-    BufferedCharsetTextWriter,
+    AsyncCharsetTextReader,
+    AsyncCharsetTextWriter,
     CharsetStringDecoder,
     CharsetStringEncoder,
     CharsetTextReader,

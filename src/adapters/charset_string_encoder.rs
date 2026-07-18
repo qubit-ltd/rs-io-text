@@ -354,6 +354,7 @@ fn map_encode_error(
     }
 }
 
+/// Maps an impossible owned-buffer capacity miss to an overflow error.
 fn map_owned_encode_error(
     charset: qubit_codec_text::Charset,
     error: CharsetEncodeError,

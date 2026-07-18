@@ -5,118 +5,175 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    Write,
-};
+use std::io;
+
+use qubit_codec_text::Utf8Codec;
+use qubit_io::Output;
 
 use crate::{
+    CharsetTextWriter,
+    CodingErrorPolicy,
     LineEnding,
     TextWrite,
 };
 
-/// Text writer that encodes text as UTF-8 bytes.
+/// Streaming UTF-8 text writer over a Qubit byte output.
+///
+/// This is the strict UTF-8 convenience form of [`CharsetTextWriter`]. It
+/// shares the generic charset buffering and encoder state machine instead of
+/// exposing a separate `std::io::Write`-based core API.
 #[derive(Debug)]
-pub struct Utf8TextWriter<W> {
-    inner: W,
-    line_ending: LineEnding,
+pub struct Utf8TextWriter<O>
+where
+    O: Output<Item = u8>,
+{
+    writer: CharsetTextWriter<O, Utf8Codec>,
 }
 
-impl<W> Utf8TextWriter<W>
+impl<O> Utf8TextWriter<O>
 where
-    W: Write,
+    O: Output<Item = u8>,
 {
-    /// Creates a UTF-8 text writer.
+    /// Creates a strict UTF-8 text writer with the default buffer capacity.
     ///
     /// # Parameters
-    /// - `inner`: Byte writer to receive UTF-8 bytes.
+    ///
+    /// - `output`: Qubit byte output that receives encoded bytes.
     ///
     /// # Returns
-    /// A text writer using LF line endings.
+    ///
+    /// Returns a text writer using LF line endings.
+    #[inline]
     #[must_use]
-    pub const fn new(inner: W) -> Self {
+    pub fn new(output: O) -> Self {
         Self {
-            inner,
-            line_ending: LineEnding::Lf,
+            writer: CharsetTextWriter::new(
+                output,
+                Utf8Codec,
+                CodingErrorPolicy::Strict,
+            ),
         }
     }
 
-    /// Sets the line ending for this writer.
+    /// Creates a strict UTF-8 writer with a requested byte buffer capacity.
     ///
     /// # Parameters
-    /// - `line_ending`: Line ending to use for subsequent lines.
+    ///
+    /// - `output`: Qubit byte output that receives encoded bytes.
+    /// - `buffer_capacity`: Requested internal byte buffer capacity.
     ///
     /// # Returns
-    /// This writer with the configured line ending.
+    ///
+    /// Returns a text writer using LF line endings.
+    #[inline]
     #[must_use]
-    pub const fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
-        self.line_ending = line_ending;
+    pub fn with_capacity(output: O, buffer_capacity: usize) -> Self {
+        Self {
+            writer: CharsetTextWriter::new_with_buffer_capacity(
+                output,
+                Utf8Codec,
+                CodingErrorPolicy::Strict,
+                buffer_capacity,
+            ),
+        }
+    }
+
+    /// Sets the line ending used for subsequent lines.
+    ///
+    /// # Parameters
+    ///
+    /// - `line_ending`: Line ending to append from [`TextWrite::write_line`].
+    ///
+    /// # Returns
+    ///
+    /// Returns this writer with the configured line ending.
+    #[inline]
+    #[must_use]
+    pub fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
+        self.writer = self.writer.with_line_ending(line_ending);
         self
     }
 
-    /// Returns a shared reference to the wrapped byte writer.
+    /// Returns a shared reference to the wrapped byte output.
     ///
     /// # Returns
-    /// The wrapped byte writer.
+    ///
+    /// Returns the wrapped output. Encoded bytes may still be buffered.
+    #[inline(always)]
     #[must_use]
-    pub const fn get_ref(&self) -> &W {
-        &self.inner
+    pub const fn output(&self) -> &O {
+        self.writer.output()
     }
 
-    /// Returns a mutable reference to the wrapped byte writer.
+    /// Returns a mutable reference to the wrapped byte output.
     ///
     /// # Returns
-    /// The wrapped byte writer.
-    pub fn get_mut(&mut self) -> &mut W {
-        &mut self.inner
+    ///
+    /// Returns the wrapped output. Direct mutation can invalidate the logical
+    /// ordering represented by pending encoded bytes.
+    #[inline(always)]
+    pub fn output_mut(&mut self) -> &mut O {
+        self.writer.output_mut()
     }
 
-    /// Returns the wrapped byte writer.
+    /// Finalizes encoded output and flushes pending bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding finalization or underlying output error.
+    #[inline]
+    pub fn finish(&mut self) -> io::Result<()> {
+        self.writer.finish()
+    }
+
+    /// Finalizes output and returns the wrapped byte output.
     ///
     /// # Returns
-    /// The underlying byte writer.
-    #[must_use]
-    pub fn into_inner(self) -> W {
-        self.inner
+    ///
+    /// Returns the underlying output after pending bytes reach it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding finalization or underlying output error.
+    #[inline]
+    pub fn into_output(self) -> io::Result<O> {
+        self.writer.into_output()
     }
 }
 
-impl<W> TextWrite for Utf8TextWriter<W>
+impl<O> TextWrite for Utf8TextWriter<O>
 where
-    W: Write,
+    O: Output<Item = u8>,
 {
     type Error = io::Error;
 
     #[inline]
     fn line_ending(&self) -> LineEnding {
-        self.line_ending
+        self.writer.line_ending()
     }
 
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
-        let mut buffer = [0_u8; 4];
-        self.write_str(ch.encode_utf8(&mut buffer))
+        self.writer.write_char(ch)
     }
 
+    #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
-        for ch in chars {
-            self.write_char(*ch)?;
-        }
-        Ok(())
+        self.writer.write_chars(chars)
     }
 
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
-        self.inner.write_all(text.as_bytes())
+        self.writer.write_str(text)
     }
 
+    #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
-        self.write_str(line)?;
-        self.write_str(self.line_ending.as_str())
+        self.writer.write_line(line)
     }
 
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
-        self.inner.flush()
+        self.writer.flush()
     }
 }

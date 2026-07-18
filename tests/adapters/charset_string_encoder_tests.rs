@@ -1,3 +1,10 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use core::num::NonZeroUsize;
 
 use qubit_codec::Codec;
@@ -612,8 +619,8 @@ mod coverage_tests {
     }
 
     #[test]
-    fn test_charset_string_encoder_maps_owned_buffer_error_to_overflow() {
-        let error = qubit_codec_text::CharsetEncodeError::new(
+    fn test_charset_string_encoder_maps_owned_buffer_capacity_errors() {
+        let capacity_error = qubit_codec_text::CharsetEncodeError::new(
             Charset::UTF_8,
             CharsetEncodeErrorKind::BufferTooSmall {
                 required: 2,
@@ -621,13 +628,23 @@ mod coverage_tests {
             },
             7,
         );
-
         let error =
             CharsetStringEncoder::<Utf8Codec>::coverage_map_owned_encode_error(
                 Charset::UTF_8,
-                error,
+                capacity_error,
             );
-
         assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+
+        let domain_error = qubit_codec_text::CharsetEncodeError::new(
+            Charset::UTF_8,
+            CharsetEncodeErrorKind::UnmappableCharacter { value: 0x100 },
+            3,
+        );
+        let error =
+            CharsetStringEncoder::<Utf8Codec>::coverage_map_owned_encode_error(
+                Charset::UTF_8,
+                domain_error,
+        );
+        assert_eq!(domain_error, error);
     }
 }
