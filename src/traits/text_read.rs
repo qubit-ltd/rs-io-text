@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 /// Reads Unicode scalar values and strings from a text source.
 ///
 /// `TextRead` operates on Rust [`char`] and [`str`] values. Implementations are

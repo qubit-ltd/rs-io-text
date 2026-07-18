@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 /// Reads the next character from a string slice at the current byte position.
 ///
 /// # Parameters

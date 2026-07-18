@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 use qubit_codec_text::CharsetDecodePolicy;
 
 /// Controls how text adapters handle malformed or unencodable data.

@@ -644,7 +644,7 @@ mod coverage_tests {
             CharsetStringEncoder::<Utf8Codec>::coverage_map_owned_encode_error(
                 Charset::UTF_8,
                 domain_error,
-        );
+            );
         assert_eq!(domain_error, error);
     }
 }
