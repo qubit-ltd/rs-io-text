@@ -229,7 +229,7 @@ fn test_accessors_and_into_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_write_methods_propagate_underlying_errors() {
+fn test_write_methods_defer_underlying_errors_until_flush() {
     let mut writer = CharsetTextWriter::new_with_buffer_capacity(
         FailingWriter,
         AsciiCodec,
@@ -240,24 +240,12 @@ fn test_write_methods_propagate_underlying_errors() {
     writer
         .write_char('x')
         .expect("first single-byte write should stay buffered");
-    assert_eq!(
-        ErrorKind::Other,
-        writer
-            .write_chars(&['x'])
-            .expect_err(
-                "write_chars should flush buffered bytes before writing"
-            )
-            .kind(),
-    );
-    assert_eq!(
-        ErrorKind::Other,
-        writer
-            .write_line("x")
-            .expect_err(
-                "write_line should report pending buffered write errors"
-            )
-            .kind(),
-    );
+    writer
+        .write_chars(&['x'])
+        .expect("write_chars should grow the persistent buffer");
+    writer
+        .write_line("x")
+        .expect("write_line should keep pending bytes buffered");
     assert_eq!(
         ErrorKind::Other,
         writer.flush().expect_err("flush must fail").kind(),

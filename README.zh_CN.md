@@ -80,7 +80,7 @@
 
 ```toml
 [dependencies]
-qubit-io-text = "0.2"
+qubit-io-text = "0.3"
 ```
 
 ## 快速开始
