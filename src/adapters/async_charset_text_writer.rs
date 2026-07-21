@@ -19,7 +19,6 @@ use qubit_codec_text::{
 };
 use qubit_io::{
     AsyncOutput,
-    AsyncOutputExt,
 };
 
 use crate::{

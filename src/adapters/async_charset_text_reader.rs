@@ -20,7 +20,6 @@ use qubit_codec_text::{
 };
 use qubit_io::{
     AsyncInput,
-    AsyncInputExt,
 };
 
 use crate::CodingErrorPolicy;
