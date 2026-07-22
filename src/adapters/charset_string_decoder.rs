@@ -10,7 +10,6 @@
 use std::cell::Cell;
 
 use qubit_codec::{
-    CapacityError,
     TranscodeDecodeError,
     TranscodeStatus,
     Transcoder,
@@ -28,6 +27,8 @@ use qubit_io::{
     try_reserve_string,
     try_reserve_vec,
 };
+
+const CHAR_CHUNK_CAPACITY: usize = 256;
 
 /// Convenience decoder for complete inputs that should become a [`String`].
 ///
@@ -149,6 +150,27 @@ where
         COVERAGE_CHAR_CAPACITY_SHRINK_BY.with(|state| state.set(0));
     }
 
+    /// Maps a transcode decode error in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_map_decode_error(
+        charset: Charset,
+        error: TranscodeDecodeError<CharsetDecodeError>,
+    ) -> CharsetDecodeError {
+        map_decode_error(charset, error)
+    }
+
+    /// Maps a finish-buffer decode error in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_map_finish_decode_error(
+        charset: Charset,
+        error: TranscodeDecodeError<CharsetDecodeError>,
+        output_offset: usize,
+    ) -> CharsetDecodeError {
+        map_finish_decode_error(charset, error, output_offset)
+    }
+
     /// Decodes a complete input slice into an owned [`String`].
     ///
     /// # Parameters
@@ -204,136 +226,189 @@ where
                 input_index,
             ));
         }
-        let input_len = input.len() - input_index;
-        let char_capacity = self
-            .required_char_output_len(input_len)
-            .map_err(|_| output_length_overflow(self.charset))?;
+        let output_len = output.len();
+        let result = self.decode_bounded(input, input_index, output);
+        if result.is_err() {
+            output.truncate(output_len);
+        }
+        result
+    }
+
+    /// Drives one closed decode lifecycle through a bounded character buffer.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete source-unit slice visible to the decoder.
+    /// - `input_index`: Absolute unit index where decoding starts.
+    /// - `output`: String receiving decoded UTF-8 text.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CharsetDecodeError`] for malformed or incomplete input,
+    /// invalid transcode progress, output-length overflow, or allocation
+    /// failure.
+    fn decode_bounded(
+        &mut self,
+        input: &[C::Unit],
+        input_index: usize,
+        output: &mut String,
+    ) -> Result<(), CharsetDecodeError> {
+        let reset_capacity = match self.decoder.max_reset_output_len() {
+            Ok(capacity) => capacity,
+            Err(_) => return Err(output_length_overflow(self.charset)),
+        };
+        let char_capacity = reset_capacity.max(CHAR_CHUNK_CAPACITY);
         #[cfg(coverage)]
         let char_capacity =
             char_capacity.saturating_sub(coverage_take_char_capacity_shrink());
         let mut chars = Vec::new();
-        let reserve_failed =
-            try_reserve_vec(&mut chars, char_capacity).is_err();
-        #[cfg(coverage)]
-        let reserve_failed = reserve_failed || coverage_should_fail_reserve();
-        if reserve_failed {
-            return Err(output_length_overflow(self.charset));
-        }
-        chars.resize(char_capacity, '\0');
-        let written = self
-            .decode_units_into(input, input_index, &mut chars)
-            .map_err(|error| {
-                if matches!(
-                    error.kind(),
-                    CharsetDecodeErrorKind::BufferTooSmall { .. },
-                ) {
-                    output_length_overflow(self.charset)
-                } else {
-                    error
+        ensure_char_capacity(&mut chars, char_capacity, self.charset)?;
+        let reset_written = match self.decoder.reset(&mut chars, 0) {
+            Ok(written) => written,
+            Err(error) => return Err(map_decode_error(self.charset, error)),
+        };
+        append_chars(output, &chars[..reset_written], self.charset)?;
+        let mut output_char_count = reset_written;
+
+        let mut input_cursor = input_index;
+        loop {
+            let progress = match self.decoder.transcode(
+                input,
+                input_cursor,
+                &mut chars,
+                0,
+            ) {
+                Ok(progress) => progress,
+                Err(error) => {
+                    return Err(map_decode_error(self.charset, error));
                 }
-            })?;
-        let byte_capacity = required_string_capacity(&chars[..written]);
-        let reserve_failed = try_reserve_string(output, byte_capacity).is_err();
-        #[cfg(coverage)]
-        let reserve_failed = reserve_failed || coverage_should_fail_reserve();
-        if reserve_failed {
-            return Err(output_length_overflow(self.charset));
-        }
-        output.extend(chars[..written].iter());
-        Ok(())
-    }
-
-    /// Returns the maximum decoded character count for a complete input.
-    ///
-    /// # Parameters
-    ///
-    /// - `input_len`: Number of input units decoded by the string helper.
-    ///
-    /// # Returns
-    ///
-    /// Returns the reset, stream, and finish character upper bound.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`CapacityError`] when char-count arithmetic overflows.
-    fn required_char_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
-        self.decoder.max_total_output_len(input_len)
-    }
-
-    /// Decodes a complete unit slice into a caller-provided character buffer.
-    ///
-    /// # Parameters
-    ///
-    /// - `input`: Complete input slice visible to the decoder.
-    /// - `input_index`: Absolute index where decoding starts.
-    /// - `output`: Character buffer receiving decoded values.
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of decoded characters written to `output`.
-    ///
-    /// # Errors
-    ///
-    /// Returns framework or charset errors from reset, transcode, or finish.
-    fn decode_units_into(
-        &mut self,
-        input: &[C::Unit],
-        input_index: usize,
-        output: &mut [char],
-    ) -> Result<usize, CharsetDecodeError> {
-        let mut output_cursor = self
-            .decoder
-            .reset(output, 0)
-            .map_err(|error| map_decode_error(self.charset, error))?;
-        let progress = self
-            .decoder
-            .transcode(input, input_index, output, output_cursor)
-            .map_err(|error| map_decode_error(self.charset, error))?;
-        output_cursor += progress.written();
-        match progress.status() {
-            TranscodeStatus::Complete => {}
-            TranscodeStatus::NeedInput {
-                input_index,
-                required,
-                available,
-            } => {
-                let kind = CharsetDecodeErrorKind::IncompleteSequence {
-                    required: required.get(),
-                    available,
-                };
-                return Err(CharsetDecodeError::new(
-                    self.charset,
-                    kind,
+            };
+            append_chars(output, &chars[..progress.written()], self.charset)?;
+            let Some(next_output_char_count) =
+                output_char_count.checked_add(progress.written())
+            else {
+                return Err(output_length_overflow(self.charset));
+            };
+            output_char_count = next_output_char_count;
+            input_cursor += progress.read();
+            match progress.status() {
+                TranscodeStatus::Complete => break,
+                TranscodeStatus::NeedInput {
                     input_index,
-                ));
-            }
-            TranscodeStatus::NeedOutput {
-                output_index,
-                required,
-                available,
-            } => {
-                let kind = CharsetDecodeErrorKind::BufferTooSmall {
-                    required: required.get(),
+                    required,
                     available,
-                };
-                return Err(CharsetDecodeError::new(
-                    self.charset,
-                    kind,
-                    output_index,
-                ));
+                } => {
+                    let kind = CharsetDecodeErrorKind::IncompleteSequence {
+                        required: required.get(),
+                        available,
+                    };
+                    return Err(CharsetDecodeError::new(
+                        self.charset,
+                        kind,
+                        input_index,
+                    ));
+                }
+                TranscodeStatus::NeedOutput { required, .. } => {
+                    if progress.read() == 0 && progress.written() == 0 {
+                        let required = required.get().max(CHAR_CHUNK_CAPACITY);
+                        ensure_char_capacity(
+                            &mut chars,
+                            required,
+                            self.charset,
+                        )?;
+                    }
+                }
             }
         }
-        output_cursor += self
-            .decoder
-            .finish(output, output_cursor)
-            .map_err(|error| map_decode_error(self.charset, error))?;
-        Ok(output_cursor)
+
+        let finish_capacity = match self.decoder.max_finish_output_len() {
+            Ok(capacity) => capacity,
+            Err(_) => return Err(output_length_overflow(self.charset)),
+        };
+        ensure_char_capacity(&mut chars, finish_capacity, self.charset)?;
+        let finish_written = match self.decoder.finish(&mut chars, 0) {
+            Ok(written) => written,
+            Err(error) => {
+                return Err(map_finish_decode_error(
+                    self.charset,
+                    error,
+                    output_char_count,
+                ));
+            }
+        };
+        append_chars(output, &chars[..finish_written], self.charset)
     }
 }
 
+/// Ensures that the reusable decoded-character buffer exposes `required` slots.
+///
+/// # Parameters
+///
+/// - `chars`: Reusable character buffer to grow and initialize.
+/// - `required`: Minimum number of character slots required.
+/// - `charset`: Charset attached to any reported error.
+///
+/// # Errors
+///
+/// Returns [`CharsetDecodeErrorKind::OutputLengthOverflow`] when the allocation
+/// cannot be reserved.
+fn ensure_char_capacity(
+    chars: &mut Vec<char>,
+    required: usize,
+    charset: Charset,
+) -> Result<(), CharsetDecodeError> {
+    if required <= chars.len() {
+        return Ok(());
+    }
+    let additional = required - chars.len();
+    let reserve_failed = try_reserve_vec(chars, additional).is_err();
+    #[cfg(coverage)]
+    let reserve_failed = reserve_failed || coverage_should_fail_reserve();
+    if reserve_failed {
+        return Err(output_length_overflow(charset));
+    }
+    chars.resize(required, '\0');
+    Ok(())
+}
+
+/// Appends one decoded character window to a string.
+///
+/// # Parameters
+///
+/// - `output`: String receiving the decoded characters.
+/// - `chars`: Decoded character window to append.
+/// - `charset`: Charset attached to any reported error.
+///
+/// # Errors
+///
+/// Returns [`CharsetDecodeErrorKind::OutputLengthOverflow`] when the required
+/// UTF-8 storage cannot be reserved.
+fn append_chars(
+    output: &mut String,
+    chars: &[char],
+    charset: Charset,
+) -> Result<(), CharsetDecodeError> {
+    let byte_capacity = required_string_capacity(chars);
+    let reserve_failed = try_reserve_string(output, byte_capacity).is_err();
+    #[cfg(coverage)]
+    let reserve_failed = reserve_failed || coverage_should_fail_reserve();
+    if reserve_failed {
+        return Err(output_length_overflow(charset));
+    }
+    output.extend(chars.iter());
+    Ok(())
+}
+
+/// Converts a transcode-layer decode error into the charset error model.
+///
+/// # Parameters
+///
+/// - `charset`: Charset attached to framework-level failures.
+/// - `error`: Error returned by the transcode layer.
+///
+/// # Returns
+///
+/// Returns the corresponding charset decoding error.
 fn map_decode_error(
     charset: Charset,
     error: TranscodeDecodeError<CharsetDecodeError>,
@@ -344,6 +419,33 @@ fn map_decode_error(
         }
         TranscodeDecodeError::Domain(error) => error.into_source(),
     }
+}
+
+/// Maps a bounded finish-buffer index to the complete decoded output index.
+///
+/// # Parameters
+///
+/// - `charset`: Charset attached to framework-level failures.
+/// - `error`: Error whose output index is relative to the finish buffer.
+/// - `output_offset`: Character count already appended before finishing.
+///
+/// # Returns
+///
+/// Returns an error whose output index is relative to the complete output.
+fn map_finish_decode_error(
+    charset: Charset,
+    error: TranscodeDecodeError<CharsetDecodeError>,
+    output_offset: usize,
+) -> CharsetDecodeError {
+    let error = map_decode_error(charset, error);
+    if matches!(error.kind(), CharsetDecodeErrorKind::OutputLengthOverflow) {
+        return error;
+    }
+    CharsetDecodeError::new(
+        charset,
+        error.kind(),
+        output_offset.saturating_add(error.index()),
+    )
 }
 
 #[cfg(coverage)]
@@ -379,6 +481,15 @@ fn coverage_should_fail_reserve() -> bool {
     })
 }
 
+/// Creates an output-length overflow error for `charset`.
+///
+/// # Parameters
+///
+/// - `charset`: Charset whose output length could not be represented.
+///
+/// # Returns
+///
+/// Returns an output-length-overflow error at the sentinel maximum index.
 #[inline]
 fn output_length_overflow(charset: Charset) -> CharsetDecodeError {
     CharsetDecodeError::new(

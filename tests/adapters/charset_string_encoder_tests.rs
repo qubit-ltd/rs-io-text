@@ -8,6 +8,7 @@
 use core::num::NonZeroUsize;
 
 use qubit_codec::Codec;
+use qubit_codec_text::Utf8Codec;
 use qubit_codec_text::{
     AsciiCodec,
     Charset,
@@ -20,7 +21,6 @@ use qubit_codec_text::{
     CharsetEncodeResult,
     UnmappableAction,
 };
-use qubit_codec_text::Utf8Codec;
 use qubit_io_text::CharsetStringEncoder;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -359,6 +359,31 @@ fn test_charset_string_encoder_encode_str_into_writes_at_output_index() {
 }
 
 #[test]
+fn test_charset_string_encoder_encode_str_into_accepts_actual_utf8_capacity() {
+    let mut encoder = CharsetStringEncoder::new(Utf8Codec);
+    let mut output = [0_u8; 3];
+
+    let written = encoder
+        .encode_str_into("ABC", &mut output, 0)
+        .expect("the actual UTF-8 output fits the caller slice");
+
+    assert_eq!(3, written);
+    assert_eq!(b"ABC", &output);
+}
+
+#[test]
+fn test_charset_string_encoder_encode_str_crosses_character_windows() {
+    let mut encoder = CharsetStringEncoder::new(Utf8Codec);
+    let input = "A中🙂".repeat(100);
+
+    let output = encoder
+        .encode_str(&input)
+        .expect("UTF-8 encoder should cross bounded character windows");
+
+    assert_eq!(input.as_bytes(), output.as_slice());
+}
+
+#[test]
 fn test_charset_string_encoder_encode_str_into_supports_non_default_units() {
     let mut encoder = CharsetStringEncoder::with_policy(
         NonDefaultUnitCodec,
@@ -395,8 +420,6 @@ fn test_charset_string_encoder_encode_str_into_reports_invalid_output_index() {
 fn test_charset_string_encoder_encode_str_into_reports_insufficient_output() {
     let mut encoder = CharsetStringEncoder::new(Utf8Codec);
     let mut output = [0_u8; 3];
-    let required =
-        <Utf8Codec as Codec>::MAX_UNITS_PER_VALUE * "A中".chars().count();
 
     let error = encoder
         .encode_str_into("A中", &mut output, 0)
@@ -404,9 +427,30 @@ fn test_charset_string_encoder_encode_str_into_reports_insufficient_output() {
 
     assert_eq!(
         CharsetEncodeErrorKind::BufferTooSmall {
-            required,
-            available: output.len(),
+            required: "中".len(),
+            available: output.len() - 1,
         },
+        error.kind(),
+    );
+    assert_eq!(1, error.index());
+    assert_eq!(b'A', output[0]);
+}
+
+#[test]
+fn test_charset_string_encoder_encode_str_into_reports_unmappable_input() {
+    let mut encoder = CharsetStringEncoder::with_policy(
+        AsciiCodec,
+        CharsetEncodePolicy::report(),
+    )
+    .expect("report policy should be constructible");
+    let mut output = [0_u8; 1];
+
+    let error = encoder
+        .encode_str_into("é", &mut output, 0)
+        .expect_err("strict ASCII should reject non-ASCII input");
+
+    assert_eq!(
+        CharsetEncodeErrorKind::UnmappableCharacter { value: 'é' as u32 },
         error.kind(),
     );
     assert_eq!(0, error.index());
@@ -474,6 +518,21 @@ fn test_charset_string_encoder_encode_str_propagates_reset_errors() {
 }
 
 #[test]
+fn test_charset_string_encoder_encode_str_into_propagates_reset_errors() {
+    let mut encoder = CharsetStringEncoder::new(EncodeResetErrorCodec);
+    let mut output = [0_u8; 1];
+
+    let error = encoder
+        .encode_str_into("", &mut output, 0)
+        .expect_err("caller-buffer reset errors should be propagated");
+
+    assert_eq!(
+        CharsetEncodeErrorKind::UnmappableCharacter { value: 0 },
+        error.kind(),
+    );
+}
+
+#[test]
 fn test_charset_string_encoder_encode_str_propagates_finish_errors() {
     let mut encoder = CharsetStringEncoder::new(EncodeFlushErrorCodec);
 
@@ -486,6 +545,21 @@ fn test_charset_string_encoder_encode_str_propagates_finish_errors() {
         error.kind(),
     );
     assert_eq!(1, error.index());
+}
+
+#[test]
+fn test_charset_string_encoder_encode_str_into_propagates_finish_errors() {
+    let mut encoder = CharsetStringEncoder::new(EncodeFlushErrorCodec);
+    let mut output = [0_u8; 2];
+
+    let error = encoder
+        .encode_str_into("A", &mut output, 0)
+        .expect_err("caller-buffer finish errors should be propagated");
+
+    assert_eq!(
+        CharsetEncodeErrorKind::UnmappableCharacter { value: 1 },
+        error.kind(),
+    );
 }
 
 #[test]
@@ -521,6 +595,15 @@ fn test_charset_string_encoder_encode_str_applies_default_policy() {
 
 #[cfg(coverage)]
 mod coverage_tests {
+    use super::{
+        EncodeFlushErrorCodec,
+        EncodeResetErrorCodec,
+    };
+
+    use qubit_codec::{
+        TranscodeDomainError,
+        TranscodeEncodeError,
+    };
     use qubit_codec_text::Charset;
     use qubit_codec_text::CharsetEncodeErrorKind;
     use qubit_codec_text::Utf8Codec;
@@ -531,46 +614,104 @@ mod coverage_tests {
     }
 
     #[test]
-    fn test_charset_string_encoder_reports_char_collect_reserve_failure() {
+    fn test_charset_string_encoder_reports_owned_output_reserve_failure() {
         reset_coverage_hooks();
         let mut encoder = CharsetStringEncoder::new(Utf8Codec);
 
         CharsetStringEncoder::<Utf8Codec>::coverage_fail_next_reserve();
-        let error = encoder.encode_str("A").expect_err(
-            "character collection reserve failure should be reported",
-        );
+        let error = encoder
+            .encode_str("A")
+            .expect_err("owned output reserve failure should be reported");
 
         assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
     }
 
     #[test]
-    fn test_charset_string_encoder_reports_output_reserve_failure() {
+    fn test_charset_string_encoder_uses_one_reserve_for_small_output() {
         reset_coverage_hooks();
         let mut encoder = CharsetStringEncoder::new(Utf8Codec);
 
         CharsetStringEncoder::<Utf8Codec>::coverage_fail_reserve_after(1);
+        let output = encoder
+            .encode_str("A")
+            .expect("no second reserve should occur for a small output");
+
+        assert_eq!(b"A", output.as_slice());
+        reset_coverage_hooks();
+    }
+
+    #[test]
+    fn test_charset_string_encoder_reports_finish_output_reserve_failure() {
+        reset_coverage_hooks();
+        let mut encoder = CharsetStringEncoder::new(EncodeFlushErrorCodec);
+
+        CharsetStringEncoder::<Utf8Codec>::coverage_fail_reserve_after(1);
         let error = encoder
             .encode_str("A")
-            .expect_err("output reserve failure should be reported");
+            .expect_err("finish output reserve failure should be reported");
 
         assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
     }
 
     #[test]
-    fn test_charset_string_encoder_encode_str_into_reports_char_collect_reserve_failure()
-     {
+    fn test_charset_string_encoder_reports_reset_output_reserve_failure() {
+        reset_coverage_hooks();
+        let mut encoder = CharsetStringEncoder::new(EncodeResetErrorCodec);
+
+        CharsetStringEncoder::<Utf8Codec>::coverage_fail_next_reserve();
+        let error = encoder
+            .encode_str("")
+            .expect_err("reset output reserve failure should be reported");
+
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+        reset_coverage_hooks();
+    }
+
+    #[test]
+    fn test_charset_string_encoder_reports_lifecycle_capacity_failures() {
+        reset_coverage_hooks();
+        let mut encoder = CharsetStringEncoder::new(Utf8Codec);
+
+        CharsetStringEncoder::<Utf8Codec>::coverage_fail_next_capacity_bound();
+        let error = encoder
+            .encode_str("")
+            .expect_err("reset capacity failure should be reported");
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+
+        let mut encoder = CharsetStringEncoder::new(Utf8Codec);
+        CharsetStringEncoder::<Utf8Codec>::coverage_fail_capacity_bound_after(
+            1,
+        );
+        let error = encoder
+            .encode_str("")
+            .expect_err("finish capacity failure should be reported");
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+
+        let mut encoder = CharsetStringEncoder::new(Utf8Codec);
+        let mut output = [];
+        CharsetStringEncoder::<Utf8Codec>::coverage_fail_next_capacity_bound();
+        let error = encoder.encode_str_into("", &mut output, 0).expect_err(
+            "caller-buffer finish capacity failure should be reported",
+        );
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+        reset_coverage_hooks();
+    }
+
+    #[test]
+    fn test_charset_string_encoder_encode_str_into_does_not_reserve_chars() {
         reset_coverage_hooks();
         let mut encoder = CharsetStringEncoder::new(Utf8Codec);
         let mut output = [0_u8; 1];
 
         CharsetStringEncoder::<Utf8Codec>::coverage_fail_next_reserve();
-        let error = encoder.encode_str_into("A", &mut output, 0).expect_err(
-            "character collection reserve failure should be reported",
-        );
+        let written = encoder
+            .encode_str_into("A", &mut output, 0)
+            .expect("caller-buffer encoding should not reserve characters");
 
-        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+        assert_eq!(1, written);
+        assert_eq!(b'A', output[0]);
         reset_coverage_hooks();
     }
 
@@ -642,5 +783,51 @@ mod coverage_tests {
                 domain_error,
             );
         assert_eq!(domain_error, error);
+    }
+
+    #[test]
+    fn test_charset_string_encoder_maps_chunk_local_errors() {
+        let error =
+            CharsetStringEncoder::<Utf8Codec>::coverage_map_chunk_encode_error(
+                Charset::UTF_8,
+                TranscodeEncodeError::Unencodable {
+                    input_index: 2,
+                    value: Some('中'),
+                },
+                5,
+            );
+        assert_eq!(7, error.index());
+
+        let capacity_error = qubit_codec_text::CharsetEncodeError::new(
+            Charset::UTF_8,
+            CharsetEncodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1,
+            },
+            3,
+        );
+        let error =
+            CharsetStringEncoder::<Utf8Codec>::coverage_map_chunk_encode_error(
+                Charset::UTF_8,
+                TranscodeEncodeError::Domain(TranscodeDomainError::main(
+                    capacity_error,
+                    0,
+                )),
+                5,
+            );
+        assert_eq!(capacity_error, error);
+    }
+
+    #[test]
+    fn test_charset_string_encoder_reports_owned_length_addition_overflow() {
+        let error =
+            CharsetStringEncoder::<Utf8Codec>::coverage_ensure_owned_capacity(
+                Charset::UTF_8,
+                usize::MAX,
+                1,
+            )
+            .expect_err("owned output length addition should overflow");
+
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
     }
 }

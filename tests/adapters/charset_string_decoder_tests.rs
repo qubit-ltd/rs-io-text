@@ -1,6 +1,7 @@
 use core::num::NonZeroUsize;
 
 use qubit_codec::Codec;
+use qubit_codec_text::Utf8Codec;
 use qubit_codec_text::{
     Charset,
     CharsetCodec,
@@ -14,7 +15,6 @@ use qubit_codec_text::{
     MalformedAction,
     Utf32U32Codec,
 };
-use qubit_codec_text::Utf8Codec;
 use qubit_io_text::CharsetStringDecoder;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -270,6 +270,35 @@ fn test_charset_string_decoder_decode_to_string_decodes_complete_input() {
 }
 
 #[test]
+fn test_charset_string_decoder_decode_to_string_crosses_character_windows() {
+    let mut decoder = CharsetStringDecoder::new(Utf8Codec);
+    let input = "A中🙂".repeat(100);
+
+    let text = decoder
+        .decode_to_string(input.as_bytes())
+        .expect("UTF-8 decoder should cross bounded character windows");
+
+    assert_eq!(input, text);
+}
+
+#[test]
+fn test_charset_string_decoder_rolls_back_after_late_malformed_input() {
+    let mut decoder = CharsetStringDecoder::with_policy(
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut input = vec![b'A'; 300];
+    input.push(0xff);
+    let mut output = String::from("seed:");
+
+    decoder
+        .decode_to_string_into(&input, 0, &mut output)
+        .expect_err("late malformed UTF-8 should fail the closed conversion");
+
+    assert_eq!("seed:", output);
+}
+
+#[test]
 fn test_charset_string_decoder_exposes_configuration_and_wrapped_decoder() {
     let mut decoder = CharsetStringDecoder::with_policy(
         Utf8Codec,
@@ -350,7 +379,17 @@ fn test_charset_string_decoder_decode_to_string_reports_incomplete_tail() {
 
 #[cfg(coverage)]
 mod coverage_tests {
-    use qubit_codec_text::{CharsetDecodeErrorKind, Utf8Codec};
+    use qubit_codec::{
+        TranscodeDecodeError,
+        TranscodeDomainError,
+        TranscodeFailure,
+    };
+    use qubit_codec_text::{
+        Charset,
+        CharsetDecodeError,
+        CharsetDecodeErrorKind,
+        Utf8Codec,
+    };
     use qubit_io_text::CharsetStringDecoder;
 
     fn reset_coverage_hooks() {
@@ -388,17 +427,66 @@ mod coverage_tests {
     }
 
     #[test]
-    fn test_charset_string_decoder_reports_need_output_as_overflow() {
+    fn test_charset_string_decoder_grows_bounded_buffer_after_need_output() {
         reset_coverage_hooks();
         let mut decoder = CharsetStringDecoder::new(Utf8Codec);
 
-        CharsetStringDecoder::<Utf8Codec>::coverage_shrink_next_char_capacity_by(1);
+        CharsetStringDecoder::<Utf8Codec>::coverage_shrink_next_char_capacity_by(usize::MAX);
+        let text = decoder
+            .decode_to_string(b"A")
+            .expect("short synthetic char buffer should grow and retry");
+
+        assert_eq!("A", text);
+        reset_coverage_hooks();
+    }
+
+    #[test]
+    fn test_charset_string_decoder_reports_bounded_buffer_growth_failure() {
+        reset_coverage_hooks();
+        let mut decoder = CharsetStringDecoder::new(Utf8Codec);
+
+        CharsetStringDecoder::<Utf8Codec>::coverage_shrink_next_char_capacity_by(usize::MAX);
+        CharsetStringDecoder::<Utf8Codec>::coverage_fail_next_reserve();
         let error = decoder
             .decode_to_string(b"A")
-            .expect_err("short synthetic char buffer should be reported");
+            .expect_err("bounded buffer growth failure should be reported");
 
         assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
+    }
+
+    #[test]
+    fn test_charset_string_decoder_maps_framework_and_finish_errors() {
+        let error =
+            CharsetStringDecoder::<Utf8Codec>::coverage_map_decode_error(
+                Charset::UTF_8,
+                TranscodeDecodeError::Failure(
+                    TranscodeFailure::insufficient_output(3, 2, 1),
+                ),
+            );
+        assert_eq!(
+            CharsetDecodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1,
+            },
+            error.kind(),
+        );
+        assert_eq!(3, error.index());
+
+        let overflow = CharsetDecodeError::new(
+            Charset::UTF_8,
+            CharsetDecodeErrorKind::OutputLengthOverflow,
+            usize::MAX,
+        );
+        let error =
+            CharsetStringDecoder::<Utf8Codec>::coverage_map_finish_decode_error(
+                Charset::UTF_8,
+                TranscodeDecodeError::Domain(TranscodeDomainError::finish(
+                    overflow,
+                )),
+                7,
+            );
+        assert_eq!(overflow, error);
     }
 }
 

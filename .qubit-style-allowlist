@@ -1,2 +1,3 @@
 coverage-cfg | src/adapters/charset_string_decoder.rs | Inject reserve failure hooks so allocation error mapping can be exercised under coverage builds.
 coverage-cfg | src/adapters/charset_string_encoder.rs | Inject reserve failure hooks so allocation error mapping can be exercised under coverage builds.
+coverage-cfg | src/stream/buffered_writer.rs | Inject a reset reserve failure so the recoverable allocation error path can be exercised under coverage builds.

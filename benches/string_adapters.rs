@@ -21,7 +21,12 @@ use criterion::{
     criterion_main,
 };
 use qubit_codec::ByteOrder;
-use qubit_codec_text::{CharsetCodec, Utf8Codec, Utf16ByteCodec, Utf32ByteCodec};
+use qubit_codec_text::{
+    CharsetCodec,
+    Utf8Codec,
+    Utf16ByteCodec,
+    Utf32ByteCodec,
+};
 use qubit_io_text::{
     CharsetStringDecoder,
     CharsetStringEncoder,
