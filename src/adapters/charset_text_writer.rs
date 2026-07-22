@@ -17,6 +17,7 @@ use qubit_io::Output;
 use crate::{
     BufferedWriter,
     CodingErrorPolicy,
+    IntoInnerError,
     LineEnding,
     TextWrite,
 };
@@ -130,6 +131,10 @@ where
 
     /// Returns a mutable reference to the wrapped byte writer.
     ///
+    /// Encoded bytes may still be pending in this writer. Direct writes can be
+    /// ordered before that pending data; call [`TextWrite::flush`] first when
+    /// ordering matters.
+    ///
     /// # Returns
     ///
     /// Returns the wrapped byte writer.
@@ -150,6 +155,27 @@ where
         self.writer.finish()
     }
 
+    /// Returns the wrapped byte writer after finishing, retaining failures.
+    ///
+    /// # Returns
+    ///
+    /// Returns the underlying byte writer after pending bytes reach it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the finish error together with this writer so callers can
+    /// repair a transient output failure and retry.
+    #[inline]
+    pub fn try_into_output(self) -> Result<O, IntoInnerError<Self>> {
+        match self.writer.try_into_inner() {
+            Ok(output) => Ok(output),
+            Err(error) => {
+                let (error, writer) = error.into_parts();
+                Err(IntoInnerError::new(error, Self { writer }))
+            }
+        }
+    }
+
     /// Returns the wrapped byte writer after finishing and flushing.
     ///
     /// # Returns
@@ -161,7 +187,7 @@ where
     /// Returns encoding finalization or I/O errors.
     #[inline]
     pub fn into_output(self) -> io::Result<O> {
-        self.writer.into_inner()
+        self.try_into_output().map_err(IntoInnerError::into_error)
     }
 }
 

@@ -100,6 +100,34 @@ fn test_accessors_and_into_inner() -> std::io::Result<()> {
 }
 
 #[test]
+fn test_try_into_output_finishes_and_returns_output() -> std::io::Result<()> {
+    let mut writer = Utf8TextWriter::new(Vec::new());
+    writer.write_str("recoverable")?;
+
+    let output = writer
+        .try_into_output()
+        .map_err(|error| error.into_error())?;
+
+    assert_eq!(b"recoverable", output.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_try_into_output_returns_utf8_writer_after_failure() {
+    let writer = Utf8TextWriter::new(FailingWriter);
+
+    let error = match writer.try_into_output() {
+        Ok(_) => {
+            panic!("recoverable conversion should retain the UTF-8 writer")
+        }
+        Err(error) => error,
+    };
+
+    assert_eq!(ErrorKind::Other, error.error().kind());
+    let _ = error.writer().output();
+}
+
+#[test]
 fn test_write_methods_propagate_underlying_errors() {
     let mut writer = Utf8TextWriter::with_capacity(FailingWriter, 1);
 

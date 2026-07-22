@@ -13,6 +13,7 @@ use qubit_io::Output;
 use crate::{
     CharsetTextWriter,
     CodingErrorPolicy,
+    IntoInnerError,
     LineEnding,
     TextWrite,
 };
@@ -126,6 +127,27 @@ where
         self.writer.finish()
     }
 
+    /// Finalizes output and returns the wrapped output recoverably.
+    ///
+    /// # Returns
+    ///
+    /// Returns the underlying output after pending bytes reach it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the finish error together with this writer so callers can
+    /// repair a transient output failure and retry.
+    #[inline]
+    pub fn try_into_output(self) -> Result<O, IntoInnerError<Self>> {
+        match self.writer.try_into_output() {
+            Ok(output) => Ok(output),
+            Err(error) => {
+                let (error, writer) = error.into_parts();
+                Err(IntoInnerError::new(error, Self { writer }))
+            }
+        }
+    }
+
     /// Finalizes output and returns the wrapped byte output.
     ///
     /// # Returns
@@ -137,7 +159,7 @@ where
     /// Returns an encoding finalization or underlying output error.
     #[inline]
     pub fn into_output(self) -> io::Result<O> {
-        self.writer.into_output()
+        self.try_into_output().map_err(IntoInnerError::into_error)
     }
 }
 

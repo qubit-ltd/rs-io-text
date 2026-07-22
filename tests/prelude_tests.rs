@@ -4,6 +4,7 @@ use qubit_io_text::prelude::{
     CharsetReadExt,
     CharsetWriteExt,
     InputTextReader,
+    IntoInnerError,
     OutputTextWriter,
     StrCharInput,
     StrTextReader,
@@ -15,6 +16,9 @@ use qubit_io_text::prelude::{
 
 #[test]
 fn test_prelude_exports_text_traits_and_adapters() -> Result<(), Infallible> {
+    let recoverable_error: Option<IntoInnerError<()>> = None;
+    assert!(recoverable_error.is_none());
+
     let mut reader = StrTextReader::new("text");
     let mut output = String::new();
 

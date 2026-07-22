@@ -147,6 +147,27 @@ fn test_into_inner_propagates_flush_error() {
 }
 
 #[test]
+fn test_try_into_inner_returns_writer_after_flush_error() {
+    let mut writer = OutputTextWriter::new(FailingCharOutput);
+    writer
+        .write_str("pending")
+        .expect("buffered write may succeed before flush");
+
+    let mut error = match writer.try_into_inner() {
+        Ok(_) => panic!("recoverable conversion should return the writer"),
+        Err(error) => error,
+    };
+
+    assert_eq!(ErrorKind::Other, error.error().kind());
+    assert!(error.writer().get_ref().is_buffered());
+    assert!(error.writer_mut().get_mut().is_buffered());
+    assert!(error.to_string().contains("write failed"));
+    assert!(std::error::Error::source(&error).is_some());
+    let mut writer = error.into_writer();
+    assert!(writer.get_mut().is_buffered());
+}
+
+#[test]
 fn test_into_inner_flushes_wrapped_output() -> std::io::Result<()> {
     let mut text = String::new();
     {

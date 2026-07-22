@@ -17,12 +17,11 @@ use qubit_codec_text::{
     CharsetCodec,
     CharsetEncoder,
 };
-use qubit_io::{
-    AsyncOutput,
-};
+use qubit_io::AsyncOutput;
 
 use crate::{
     CodingErrorPolicy,
+    IntoInnerError,
     LineEnding,
     adapters::charset_text_writer::create_encoder,
     io_error::{
@@ -329,16 +328,18 @@ where
         if text.is_empty() {
             return Ok(());
         }
-        let mut chars = Vec::with_capacity(DEFAULT_CHAR_CHUNK_CAPACITY);
+        let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
+        let mut char_count = 0;
         for ch in text.chars() {
-            chars.push(ch);
-            if chars.len() == DEFAULT_CHAR_CHUNK_CAPACITY {
-                self.encode_chars_async(chars.as_slice()).await?;
-                chars.clear();
+            chars[char_count] = ch;
+            char_count += 1;
+            if char_count == DEFAULT_CHAR_CHUNK_CAPACITY {
+                self.encode_chars_async(&chars).await?;
+                char_count = 0;
             }
         }
-        if !chars.is_empty() {
-            self.encode_chars_async(chars.as_slice()).await?;
+        if char_count != 0 {
+            self.encode_chars_async(&chars[..char_count]).await?;
         }
         Ok(())
     }
@@ -401,6 +402,26 @@ where
         self.output.flush_async().await
     }
 
+    /// Finishes this writer and returns its output recoverably.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped output after all encoded bytes are accepted and the
+    /// output flush succeeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns the finish error together with this writer so callers can
+    /// repair a transient asynchronous output failure and retry.
+    pub async fn try_into_output_async(
+        mut self,
+    ) -> Result<O, IntoInnerError<Self>> {
+        if let Err(error) = self.finish_async().await {
+            return Err(IntoInnerError::new(error, self));
+        }
+        Ok(self.output)
+    }
+
     /// Finishes this writer and returns its asynchronous byte output.
     ///
     /// # Returns
@@ -413,8 +434,9 @@ where
     /// Returns encoder finalization or output errors. Because this method
     /// consumes the writer, an error also consumes access to its retained
     /// pending state; use [`Self::finish_async`] first when retry is required.
-    pub async fn into_output_async(mut self) -> io::Result<O> {
-        self.finish_async().await?;
-        Ok(self.output)
+    pub async fn into_output_async(self) -> io::Result<O> {
+        self.try_into_output_async()
+            .await
+            .map_err(IntoInnerError::into_error)
     }
 }

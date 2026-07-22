@@ -22,6 +22,7 @@ use qubit_codec::{
     Codec,
     DecodeFailure,
 };
+use qubit_codec_text::Utf8Codec;
 use qubit_codec_text::{
     Charset,
     CharsetCodec,
@@ -34,7 +35,6 @@ use qubit_io::{
     AsyncInput,
     AsyncOutput,
 };
-use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     AsyncCharsetTextReader,
     AsyncCharsetTextWriter,
@@ -435,7 +435,8 @@ fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state()
 }
 
 #[test]
-fn async_charset_reader_compacts_partial_tail_across_pending_reads() -> io::Result<()> {
+fn async_charset_reader_compacts_partial_tail_across_pending_reads()
+-> io::Result<()> {
     let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 3, true);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         input,
@@ -632,7 +633,8 @@ fn async_charset_writer_accessors_empty_chunks_and_finished_state()
 }
 
 #[test]
-fn async_charset_writer_grows_across_need_output_and_pending_writes() -> io::Result<()> {
+fn async_charset_writer_grows_across_need_output_and_pending_writes()
+-> io::Result<()> {
     let output = ChunkedAsyncOutput::new(1, true);
     let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
         output,
@@ -691,6 +693,28 @@ fn async_charset_writer_propagates_flush_errors() -> io::Result<()> {
         .expect_err("scripted flush error should propagate");
     assert_eq!(io::ErrorKind::BrokenPipe, error.kind());
     complete(writer.flush_async())?;
+    Ok(())
+}
+
+#[test]
+fn async_charset_writer_try_into_output_returns_writer_after_error()
+-> io::Result<()> {
+    let output = ChunkedAsyncOutput::new(4, false)
+        .with_flush_error(io::ErrorKind::BrokenPipe);
+    let writer = AsyncCharsetTextWriter::new(
+        output,
+        Utf8Codec,
+        CodingErrorPolicy::Strict,
+    );
+
+    let error = complete(writer.try_into_output_async())
+        .expect_err("recoverable conversion should return the writer");
+    assert_eq!(io::ErrorKind::BrokenPipe, error.error().kind());
+    let writer = error.into_writer();
+    let output = complete(writer.try_into_output_async())
+        .map_err(|error| error.into_error())?;
+
+    assert!(output.flushed);
     Ok(())
 }
 

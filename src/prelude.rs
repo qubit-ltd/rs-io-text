@@ -23,6 +23,7 @@ pub use crate::{
     CharsetWriteExt,
     CodingErrorPolicy,
     InputTextReader,
+    IntoInnerError,
     LineEnding,
     OutputTextWriter,
     StrCharInput,

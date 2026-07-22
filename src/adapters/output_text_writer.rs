@@ -14,9 +14,14 @@ use qubit_io::{
 };
 
 use crate::{
+    IntoInnerError,
     LineEnding,
     TextWrite,
 };
+
+mod boxed_char_output;
+
+use boxed_char_output::BoxedCharOutput;
 
 /// Default character chunk capacity for string writes.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -63,7 +68,7 @@ impl<'a> OutputTextWriter<'a> {
         let output = if output.is_buffered() {
             output
         } else {
-            Box::new(BufferedOutput::new(BoxedCharOutput { output }))
+            Box::new(BufferedOutput::new(BoxedCharOutput::new(output)))
         };
         Self {
             output,
@@ -95,10 +100,32 @@ impl<'a> OutputTextWriter<'a> {
 
     /// Returns a mutable reference to the wrapped output.
     ///
+    /// The wrapped output may contain characters buffered by this writer.
+    /// Direct writes can be ordered before that pending text. Call
+    /// [`TextWrite::flush`] first when ordering matters.
+    ///
     /// # Returns
     /// The wrapped output trait object.
+    #[inline(always)]
     pub fn get_mut(&mut self) -> &mut (dyn Output<Item = char> + 'a) {
         self.output.as_mut()
+    }
+
+    /// Flushes this writer and returns the wrapped output recoverably.
+    ///
+    /// # Returns
+    /// The underlying boxed character output.
+    ///
+    /// # Errors
+    /// Returns the flush error together with this writer so the operation can
+    /// be retried after a transient failure.
+    pub fn try_into_inner(
+        mut self,
+    ) -> Result<Box<dyn Output<Item = char> + 'a>, IntoInnerError<Self>> {
+        if let Err(error) = self.output.flush() {
+            return Err(IntoInnerError::new(error, self));
+        }
+        Ok(self.output)
     }
 
     /// Flushes this writer and returns the wrapped output.
@@ -108,11 +135,8 @@ impl<'a> OutputTextWriter<'a> {
     ///
     /// # Errors
     /// Returns any error produced while flushing buffered characters.
-    pub fn into_inner(
-        mut self,
-    ) -> io::Result<Box<dyn Output<Item = char> + 'a>> {
-        self.output.flush()?;
-        Ok(self.output)
+    pub fn into_inner(self) -> io::Result<Box<dyn Output<Item = char> + 'a>> {
+        self.try_into_inner().map_err(IntoInnerError::into_error)
     }
 }
 
@@ -169,30 +193,5 @@ impl fmt::Debug for OutputTextWriter<'_> {
             .field("is_buffered", &self.output.is_buffered())
             .field("line_ending", &self.line_ending)
             .finish()
-    }
-}
-
-/// Concrete forwarding wrapper for a boxed character output.
-struct BoxedCharOutput<'a> {
-    output: Box<dyn Output<Item = char> + 'a>,
-}
-
-impl Output for BoxedCharOutput<'_> {
-    type Item = char;
-
-    #[inline]
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[char],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
-        // SAFETY: Forwarded from the trait caller.
-        unsafe { self.output.write_unchecked(input, index, count) }
-    }
-
-    #[inline]
-    fn flush(&mut self) -> io::Result<()> {
-        self.output.flush()
     }
 }

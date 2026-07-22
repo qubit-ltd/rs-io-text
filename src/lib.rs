@@ -19,6 +19,7 @@
 mod adapters;
 mod coding_error_policy;
 mod ext;
+mod into_inner_error;
 mod io_error;
 mod line_ending;
 pub mod prelude;
@@ -48,6 +49,7 @@ pub use ext::{
     CharsetReadExt,
     CharsetWriteExt,
 };
+pub use into_inner_error::IntoInnerError;
 pub use line_ending::LineEnding;
 pub use stream::{
     BufferedReader,
