@@ -34,12 +34,12 @@ use qubit_io::{
     AsyncInput,
     AsyncOutput,
 };
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     AsyncCharsetTextReader,
     AsyncCharsetTextWriter,
     CodingErrorPolicy,
     LineEnding,
-    Utf8Codec,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -185,7 +185,6 @@ struct ChunkedAsyncInput {
     position: usize,
     max_chunk: usize,
     pending: bool,
-    interruptions: usize,
     error: Option<io::ErrorKind>,
 }
 
@@ -196,14 +195,8 @@ impl ChunkedAsyncInput {
             position: 0,
             max_chunk,
             pending,
-            interruptions: 0,
             error: None,
         }
-    }
-
-    fn with_interruptions(mut self, interruptions: usize) -> Self {
-        self.interruptions = interruptions;
-        self
     }
 
     fn with_error(mut self, error: io::ErrorKind) -> Self {
@@ -222,10 +215,6 @@ impl AsyncInput for ChunkedAsyncInput {
         index: usize,
         count: usize,
     ) -> Poll<io::Result<usize>> {
-        if self.interruptions > 0 {
-            self.interruptions -= 1;
-            return Poll::Ready(Err(io::ErrorKind::Interrupted.into()));
-        }
         if let Some(kind) = self.error.take() {
             return Poll::Ready(Err(io::Error::new(
                 kind,
@@ -253,7 +242,6 @@ struct ChunkedAsyncOutput {
     max_chunk: usize,
     pending: bool,
     flushed: bool,
-    interruptions: usize,
     write_zero: bool,
     write_error: Option<io::ErrorKind>,
     flush_error: Option<io::ErrorKind>,
@@ -266,16 +254,10 @@ impl ChunkedAsyncOutput {
             max_chunk,
             pending,
             flushed: false,
-            interruptions: 0,
             write_zero: false,
             write_error: None,
             flush_error: None,
         }
-    }
-
-    fn with_interruptions(mut self, interruptions: usize) -> Self {
-        self.interruptions = interruptions;
-        self
     }
 
     fn with_write_zero(mut self) -> Self {
@@ -304,10 +286,6 @@ impl AsyncOutput for ChunkedAsyncOutput {
         index: usize,
         count: usize,
     ) -> Poll<io::Result<usize>> {
-        if self.interruptions > 0 {
-            self.interruptions -= 1;
-            return Poll::Ready(Err(io::ErrorKind::Interrupted.into()));
-        }
         if let Some(kind) = self.write_error.take() {
             return Poll::Ready(Err(io::Error::new(
                 kind,
@@ -457,10 +435,8 @@ fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state()
 }
 
 #[test]
-fn async_charset_reader_compacts_partial_tail_and_retries_interruptions()
--> io::Result<()> {
-    let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 3, false)
-        .with_interruptions(1);
+fn async_charset_reader_compacts_partial_tail_across_pending_reads() -> io::Result<()> {
+    let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 3, true);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         input,
         Utf8Codec,
@@ -656,9 +632,8 @@ fn async_charset_writer_accessors_empty_chunks_and_finished_state()
 }
 
 #[test]
-fn async_charset_writer_grows_across_need_output_and_retries_interruptions()
--> io::Result<()> {
-    let output = ChunkedAsyncOutput::new(1, false).with_interruptions(1);
+fn async_charset_writer_grows_across_need_output_and_pending_writes() -> io::Result<()> {
+    let output = ChunkedAsyncOutput::new(1, true);
     let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
         output,
         Utf8Codec,
