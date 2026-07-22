@@ -8,7 +8,7 @@
 
 ```toml
 [dependencies]
-qubit-io-text = "0.2"
+qubit-io-text = "0.3"
 ```
 
 ## API 分层
@@ -31,7 +31,6 @@ qubit-io-text = "0.2"
 数量，而不是 UTF-8 字节数。
 
 ```rust
-use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     StrTextReader,
     TextRead,
@@ -77,6 +76,7 @@ assert_eq!("first\r\n", output);
 ```rust
 use std::io::Cursor;
 
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     CharsetTextReader,
     CharsetTextWriter,
@@ -201,9 +201,10 @@ where
 
 Writer 还提供 `write_char_async`、`write_chars_async` 与 `flush_async`。Flush
 只排空编码字节，不结束 encoder；finish 会生成 codec 自己的尾部输出、排空字节并
-刷新底层。失败的 `finish_async()` 会保留 pending 状态，可再次调用重试。
-`into_output_async()` 则会在错误时也消费 writer，因此需要恢复时应先单独调用
-`finish_async()`。
+刷新底层。失败的 `finish_async()` 会保留 pending 状态，可再次调用重试；消费型
+转换失败时，`try_into_output_async()` 也会通过 `IntoInnerError` 保留完整 writer。
+同步的 `BufferedWriter`、`OutputTextWriter`、`CharsetTextWriter` 和
+`Utf8TextWriter` 提供对应的可恢复转换方法。
 
 挂起和取消不会丢失 pending 编码字节。但取消高层写操作时，文本前缀可能已经生效；
 除非外层协议允许重复前缀，否则不要盲目重试整个字符串。

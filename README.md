@@ -5,7 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/v/qubit-io-text.svg?color=blue)](https://crates.io/crates/qubit-io-text)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Chinese Document](https://img.shields.io/badge/Document-Chinese-blue.svg)](README.zh_CN.md)
+[![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
 Unicode text traits and synchronous/asynchronous charset adapters for Rust.
 
@@ -84,8 +84,9 @@ where
 ```
 
 Call `finish()` or `finish_async()` before depending on codec trailers or the
-underlying output flush. `into_output_async()` consumes the writer even on
-failure; call `finish_async()` first when retrying delivery matters.
+underlying output flush. Use `try_into_output()` or
+`try_into_output_async()` when a failed consuming conversion must return the
+writer for inspection and retry.
 
 ## API Map
 
@@ -107,7 +108,7 @@ do not blindly retry the whole text unless the surrounding protocol permits it.
 See the [user guide](doc/user_guide.md) and
 [API reference](https://docs.rs/qubit-io-text).
 
-## Development
+## Testing
 
 ```bash
 # Run tests with the default feature set
@@ -116,12 +117,28 @@ cargo test
 # Run tests with all declared features
 cargo test --all-features
 
-./align-ci.sh
-RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
+# Project CI checks
+./ci-check.sh
+
+# Check code coverage
+./coverage.sh
 ```
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 
-Copyright (c) 2026 Haixing Hu.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
+full license text.
+
+## Contributing
+
+Contributions are welcome. Please follow the Rust API guidelines, keep public
+API documentation and tests current, and run `./align-ci.sh` to format code and
+`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
+
+## Author
+
+**Haixing Hu** - *Qubit Co. Ltd.*
+
+Repository: [https://github.com/qubit-ltd/rs-io-text](https://github.com/qubit-ltd/rs-io-text)

@@ -8,7 +8,7 @@ values and lines instead of encoded bytes. Charset codecs are supplied by
 
 ```toml
 [dependencies]
-qubit-io-text = "0.2"
+qubit-io-text = "0.3"
 ```
 
 ## API Layers
@@ -31,7 +31,6 @@ an async counterpart to every text trait.
 Unicode scalar values appended, not the number of UTF-8 bytes.
 
 ```rust
-use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     StrTextReader,
     TextRead,
@@ -77,6 +76,7 @@ Built-in codec families include `AsciiCodec`, `Latin1Codec`, `Utf8Codec`,
 ```rust
 use std::io::Cursor;
 
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     CharsetTextReader,
     CharsetTextWriter,
@@ -205,8 +205,10 @@ The writer also provides `write_char_async`, `write_chars_async`, and
 `flush_async`. Flushing drains encoded bytes but does not finish the encoder.
 Finishing emits codec-owned trailing output, drains it, and flushes the
 underlying output. A failed `finish_async()` retains pending state and can be
-retried. In contrast, `into_output_async()` consumes the writer on error, so
-call `finish_async()` separately when recovery matters.
+retried. `try_into_output_async()` also retains the complete writer inside
+`IntoInnerError` when a consuming conversion fails. The synchronous
+`BufferedWriter`, `OutputTextWriter`, `CharsetTextWriter`, and
+`Utf8TextWriter` provide matching recoverable conversion methods.
 
 Pending encoded bytes survive suspension and cancellation. However, a cancelled
 high-level write may already have applied a text prefix. Do not retry the whole

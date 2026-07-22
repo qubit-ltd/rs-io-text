@@ -83,8 +83,8 @@ where
 ```
 
 在依赖 codec trailer 或底层 flush 结果前，必须调用 `finish()` 或
-`finish_async()`。`into_output_async()` 在失败时也会消费 writer；需要重试投递时，
-应先单独调用 `finish_async()`。
+`finish_async()`。消费型转换失败后需要取回 writer 并重试时，应使用
+`try_into_output()` 或 `try_into_output_async()`。
 
 ## API 地图
 
@@ -105,7 +105,7 @@ where
 详细说明见[中文用户指南](doc/user_guide.zh_CN.md)和
 [API 文档](https://docs.rs/qubit-io-text)。
 
-## 开发
+## 测试
 
 ```bash
 # 使用默认 feature 集运行测试
@@ -114,12 +114,27 @@ cargo test
 # 使用项目声明的全部 feature 运行测试
 cargo test --all-features
 
-./align-ci.sh
-RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
+# 运行项目 CI 检查
+./ci-check.sh
+
+# 检查代码覆盖率
+./coverage.sh
 ```
 
 ## 许可证
 
-本项目使用 Apache License 2.0，完整文本见 [LICENSE](LICENSE)。
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 
-Copyright (c) 2026 Haixing Hu.
+本项目基于 Apache License 2.0 授权。完整许可证文本请参阅
+[LICENSE](LICENSE)。
+
+## 贡献
+
+欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
+Pull Request 前运行 `./align-ci.sh`格式化代码，运行`./ci-check.sh`对齐CI要求。
+
+## 作者
+
+**Haixing Hu** - *Qubit Co. Ltd.*
+
+仓库地址：[https://github.com/qubit-ltd/rs-io-text](https://github.com/qubit-ltd/rs-io-text)
