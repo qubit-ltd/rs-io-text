@@ -1,4 +1,5 @@
 use qubit_io_text::{
+    TextLineRead,
     TextRead,
     TextWrite,
 };
@@ -14,21 +15,6 @@ impl TextRead for FailingTextReader {
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         Err(ReadError)
     }
-
-    fn read_chars(
-        &mut self,
-        _output: &mut Vec<char>,
-        _max: usize,
-    ) -> Result<usize, Self::Error> {
-        Err(ReadError)
-    }
-
-    fn read_to_string(
-        &mut self,
-        _output: &mut String,
-    ) -> Result<usize, Self::Error> {
-        Err(ReadError)
-    }
 }
 
 struct EmptyTextReader;
@@ -39,22 +25,31 @@ impl TextRead for EmptyTextReader {
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         Ok(None)
     }
+}
 
-    fn read_chars(
-        &mut self,
-        _output: &mut Vec<char>,
-        _max: usize,
-    ) -> Result<usize, Self::Error> {
-        Ok(0)
-    }
+struct SequenceTextReader {
+    chars: std::vec::IntoIter<char>,
+}
 
-    fn read_to_string(
-        &mut self,
-        _output: &mut String,
-    ) -> Result<usize, Self::Error> {
-        Ok(0)
+impl SequenceTextReader {
+    fn new(text: &str) -> Self {
+        Self {
+            chars: text.chars().collect::<Vec<_>>().into_iter(),
+        }
     }
 }
+
+impl TextRead for SequenceTextReader {
+    type Error = ReadError;
+
+    fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
+        Ok(self.chars.next())
+    }
+}
+
+impl TextLineRead for SequenceTextReader {}
+
+impl TextLineRead for FailingTextReader {}
 
 #[derive(Debug, Eq, PartialEq)]
 struct WriteError;
@@ -68,18 +63,6 @@ impl TextWrite for FailingTextWriter {
         Err(WriteError)
     }
 
-    fn write_char(&mut self, _ch: char) -> Result<(), Self::Error> {
-        Err(WriteError)
-    }
-
-    fn write_chars(&mut self, _chars: &[char]) -> Result<(), Self::Error> {
-        Err(WriteError)
-    }
-
-    fn write_line(&mut self, _line: &str) -> Result<(), Self::Error> {
-        Err(WriteError)
-    }
-
     fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -87,6 +70,24 @@ impl TextWrite for FailingTextWriter {
 
 struct FailOnSecondWrite {
     calls: usize,
+}
+
+#[derive(Default)]
+struct MinimalTextWriter {
+    output: String,
+}
+
+impl TextWrite for MinimalTextWriter {
+    type Error = WriteError;
+
+    fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
+        self.output.push_str(text);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 impl TextWrite for FailOnSecondWrite {
@@ -100,26 +101,47 @@ impl TextWrite for FailOnSecondWrite {
         Ok(())
     }
 
-    fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
-        let mut buffer = [0_u8; 4];
-        self.write_str(ch.encode_utf8(&mut buffer))
-    }
-
-    fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
-        for ch in chars {
-            self.write_char(*ch)?;
-        }
-        Ok(())
-    }
-
-    fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
-        self.write_str(line)?;
-        self.write_str(self.line_ending().as_str())
-    }
-
     fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
+}
+
+#[test]
+fn test_default_read_methods_append_requested_text() {
+    let mut reader = SequenceTextReader::new("ab中");
+    let mut chars = vec![':'];
+    let mut text = String::from("prefix:");
+
+    assert_eq!(Ok(2), reader.read_chars(&mut chars, 2));
+    assert_eq!(&[':', 'a', 'b'], chars.as_slice());
+    assert_eq!(Ok(1), reader.read_to_string(&mut text));
+    assert_eq!("prefix:中", text);
+}
+
+#[test]
+fn test_default_read_methods_cover_zero_limit_and_errors() {
+    let mut reader = SequenceTextReader::new("A");
+    let mut chars = Vec::new();
+    assert_eq!(Ok(0), reader.read_chars(&mut chars, 0));
+    assert_eq!(Ok(Some('A')), reader.read_char());
+
+    let mut reader = FailingTextReader;
+    assert_eq!(Err(ReadError), reader.read_to_string(&mut String::new()));
+    assert_eq!(Err(ReadError), reader.read_line(&mut String::new()));
+}
+
+#[test]
+fn test_default_read_line_preserves_terminator_and_eof() {
+    let mut reader = SequenceTextReader::new("first\nlast");
+    let mut output = String::new();
+
+    assert_eq!(Ok(true), reader.read_line(&mut output));
+    assert_eq!("first\n", output);
+    output.clear();
+    assert_eq!(Ok(true), reader.read_line(&mut output));
+    assert_eq!("last", output);
+    output.clear();
+    assert_eq!(Ok(false), reader.read_line(&mut output));
 }
 
 #[test]
@@ -155,4 +177,17 @@ fn test_write_line_propagates_line_ending_errors() {
 
     assert_eq!(Err(WriteError), writer.write_line("line"));
     assert_eq!(2, writer.calls);
+}
+
+#[test]
+fn test_default_write_methods_write_complete_text() {
+    let mut writer = MinimalTextWriter::default();
+
+    assert_eq!(Ok(()), writer.write_char('中'));
+    assert_eq!(Ok(()), writer.write_chars(&['A', '🙂']));
+    assert_eq!(Ok(()), writer.write_chars(&[]));
+    assert_eq!(Ok(()), writer.write_line("line"));
+    assert_eq!(Ok(()), writer.flush());
+
+    assert_eq!("中A🙂line\n", writer.output);
 }

@@ -34,7 +34,10 @@ pub trait TextWrite {
     /// # Errors
     /// Returns an implementation-specific error when the character cannot be
     /// accepted by the sink.
-    fn write_char(&mut self, ch: char) -> Result<(), Self::Error>;
+    fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
+        let mut buffer = [0_u8; 4];
+        self.write_str(ch.encode_utf8(&mut buffer))
+    }
 
     /// Writes a slice of Unicode scalar values.
     ///
@@ -44,7 +47,12 @@ pub trait TextWrite {
     /// # Errors
     /// Returns an implementation-specific error when any character cannot be
     /// accepted by the sink.
-    fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error>;
+    fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
+        for ch in chars {
+            self.write_char(*ch)?;
+        }
+        Ok(())
+    }
 
     /// Writes a string slice.
     ///
@@ -64,7 +72,10 @@ pub trait TextWrite {
     /// # Errors
     /// Returns an implementation-specific error when the line or line ending
     /// cannot be accepted by the sink.
-    fn write_line(&mut self, line: &str) -> Result<(), Self::Error>;
+    fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
+        self.write_str(line)?;
+        self.write_str(self.line_ending().as_str())
+    }
 
     /// Flushes buffered text to the underlying sink.
     ///

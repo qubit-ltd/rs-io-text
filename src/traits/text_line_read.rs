@@ -26,5 +26,15 @@ pub trait TextLineRead: TextRead {
     /// # Errors
     /// Returns an implementation-specific error when the source cannot be read
     /// or decoded.
-    fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error>;
+    fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
+        let mut read = false;
+        while let Some(ch) = self.read_char()? {
+            output.push(ch);
+            read = true;
+            if ch == '\n' {
+                break;
+            }
+        }
+        Ok(read)
+    }
 }

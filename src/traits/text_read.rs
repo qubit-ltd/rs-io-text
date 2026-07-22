@@ -40,7 +40,17 @@ pub trait TextRead {
         &mut self,
         output: &mut Vec<char>,
         max: usize,
-    ) -> Result<usize, Self::Error>;
+    ) -> Result<usize, Self::Error> {
+        let mut count = 0;
+        while count < max {
+            let Some(ch) = self.read_char()? else {
+                break;
+            };
+            output.push(ch);
+            count += 1;
+        }
+        Ok(count)
+    }
 
     /// Reads all remaining text into `output`.
     ///
@@ -57,5 +67,12 @@ pub trait TextRead {
     fn read_to_string(
         &mut self,
         output: &mut String,
-    ) -> Result<usize, Self::Error>;
+    ) -> Result<usize, Self::Error> {
+        let mut count = 0;
+        while let Some(ch) = self.read_char()? {
+            output.push(ch);
+            count += 1;
+        }
+        Ok(count)
+    }
 }
