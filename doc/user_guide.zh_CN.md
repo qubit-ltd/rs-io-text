@@ -31,6 +31,7 @@ qubit-io-text = "0.2"
 数量，而不是 UTF-8 字节数。
 
 ```rust
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     StrTextReader,
     TextRead,
@@ -82,7 +83,6 @@ use qubit_io_text::{
     CodingErrorPolicy,
     TextRead,
     TextWrite,
-    Utf8Codec,
 };
 
 let mut bytes = Vec::new();
@@ -108,11 +108,11 @@ one-shot helper：
 ```rust
 use std::io::Cursor;
 
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     CharsetReadExt,
     CharsetWriteExt,
     CodingErrorPolicy,
-    Utf8Codec,
 };
 
 let mut input = Cursor::new(b"hello".to_vec());
@@ -137,10 +137,10 @@ output.write_str_with_charset(
 
 ```rust
 use qubit_io::AsyncInput;
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     AsyncCharsetTextReader,
     CodingErrorPolicy,
-    Utf8Codec,
 };
 
 async fn read_document<I>(input: I) -> std::io::Result<String>
@@ -175,11 +175,11 @@ Reader 会在下一个挂起点前把已经收到的字节提交到保留缓冲�
 
 ```rust
 use qubit_io::AsyncOutput;
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     AsyncCharsetTextWriter,
     CodingErrorPolicy,
     LineEnding,
-    Utf8Codec,
 };
 
 async fn write_document<O>(output: O) -> std::io::Result<O>

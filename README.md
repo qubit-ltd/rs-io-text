@@ -35,12 +35,12 @@ qubit-io-text = "0.3"
 ## Synchronous Example
 
 ```rust
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     CharsetTextWriter,
     CodingErrorPolicy,
     LineEnding,
     TextWrite,
-    Utf8Codec,
 };
 
 let mut bytes = Vec::new();
@@ -63,10 +63,10 @@ assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
 
 ```rust
 use qubit_io::AsyncOutput;
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     AsyncCharsetTextWriter,
     CodingErrorPolicy,
-    Utf8Codec,
 };
 
 async fn write_message<O>(output: O) -> std::io::Result<O>
@@ -110,7 +110,12 @@ See the [user guide](doc/user_guide.md) and
 ## Development
 
 ```bash
+# Run tests with the default feature set
 cargo test
+
+# Run tests with all declared features
+cargo test --all-features
+
 ./align-ci.sh
 RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 ```

@@ -31,6 +31,7 @@ an async counterpart to every text trait.
 Unicode scalar values appended, not the number of UTF-8 bytes.
 
 ```rust
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     StrTextReader,
     TextRead,
@@ -82,7 +83,6 @@ use qubit_io_text::{
     CodingErrorPolicy,
     TextRead,
     TextWrite,
-    Utf8Codec,
 };
 
 let mut bytes = Vec::new();
@@ -108,11 +108,11 @@ helpers on `Input` and `Output` values:
 ```rust
 use std::io::Cursor;
 
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     CharsetReadExt,
     CharsetWriteExt,
     CodingErrorPolicy,
-    Utf8Codec,
 };
 
 let mut input = Cursor::new(b"hello".to_vec());
@@ -137,10 +137,10 @@ character buffers. Construction performs no I/O.
 
 ```rust
 use qubit_io::AsyncInput;
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     AsyncCharsetTextReader,
     CodingErrorPolicy,
-    Utf8Codec,
 };
 
 async fn read_document<I>(input: I) -> std::io::Result<String>
@@ -177,11 +177,11 @@ encoded bytes.
 
 ```rust
 use qubit_io::AsyncOutput;
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     AsyncCharsetTextWriter,
     CodingErrorPolicy,
     LineEnding,
-    Utf8Codec,
 };
 
 async fn write_document<O>(output: O) -> std::io::Result<O>
