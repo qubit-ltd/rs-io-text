@@ -6,15 +6,15 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Common text I/O traits and adapters for Qubit Text IO users.
+//!
+//! Charset codecs and byte-order types must be imported directly from their
+//! owning `qubit-codec-text` or `qubit-codec` crate.
 
 pub use crate::{
-    AsciiCodec,
     AsyncCharsetTextReader,
     AsyncCharsetTextWriter,
     BufferedReader,
     BufferedWriter,
-    ByteOrder,
-    CharsetCodec,
     CharsetReadExt,
     CharsetStringDecoder,
     CharsetStringEncoder,
@@ -23,7 +23,6 @@ pub use crate::{
     CharsetWriteExt,
     CodingErrorPolicy,
     InputTextReader,
-    Latin1Codec,
     LineEnding,
     OutputTextWriter,
     StrCharInput,
@@ -35,9 +34,6 @@ pub use crate::{
     TextLineRead,
     TextRead,
     TextWrite,
-    Utf8Codec,
     Utf8TextReader,
     Utf8TextWriter,
-    Utf16ByteCodec,
-    Utf32ByteCodec,
 };

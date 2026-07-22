@@ -15,15 +15,13 @@ use qubit_codec_text::{
     CharsetEncodeResult,
 };
 use qubit_io::Output;
+use qubit_codec_text::{AsciiCodec, CharsetCodec, Utf8Codec};
 use qubit_io_text::{
-    AsciiCodec,
-    CharsetCodec,
     CharsetTextWriter,
     CharsetWriteExt,
     CodingErrorPolicy,
     LineEnding,
     TextWrite,
-    Utf8Codec,
 };
 
 struct FailingWriter;

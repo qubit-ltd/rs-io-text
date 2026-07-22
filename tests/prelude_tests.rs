@@ -48,19 +48,19 @@ fn test_prelude_exports_char_io_adapters() -> std::io::Result<()> {
 #[test]
 fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
     use qubit_codec_text::{
+        AsciiCodec,
         CharsetDecodePolicy,
         CharsetDecoder,
         CharsetEncodePolicy,
         CharsetEncoder,
+        Utf8Codec,
     };
     use qubit_io_text::prelude::{
-        AsciiCodec,
         BufferedReader,
         BufferedWriter,
         CharsetStringDecoder,
         CharsetStringEncoder,
         CodingErrorPolicy,
-        Utf8Codec,
     };
     use std::io::Cursor;
 

@@ -14,11 +14,9 @@ use qubit_codec::{
     CapacityError,
     TranscodeEncodeOutput,
     TranscodeEncoder,
-};
-use qubit_io::{
-    Output,
     nz,
 };
+use qubit_io::Output;
 
 use crate::{
     LineEnding,

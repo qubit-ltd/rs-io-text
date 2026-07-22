@@ -22,13 +22,13 @@ use qubit_codec::{
 use qubit_codec_text::{
     CharsetDecodePolicy,
     CharsetDecoder,
+    Utf8Codec,
 };
 use qubit_io_text::{
     BufferedReader,
     CodingErrorPolicy,
     TextLineRead,
     TextRead,
-    Utf8Codec,
 };
 
 #[derive(Debug, Default)]

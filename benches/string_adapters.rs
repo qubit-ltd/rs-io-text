@@ -20,14 +20,11 @@ use criterion::{
     criterion_group,
     criterion_main,
 };
+use qubit_codec::ByteOrder;
+use qubit_codec_text::{CharsetCodec, Utf8Codec, Utf16ByteCodec, Utf32ByteCodec};
 use qubit_io_text::{
-    ByteOrder,
-    CharsetCodec,
     CharsetStringDecoder,
     CharsetStringEncoder,
-    Utf8Codec,
-    Utf16ByteCodec,
-    Utf32ByteCodec,
 };
 
 use crate::tracking_allocator::measure_peak;

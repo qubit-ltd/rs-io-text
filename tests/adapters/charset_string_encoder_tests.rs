@@ -20,10 +20,8 @@ use qubit_codec_text::{
     CharsetEncodeResult,
     UnmappableAction,
 };
-use qubit_io_text::{
-    CharsetStringEncoder,
-    Utf8Codec,
-};
+use qubit_codec_text::Utf8Codec;
+use qubit_io_text::CharsetStringEncoder;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct NonDefaultUnit(u8);
@@ -525,10 +523,8 @@ fn test_charset_string_encoder_encode_str_applies_default_policy() {
 mod coverage_tests {
     use qubit_codec_text::Charset;
     use qubit_codec_text::CharsetEncodeErrorKind;
-    use qubit_io_text::{
-        CharsetStringEncoder,
-        Utf8Codec,
-    };
+    use qubit_codec_text::Utf8Codec;
+    use qubit_io_text::CharsetStringEncoder;
 
     fn reset_coverage_hooks() {
         CharsetStringEncoder::<Utf8Codec>::coverage_reset_reserve_hooks();

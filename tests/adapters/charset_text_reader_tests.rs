@@ -6,13 +6,13 @@ use std::io::{
 };
 
 use qubit_io::Input;
+use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
     CharsetReadExt,
     CharsetTextReader,
     CodingErrorPolicy,
     TextLineRead,
     TextRead,
-    Utf8Codec,
 };
 
 struct FailingReader;

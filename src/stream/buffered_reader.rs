@@ -14,13 +14,10 @@ use qubit_codec::{
     CapacityError,
     TranscodeDecodeInput,
     TranscodeDecoder,
-};
-use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::{
-    Input,
-    UncheckedSlice,
     nz,
 };
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_io::{Input, UncheckedSlice};
 
 use crate::{
     CodingErrorPolicy,

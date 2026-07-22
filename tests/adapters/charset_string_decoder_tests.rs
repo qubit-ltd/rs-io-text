@@ -14,10 +14,8 @@ use qubit_codec_text::{
     MalformedAction,
     Utf32U32Codec,
 };
-use qubit_io_text::{
-    CharsetStringDecoder,
-    Utf8Codec,
-};
+use qubit_codec_text::Utf8Codec;
+use qubit_io_text::CharsetStringDecoder;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct InvalidInputErrorCodec;
@@ -352,11 +350,8 @@ fn test_charset_string_decoder_decode_to_string_reports_incomplete_tail() {
 
 #[cfg(coverage)]
 mod coverage_tests {
-    use qubit_codec_text::CharsetDecodeErrorKind;
-    use qubit_io_text::{
-        CharsetStringDecoder,
-        Utf8Codec,
-    };
+    use qubit_codec_text::{CharsetDecodeErrorKind, Utf8Codec};
+    use qubit_io_text::CharsetStringDecoder;
 
     fn reset_coverage_hooks() {
         CharsetStringDecoder::<Utf8Codec>::coverage_reset_reserve_hooks();

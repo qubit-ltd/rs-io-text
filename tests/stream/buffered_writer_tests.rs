@@ -23,12 +23,12 @@ use qubit_codec_text::{
     AsciiCodec,
     CharsetEncodePolicy,
     CharsetEncoder,
+    Utf8Codec,
 };
 use qubit_io_text::{
     BufferedWriter,
     LineEnding,
     TextWrite,
-    Utf8Codec,
 };
 
 #[derive(Debug, Default)]

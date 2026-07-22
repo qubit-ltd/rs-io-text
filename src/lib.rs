@@ -49,15 +49,6 @@ pub use ext::{
     CharsetWriteExt,
 };
 pub use line_ending::LineEnding;
-pub use qubit_codec::ByteOrder;
-pub use qubit_codec_text::{
-    AsciiCodec,
-    CharsetCodec,
-    Latin1Codec,
-    Utf8Codec,
-    Utf16ByteCodec,
-    Utf32ByteCodec,
-};
 pub use stream::{
     BufferedReader,
     BufferedWriter,
