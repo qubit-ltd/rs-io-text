@@ -571,6 +571,22 @@ fn test_buffered_writer_reports_reset_capacity_errors() {
     assert_eq!(ErrorKind::OutOfMemory, error.kind());
 }
 
+#[cfg(coverage)]
+#[test]
+fn test_buffered_writer_reports_reset_output_reserve_errors() {
+    let mut writer = BufferedWriter::new(
+        Cursor::new(Vec::new()),
+        LifecycleEncoder::default(),
+    );
+
+    BufferedWriter::<Cursor<Vec<u8>>, LifecycleEncoder>::coverage_fail_next_reset_reserve();
+    let error = writer
+        .write_char('A')
+        .expect_err("reset output reserve failure should be reported");
+
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
 #[test]
 fn test_buffered_writer_reports_reset_domain_errors() {
     let mut writer =
@@ -587,6 +603,13 @@ fn test_buffered_writer_reports_reset_domain_errors() {
     let error = writer
         .write_str(&"a".repeat(256))
         .expect_err("chunk flush must propagate reset domain errors");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let error = writer
+        .write_line("line")
+        .expect_err("line content errors must stop before the line ending");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 }
 
@@ -612,6 +635,21 @@ fn test_buffered_writer_into_inner_propagates_lazy_reset_errors() {
         .expect_err("into_inner must propagate lazy reset errors");
 
     assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
+#[test]
+fn test_buffered_writer_try_into_inner_returns_writer_after_finish_error() {
+    let writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
+
+    let error = writer
+        .try_into_inner()
+        .expect_err("recoverable conversion should return the writer");
+
+    assert_eq!(ErrorKind::InvalidInput, error.error().kind());
+    assert!(error.writer().inner().get_ref().is_empty());
+    let error = error.into_error();
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
 }
 
 #[test]

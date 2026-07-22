@@ -18,9 +18,7 @@ use qubit_codec_text::{
     CharsetDecodePolicy,
     CharsetDecoder,
 };
-use qubit_io::{
-    AsyncInput,
-};
+use qubit_io::AsyncInput;
 
 use crate::CodingErrorPolicy;
 use crate::io_error::{
@@ -397,14 +395,13 @@ where
         max: usize,
     ) -> io::Result<usize> {
         let mut count = 0;
-        while count < max {
-            match self.read_char_async().await? {
-                Some(ch) => {
-                    output.push(ch);
-                    count += 1;
-                }
-                None => break,
-            }
+        while count < max && self.fill_chars_async().await? {
+            let available = self.char_limit - self.char_position;
+            let take = available.min(max - count);
+            let end = self.char_position + take;
+            output.extend_from_slice(&self.chars[self.char_position..end]);
+            self.char_position = end;
+            count += take;
         }
         Ok(count)
     }
@@ -427,9 +424,11 @@ where
         output: &mut String,
     ) -> io::Result<usize> {
         let mut count = 0;
-        while let Some(ch) = self.read_char_async().await? {
-            output.push(ch);
-            count += 1;
+        while self.fill_chars_async().await? {
+            let chars = &self.chars[self.char_position..self.char_limit];
+            output.extend(chars.iter());
+            count += chars.len();
+            self.char_position = self.char_limit;
         }
         Ok(count)
     }
@@ -453,11 +452,17 @@ where
         output: &mut String,
     ) -> io::Result<bool> {
         let mut read = false;
-        while let Some(ch) = self.read_char_async().await? {
-            output.push(ch);
+        while self.fill_chars_async().await? {
+            let chars = &self.chars[self.char_position..self.char_limit];
+            let take = chars
+                .iter()
+                .position(|ch| *ch == '\n')
+                .map_or(chars.len(), |index| index + 1);
+            output.extend(chars[..take].iter());
+            self.char_position += take;
             read = true;
-            if ch == '\n' {
-                break;
+            if chars.get(take - 1) == Some(&'\n') {
+                return Ok(true);
             }
         }
         Ok(read)

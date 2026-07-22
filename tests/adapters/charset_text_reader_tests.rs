@@ -5,8 +5,8 @@ use std::io::{
     Read,
 };
 
-use qubit_io::Input;
 use qubit_codec_text::Utf8Codec;
+use qubit_io::Input;
 use qubit_io_text::{
     CharsetReadExt,
     CharsetTextReader,
@@ -217,6 +217,26 @@ fn test_with_capacity_preserves_utf8_tail_across_refills() -> std::io::Result<()
     assert_eq!(Some('中'), reader.read_char()?);
     assert_eq!(Some('🙂'), reader.read_char()?);
     assert_eq!(None, reader.read_char()?);
+    Ok(())
+}
+
+#[test]
+fn test_all_small_capacities_preserve_utf8_boundaries() -> std::io::Result<()> {
+    let expected = "A中🙂B";
+    for capacity in 0..=expected.len() {
+        let input = Cursor::new(expected.as_bytes().to_vec());
+        let mut reader = CharsetTextReader::new_with_buffer_capacity(
+            input,
+            Utf8Codec,
+            CodingErrorPolicy::Strict,
+            capacity,
+        );
+        let mut output = String::new();
+
+        reader.read_to_string(&mut output)?;
+
+        assert_eq!(expected, output, "capacity {capacity}");
+    }
     Ok(())
 }
 

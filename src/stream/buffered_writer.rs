@@ -5,6 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow coverage-cfg
+#[cfg(coverage)]
+use std::cell::Cell;
 use std::{
     error::Error as StdError,
     io,
@@ -19,6 +22,7 @@ use qubit_codec::{
 use qubit_io::Output;
 
 use crate::{
+    IntoInnerError,
     LineEnding,
     TextWrite,
     io_error::{
@@ -143,6 +147,13 @@ where
         self.line_ending
     }
 
+    /// Makes the next reset-capacity check fail in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_fail_next_reset_reserve() {
+        COVERAGE_FAIL_NEXT_RESET_RESERVE.with(|state| state.set(true));
+    }
+
     /// Returns an error if this writer has already been finished.
     ///
     /// # Errors
@@ -178,18 +189,13 @@ where
     /// Returns encoding errors or I/O errors from the wrapped writer.
     fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
         self.ensure_started()?;
-        let written = self.output.transcode_from(
+        self.output.transcode_from(
             &mut self.encoder,
             &mut encode_error_to_io,
             chars,
             0,
             chars.len(),
         )?;
-        if written != chars.len() {
-            return Err(io::Error::other(
-                "text encoder did not consume the complete character input",
-            ));
-        }
         Ok(())
     }
 
@@ -207,7 +213,14 @@ where
             .encoder
             .max_reset_output_len()
             .map_err(capacity_error_to_io)?;
-        self.output.ensure_spare_capacity(required)?;
+        let reserve_result = self.output.ensure_spare_capacity(required);
+        #[cfg(coverage)]
+        let reserve_result = if coverage_take_reset_reserve_failure() {
+            Err(io::Error::from(io::ErrorKind::OutOfMemory))
+        } else {
+            reserve_result
+        };
+        reserve_result?;
         let (units, output_index, available) =
             self.output.spare_raw_parts_mut();
         assert!(
@@ -260,6 +273,24 @@ where
         self.output.flush()
     }
 
+    /// Returns the wrapped byte writer after finishing, retaining failures.
+    ///
+    /// # Returns
+    ///
+    /// Returns the underlying byte writer after pending bytes reach it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the finish error together with this writer so callers can
+    /// inspect pending state and retry a transient output failure.
+    pub fn try_into_inner(mut self) -> Result<W, IntoInnerError<Self>> {
+        if let Err(error) = self.finish() {
+            return Err(IntoInnerError::new(error, self));
+        }
+        let (inner, _) = self.output.into_parts();
+        Ok(inner)
+    }
+
     /// Returns the wrapped byte writer after finishing and flushing.
     ///
     /// # Returns
@@ -269,10 +300,8 @@ where
     /// # Errors
     ///
     /// Returns encoding finalization or I/O errors.
-    pub fn into_inner(mut self) -> io::Result<W> {
-        self.finish()?;
-        let (inner, _) = self.output.into_parts();
-        Ok(inner)
+    pub fn into_inner(self) -> io::Result<W> {
+        self.try_into_inner().map_err(IntoInnerError::into_error)
     }
 }
 
@@ -338,4 +367,15 @@ where
 /// Converts capacity errors at the buffered-writer boundary.
 fn capacity_error_to_io(error: CapacityError) -> io::Error {
     shared_capacity_error_to_io(error)
+}
+
+#[cfg(coverage)]
+thread_local! {
+    static COVERAGE_FAIL_NEXT_RESET_RESERVE: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Returns and clears the synthetic reset-reserve failure request.
+#[cfg(coverage)]
+fn coverage_take_reset_reserve_failure() -> bool {
+    COVERAGE_FAIL_NEXT_RESET_RESERVE.with(|state| state.replace(false))
 }
