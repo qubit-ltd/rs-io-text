@@ -17,6 +17,10 @@ use crate::{
     TextWrite,
 };
 
+mod borrowed_output;
+
+use borrowed_output::BorrowedOutput;
+
 /// Extension methods for writing charset-encoded text to byte streams.
 pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     /// Wraps this byte writer as a charset text writer.
@@ -94,45 +98,3 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
 }
 
 impl<W> CharsetWriteExt for W where W: Output<Item = u8> + Sized {}
-
-/// Borrowed output adapter used by one-shot extension methods.
-struct BorrowedOutput<'a, O>
-where
-    O: Output<Item = u8> + ?Sized,
-{
-    inner: &'a mut O,
-}
-
-impl<'a, O> BorrowedOutput<'a, O>
-where
-    O: Output<Item = u8> + ?Sized,
-{
-    /// Creates an adapter that forwards writes to a borrowed output.
-    fn new(inner: &'a mut O) -> Self {
-        Self { inner }
-    }
-}
-
-impl<O> Output for BorrowedOutput<'_, O>
-where
-    O: Output<Item = u8> + ?Sized,
-{
-    type Item = u8;
-
-    /// Forwards an unchecked byte write to the borrowed output.
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[u8],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
-        // SAFETY: The caller guarantees the source range for this adapter;
-        // the same guarantee is forwarded to the wrapped output.
-        unsafe { self.inner.write_unchecked(input, index, count) }
-    }
-
-    /// Flushes the borrowed output.
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
-}

@@ -17,6 +17,10 @@ use crate::{
     TextRead,
 };
 
+mod borrowed_input;
+
+use borrowed_input::BorrowedInput;
+
 /// Extension methods for reading charset-encoded text from byte streams.
 pub trait CharsetReadExt: Input<Item = u8> + Sized {
     /// Wraps this byte reader as a charset text reader.
@@ -97,40 +101,3 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
 }
 
 impl<R> CharsetReadExt for R where R: Input<Item = u8> + Sized {}
-
-/// Borrowed input adapter used by one-shot extension methods.
-struct BorrowedInput<'a, I>
-where
-    I: Input<Item = u8> + ?Sized,
-{
-    inner: &'a mut I,
-}
-
-impl<'a, I> BorrowedInput<'a, I>
-where
-    I: Input<Item = u8> + ?Sized,
-{
-    /// Creates an adapter that forwards reads to a borrowed input.
-    fn new(inner: &'a mut I) -> Self {
-        Self { inner }
-    }
-}
-
-impl<I> Input for BorrowedInput<'_, I>
-where
-    I: Input<Item = u8> + ?Sized,
-{
-    type Item = u8;
-
-    /// Forwards an unchecked byte read to the borrowed input.
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
-        // SAFETY: The caller guarantees the destination range for this
-        // adapter; the same guarantee is forwarded to the wrapped input.
-        unsafe { self.inner.read_unchecked(output, index, count) }
-    }
-}

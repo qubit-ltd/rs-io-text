@@ -19,6 +19,10 @@ use crate::{
     TextRead,
 };
 
+mod boxed_char_input;
+
+use boxed_char_input::BoxedCharInput;
+
 /// Default character chunk capacity for text reads.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 
@@ -63,7 +67,7 @@ impl<'a> InputTextReader<'a> {
         let input = if input.is_buffered() {
             input
         } else {
-            Box::new(BufferedInput::new(BoxedCharInput { input }))
+            Box::new(BufferedInput::new(BoxedCharInput::new(input)))
         };
         Self {
             input,
@@ -82,15 +86,22 @@ impl<'a> InputTextReader<'a> {
 
     /// Returns a mutable reference to the wrapped input.
     ///
+    /// Characters retained in this reader's pending queue are logically
+    /// earlier than the wrapped input's current position. Reading the wrapped
+    /// input directly can therefore reorder or skip text that this reader has
+    /// already fetched.
+    ///
     /// # Returns
     /// The wrapped input trait object.
+    #[inline(always)]
     pub fn get_mut(&mut self) -> &mut (dyn Input<Item = char> + 'a) {
         self.input.as_mut()
     }
 
     /// Returns the wrapped input.
     ///
-    /// Pending characters already read past a line boundary are discarded.
+    /// Pending characters already read past a line boundary are discarded;
+    /// the returned input remains positioned after those characters.
     ///
     /// # Returns
     /// The underlying boxed character input.
@@ -220,25 +231,5 @@ impl fmt::Debug for InputTextReader<'_> {
             .field("is_buffered", &self.input.is_buffered())
             .field("pending_len", &self.pending.len())
             .finish()
-    }
-}
-
-/// Concrete forwarding wrapper for a boxed character input.
-struct BoxedCharInput<'a> {
-    input: Box<dyn Input<Item = char> + 'a>,
-}
-
-impl Input for BoxedCharInput<'_> {
-    type Item = char;
-
-    #[inline]
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [char],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
-        // SAFETY: Forwarded from the trait caller.
-        unsafe { self.input.read_unchecked(output, index, count) }
     }
 }
