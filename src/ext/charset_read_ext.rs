@@ -9,17 +9,16 @@
 use std::io;
 
 use qubit_codec_text::CharsetCodec;
-use qubit_io::Input;
+use qubit_io::{
+    Input,
+    InputRef,
+};
 
 use crate::{
     CharsetTextReader,
     CodingErrorPolicy,
     TextRead,
 };
-
-mod borrowed_input;
-
-use borrowed_input::BorrowedInput;
 
 /// Extension methods for reading charset-encoded text from byte streams.
 pub trait CharsetReadExt: Input<Item = u8> + Sized {
@@ -93,7 +92,7 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
         C: CharsetCodec<Unit = u8>,
     {
         let mut reader =
-            CharsetTextReader::new(BorrowedInput::new(self), codec, policy);
+            CharsetTextReader::new(InputRef::new(self), codec, policy);
         let mut output = String::new();
         reader.read_to_string(&mut output)?;
         Ok(output)

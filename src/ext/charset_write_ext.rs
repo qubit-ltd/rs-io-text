@@ -9,17 +9,16 @@
 use std::io;
 
 use qubit_codec_text::CharsetCodec;
-use qubit_io::Output;
+use qubit_io::{
+    Output,
+    OutputRef,
+};
 
 use crate::{
     CharsetTextWriter,
     CodingErrorPolicy,
     TextWrite,
 };
-
-mod borrowed_output;
-
-use borrowed_output::BorrowedOutput;
 
 /// Extension methods for writing charset-encoded text to byte streams.
 pub trait CharsetWriteExt: Output<Item = u8> + Sized {
@@ -91,7 +90,7 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
         C: CharsetCodec<Unit = u8>,
     {
         let mut writer =
-            CharsetTextWriter::new(BorrowedOutput::new(self), codec, policy);
+            CharsetTextWriter::new(OutputRef::new(self), codec, policy);
         writer.write_str(text)?;
         writer.finish()
     }

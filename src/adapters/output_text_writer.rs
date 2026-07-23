@@ -9,6 +9,7 @@ use std::fmt;
 use std::io;
 
 use qubit_io::{
+    BoxOutput,
     BufferedOutput,
     Output,
 };
@@ -18,10 +19,6 @@ use crate::{
     LineEnding,
     TextWrite,
 };
-
-mod boxed_char_output;
-
-use boxed_char_output::BoxedCharOutput;
 
 /// Default character chunk capacity for string writes.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -68,7 +65,7 @@ impl<'a> OutputTextWriter<'a> {
         let output = if output.is_buffered() {
             output
         } else {
-            Box::new(BufferedOutput::new(BoxedCharOutput::new(output)))
+            Box::new(BufferedOutput::new(BoxOutput::new(output)))
         };
         Self {
             output,

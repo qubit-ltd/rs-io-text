@@ -10,6 +10,7 @@ use std::fmt;
 use std::io;
 
 use qubit_io::{
+    BoxInput,
     BufferedInput,
     Input,
 };
@@ -18,10 +19,6 @@ use crate::{
     TextLineRead,
     TextRead,
 };
-
-mod boxed_char_input;
-
-use boxed_char_input::BoxedCharInput;
 
 /// Default character chunk capacity for text reads.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -67,7 +64,7 @@ impl<'a> InputTextReader<'a> {
         let input = if input.is_buffered() {
             input
         } else {
-            Box::new(BufferedInput::new(BoxedCharInput::new(input)))
+            Box::new(BufferedInput::new(BoxInput::new(input)))
         };
         Self {
             input,
