@@ -26,6 +26,11 @@ use qubit_io_text::prelude::{
 fn test_prelude_exports_text_traits_and_adapters() -> Result<(), Infallible> {
     let recoverable_error: Option<IntoInnerError<()>> = None;
     assert!(recoverable_error.is_none());
+    let recoverable_error: IntoInnerError<()> = qubit_io::IntoInnerError::new(
+        std::io::Error::other("recoverable"),
+        (),
+    );
+    assert_eq!("recoverable", recoverable_error.to_string());
 
     let mut reader = StrTextReader::new("text");
     let mut output = String::new();
