@@ -84,9 +84,11 @@ where
 ```
 
 Call `finish()` or `finish_async()` before depending on codec trailers or the
-underlying output flush. Use `try_into_output()` or
-`try_into_output_async()` when a failed consuming conversion must return the
-writer for inspection and retry.
+underlying output flush. Synchronous consuming conversions such as
+`into_output()` and `into_inner()` retain the writer in `IntoInnerError` on
+failure; their `try_` forms are compatibility aliases with the same semantics.
+For asynchronous writers, use `try_into_output_async()` when a failed
+conversion must return the writer for inspection and retry.
 
 ## API Map
 

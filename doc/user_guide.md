@@ -206,9 +206,11 @@ The writer also provides `write_char_async`, `write_chars_async`, and
 Finishing emits codec-owned trailing output, drains it, and flushes the
 underlying output. A failed `finish_async()` retains pending state and can be
 retried. `try_into_output_async()` also retains the complete writer inside
-`IntoInnerError` when a consuming conversion fails. The synchronous
+`IntoInnerError` when a consuming conversion fails. For the synchronous
 `BufferedWriter`, `OutputTextWriter`, `CharsetTextWriter`, and
-`Utf8TextWriter` provide matching recoverable conversion methods.
+`Utf8TextWriter`, the default `into_inner()` or `into_output()` conversion
+already returns `IntoInnerError<Self>` and retains pending state. Their
+`try_` methods are compatibility aliases with the same recoverable semantics.
 
 Pending encoded bytes survive suspension and cancellation. However, a cancelled
 high-level write may already have applied a text prefix. Do not retry the whole

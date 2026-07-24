@@ -83,8 +83,10 @@ where
 ```
 
 在依赖 codec trailer 或底层 flush 结果前，必须调用 `finish()` 或
-`finish_async()`。消费型转换失败后需要取回 writer 并重试时，应使用
-`try_into_output()` 或 `try_into_output_async()`。
+`finish_async()`。同步的 `into_output()`、`into_inner()` 等消费型转换会在失败时
+通过 `IntoInnerError` 保留 writer，其 `try_` 形式是语义相同的兼容别名。异步
+writer 在转换失败后需要取回 writer 并重试时，应使用
+`try_into_output_async()`。
 
 ## API 地图
 
