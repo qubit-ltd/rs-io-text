@@ -164,7 +164,7 @@ fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
         CharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict);
 
     writer.write_str("output中文")?;
-    let output = writer.into_output()?;
+    let output = writer.into_output().map_err(|error| error.into_error())?;
 
     assert_eq!("output中文".as_bytes(), output.into_bytes().as_slice());
     Ok(())
@@ -233,7 +233,7 @@ fn test_accessors_and_into_output() -> std::io::Result<()> {
     writer.write_str("ascii")?;
     writer.flush()?;
 
-    let output = writer.into_output()?;
+    let output = writer.into_output().map_err(|error| error.into_error())?;
     assert_eq!(b"prefix:inner:ascii", output.as_slice());
     Ok(())
 }
@@ -256,14 +256,14 @@ fn test_try_into_output_finishes_and_returns_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_try_into_output_returns_charset_writer_after_failure() {
+fn test_into_output_returns_charset_writer_after_failure() {
     let writer = CharsetTextWriter::new(
         FailingWriter,
         Utf8Codec,
         CodingErrorPolicy::Strict,
     );
 
-    let error = match writer.try_into_output() {
+    let error = match writer.into_output() {
         Ok(_) => {
             panic!("recoverable conversion should retain the charset writer")
         }
@@ -309,7 +309,7 @@ fn test_write_raises_buffer_to_single_character_max_output()
     );
 
     writer.write_char('B')?;
-    let output = writer.into_output()?;
+    let output = writer.into_output().map_err(|error| error.into_error())?;
 
     assert_eq!(b"BB", output.as_slice());
     Ok(())
@@ -342,7 +342,7 @@ fn test_charset_write_ext_creates_stream_writer() -> std::io::Result<()> {
         output.charset_text_writer(AsciiCodec, CodingErrorPolicy::Replace);
 
     writer.write_line("A🙂")?;
-    let output = writer.into_output()?;
+    let output = writer.into_output().map_err(|error| error.into_error())?;
 
     assert_eq!(b"A?\n", output.as_slice());
     Ok(())
@@ -356,7 +356,7 @@ fn test_charset_write_ext_accepts_qubit_output_without_std_write()
         output.charset_text_writer(Utf8Codec, CodingErrorPolicy::Strict);
 
     writer.write_str("ext输出")?;
-    let output = writer.into_output()?;
+    let output = writer.into_output().map_err(|error| error.into_error())?;
 
     assert_eq!("ext输出".as_bytes(), output.into_bytes().as_slice());
     Ok(())
@@ -373,7 +373,7 @@ fn test_charset_write_ext_creates_buffered_stream_writer() -> std::io::Result<()
     );
 
     writer.write_str("é")?;
-    let output = writer.into_output()?;
+    let output = writer.into_output().map_err(|error| error.into_error())?;
 
     assert_eq!("é".as_bytes(), output.as_slice());
     Ok(())

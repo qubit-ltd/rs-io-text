@@ -432,7 +432,7 @@ fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
         BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
 
     writer.write_str("Aé🙂")?;
-    let cursor = writer.into_inner()?;
+    let cursor = writer.into_inner().map_err(|error| error.into_error())?;
 
     assert_eq!("Aé🙂".as_bytes(), cursor.into_inner().as_slice());
     Ok(())
@@ -467,7 +467,7 @@ fn test_buffered_writer_accessors_empty_writes_and_finish_state()
         .expect_err("string writes after finish must be rejected");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 
-    let cursor = writer.into_inner()?;
+    let cursor = writer.into_inner().map_err(|error| error.into_error())?;
     assert_eq!(b"prefix:A", cursor.into_inner().as_slice());
     Ok(())
 }
@@ -481,7 +481,7 @@ fn test_buffered_writer_flushes_exact_string_chunks() -> std::io::Result<()> {
     let text = "a".repeat(256);
 
     writer.write_str(text.as_str())?;
-    let cursor = writer.into_inner()?;
+    let cursor = writer.into_inner().map_err(|error| error.into_error())?;
 
     assert_eq!(text.as_bytes(), cursor.into_inner().as_slice());
     Ok(())
@@ -505,7 +505,7 @@ fn test_buffered_writer_emits_finish_output() -> std::io::Result<()> {
         BufferedWriter::new(Cursor::new(Vec::new()), FinishByteEncoder);
 
     writer.finish()?;
-    let cursor = writer.into_inner()?;
+    let cursor = writer.into_inner().map_err(|error| error.into_error())?;
 
     assert_eq!(b"!", cursor.into_inner().as_slice());
     Ok(())
@@ -522,7 +522,7 @@ fn test_buffered_writer_runs_complete_lifecycle_on_first_write()
 
     writer.write_char('A')?;
     writer.write_char('B')?;
-    let cursor = writer.into_inner()?;
+    let cursor = writer.into_inner().map_err(|error| error.into_error())?;
 
     assert_eq!(b"^AB!", cursor.into_inner().as_slice());
     Ok(())
@@ -538,7 +538,7 @@ fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream()
     );
 
     writer.finish()?;
-    let cursor = writer.into_inner()?;
+    let cursor = writer.into_inner().map_err(|error| error.into_error())?;
 
     assert_eq!(b"^!", cursor.into_inner().as_slice());
     Ok(())
@@ -634,7 +634,8 @@ fn test_buffered_writer_into_inner_propagates_lazy_reset_errors() {
         .into_inner()
         .expect_err("into_inner must propagate lazy reset errors");
 
-    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+    assert_eq!(ErrorKind::OutOfMemory, error.error().kind());
+    assert!(error.writer().inner().get_ref().is_empty());
 }
 
 #[test]
@@ -671,7 +672,7 @@ fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()>
         .with_line_ending(LineEnding::CrLf);
 
     writer.write_line("line")?;
-    let cursor = writer.into_inner()?;
+    let cursor = writer.into_inner().map_err(|error| error.into_error())?;
 
     assert_eq!(b"line\r\n", cursor.into_inner().as_slice());
     Ok(())

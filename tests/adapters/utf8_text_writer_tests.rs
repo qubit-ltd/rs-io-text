@@ -60,7 +60,7 @@ fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
 
     writer.write_line("output中文")?;
     writer.finish()?;
-    let output = writer.into_output()?;
+    let output = writer.into_output().map_err(|error| error.into_error())?;
 
     assert_eq!("output中文\n".as_bytes(), output.bytes.as_slice());
     Ok(())
@@ -95,7 +95,8 @@ fn test_accessors_and_into_inner() -> std::io::Result<()> {
     writer.write_line("done")?;
     writer.finish()?;
 
-    assert_eq!(b"prefix:done\n", writer.into_output()?.as_slice());
+    let output = writer.into_output().map_err(|error| error.into_error())?;
+    assert_eq!(b"prefix:done\n", output.as_slice());
     Ok(())
 }
 
@@ -113,10 +114,10 @@ fn test_try_into_output_finishes_and_returns_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_try_into_output_returns_utf8_writer_after_failure() {
+fn test_into_output_returns_utf8_writer_after_failure() {
     let writer = Utf8TextWriter::new(FailingWriter);
 
-    let error = match writer.try_into_output() {
+    let error = match writer.into_output() {
         Ok(_) => {
             panic!("recoverable conversion should retain the UTF-8 writer")
         }

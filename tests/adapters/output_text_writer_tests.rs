@@ -132,7 +132,7 @@ fn test_from_boxed_keeps_buffered_output() -> std::io::Result<()> {
 
         assert!(writer.get_ref().is_buffered());
         writer.write_line("box")?;
-        let output = writer.into_inner()?;
+        let output = writer.into_inner().map_err(|error| error.into_error())?;
         drop(output);
     }
 
@@ -151,7 +151,9 @@ fn test_into_inner_propagates_flush_error() {
         Ok(_) => panic!("into_inner should propagate flush error"),
         Err(error) => error,
     };
-    assert_eq!(ErrorKind::Other, error.kind());
+    assert_eq!(ErrorKind::Other, error.error().kind());
+    assert!(error.writer().get_ref().is_buffered());
+    let _writer = error.into_writer();
 }
 
 #[test]
@@ -183,7 +185,7 @@ fn test_into_inner_flushes_wrapped_output() -> std::io::Result<()> {
         let mut writer = OutputTextWriter::new(output);
 
         writer.write_str("value")?;
-        let output = writer.into_inner()?;
+        let output = writer.into_inner().map_err(|error| error.into_error())?;
         drop(output);
     }
 

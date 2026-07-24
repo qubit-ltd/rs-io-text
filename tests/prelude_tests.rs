@@ -26,10 +26,8 @@ use qubit_io_text::prelude::{
 fn test_prelude_exports_text_traits_and_adapters() -> Result<(), Infallible> {
     let recoverable_error: Option<IntoInnerError<()>> = None;
     assert!(recoverable_error.is_none());
-    let recoverable_error: IntoInnerError<()> = qubit_io::IntoInnerError::new(
-        std::io::Error::other("recoverable"),
-        (),
-    );
+    let recoverable_error: IntoInnerError<()> =
+        qubit_io::IntoInnerError::new(std::io::Error::other("recoverable"), ());
     assert_eq!("recoverable", recoverable_error.to_string());
 
     let mut reader = StrTextReader::new("text");
@@ -115,6 +113,7 @@ fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
             .expect("UTF-8 strict encoder should be constructible");
     let mut writer = BufferedWriter::new(Vec::new(), encoder);
     writer.write_str("C")?;
-    assert_eq!(b"C", writer.into_inner()?.as_slice());
+    let output = writer.into_inner().map_err(|error| error.into_error())?;
+    assert_eq!(b"C", output.as_slice());
     Ok(())
 }

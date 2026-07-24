@@ -299,9 +299,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns encoding finalization or I/O errors.
-    pub fn into_inner(self) -> io::Result<W> {
-        self.try_into_inner().map_err(IntoInnerError::into_error)
+    /// Returns the finish error together with this writer so callers can
+    /// inspect pending state and retry a transient output failure.
+    pub fn into_inner(self) -> Result<W, IntoInnerError<Self>> {
+        self.try_into_inner()
     }
 }
 

@@ -125,15 +125,18 @@ impl<'a> OutputTextWriter<'a> {
         Ok(self.output)
     }
 
-    /// Flushes this writer and returns the wrapped output.
+    /// Flushes this writer and returns the wrapped output recoverably.
     ///
     /// # Returns
     /// The underlying boxed character output.
     ///
     /// # Errors
-    /// Returns any error produced while flushing buffered characters.
-    pub fn into_inner(self) -> io::Result<Box<dyn Output<Item = char> + 'a>> {
-        self.try_into_inner().map_err(IntoInnerError::into_error)
+    /// Returns the flush error together with this writer so the operation can
+    /// be retried after a transient failure.
+    pub fn into_inner(
+        self,
+    ) -> Result<Box<dyn Output<Item = char> + 'a>, IntoInnerError<Self>> {
+        self.try_into_inner()
     }
 }
 

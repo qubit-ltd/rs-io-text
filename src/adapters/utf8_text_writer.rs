@@ -156,10 +156,11 @@ where
     ///
     /// # Errors
     ///
-    /// Returns an encoding finalization or underlying output error.
+    /// Returns the finalization error together with this writer so callers
+    /// can repair a transient output failure and retry.
     #[inline]
-    pub fn into_output(self) -> io::Result<O> {
-        self.try_into_output().map_err(IntoInnerError::into_error)
+    pub fn into_output(self) -> Result<O, IntoInnerError<Self>> {
+        self.try_into_output()
     }
 }
 
