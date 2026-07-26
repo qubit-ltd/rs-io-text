@@ -12,12 +12,14 @@ use qubit_codec_text::{
     CharsetEncodePolicy,
     CharsetEncoder,
 };
-use qubit_io::Output;
+use qubit_io::{
+    IntoInnerError,
+    Output,
+};
 
 use crate::{
     BufferedWriter,
     CodingErrorPolicy,
-    IntoInnerError,
     LineEnding,
     TextWrite,
 };

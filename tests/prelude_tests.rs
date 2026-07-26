@@ -8,11 +8,11 @@
 
 use std::convert::Infallible;
 
+use qubit_io::IntoInnerError;
 use qubit_io_text::prelude::{
     CharsetReadExt,
     CharsetWriteExt,
     InputTextReader,
-    IntoInnerError,
     OutputTextWriter,
     StrCharInput,
     StrTextReader,

@@ -19,10 +19,12 @@ use qubit_codec::{
     TranscodeEncoder,
     nz,
 };
-use qubit_io::Output;
+use qubit_io::{
+    IntoInnerError,
+    Output,
+};
 
 use crate::{
-    IntoInnerError,
     LineEnding,
     TextWrite,
     io_error::{

@@ -17,11 +17,13 @@ use qubit_codec_text::{
     CharsetCodec,
     CharsetEncoder,
 };
-use qubit_io::AsyncOutput;
+use qubit_io::{
+    AsyncOutput,
+    IntoInnerError,
+};
 
 use crate::{
     CodingErrorPolicy,
-    IntoInnerError,
     LineEnding,
     adapters::charset_text_writer::create_encoder,
     io_error::{

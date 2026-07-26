@@ -11,11 +11,11 @@ use std::io;
 use qubit_io::{
     BoxOutput,
     BufferedOutput,
+    IntoInnerError,
     Output,
 };
 
 use crate::{
-    IntoInnerError,
     LineEnding,
     TextWrite,
 };

@@ -8,12 +8,14 @@
 use std::io;
 
 use qubit_codec_text::Utf8Codec;
-use qubit_io::Output;
+use qubit_io::{
+    IntoInnerError,
+    Output,
+};
 
 use crate::{
     CharsetTextWriter,
     CodingErrorPolicy,
-    IntoInnerError,
     LineEnding,
     TextWrite,
 };

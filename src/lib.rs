@@ -49,7 +49,6 @@ pub use ext::{
     CharsetWriteExt,
 };
 pub use line_ending::LineEnding;
-pub use qubit_io::IntoInnerError;
 pub use stream::{
     BufferedReader,
     BufferedWriter,
