@@ -7,7 +7,11 @@
 // =============================================================================
 // qubit-style: allow source-test-pair
 
-use std::io;
+use std::{
+    future::poll_fn,
+    io,
+    pin::Pin,
+};
 
 use qubit_codec::{
     TranscodeStatus,
@@ -18,7 +22,10 @@ use qubit_codec_text::{
     CharsetDecodePolicy,
     CharsetDecoder,
 };
-use qubit_io::AsyncInput;
+use qubit_io::{
+    AsyncBufferedInput,
+    AsyncInput,
+};
 
 use crate::CodingErrorPolicy;
 use crate::io_error::{
@@ -44,12 +51,9 @@ where
     I: AsyncInput<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
-    input: I,
+    input: AsyncBufferedInput<I>,
     decoder: CharsetDecoder<C>,
     policy: CodingErrorPolicy,
-    bytes: Vec<u8>,
-    byte_position: usize,
-    byte_limit: usize,
     chars: Vec<char>,
     char_position: usize,
     char_limit: usize,
@@ -108,12 +112,9 @@ where
         let decoder =
             CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
-            input,
+            input: AsyncBufferedInput::with_capacity(input, capacity),
             decoder,
             policy,
-            bytes: vec![0; capacity],
-            byte_position: 0,
-            byte_limit: 0,
             chars: vec!['\0'; capacity],
             char_position: 0,
             char_limit: 0,
@@ -131,7 +132,7 @@ where
     /// retained by this reader.
     #[must_use]
     pub const fn input(&self) -> &I {
-        &self.input
+        self.input.inner()
     }
 
     /// Returns a mutable reference to the asynchronous byte input.
@@ -143,7 +144,7 @@ where
     ///
     /// Returns the wrapped input.
     pub fn input_mut(&mut self) -> &mut I {
-        &mut self.input
+        self.input.inner_mut()
     }
 
     /// Consumes this reader and returns its asynchronous byte input.
@@ -154,7 +155,8 @@ where
     /// characters are discarded.
     #[must_use]
     pub fn into_input(self) -> I {
-        self.input
+        let (input, _) = self.input.into_parts();
+        input
     }
 
     /// Returns whether at least one decoded character is buffered.
@@ -173,32 +175,23 @@ where
     /// Returns the number of encoded bytes not yet consumed by the decoder.
     #[inline]
     fn unread_byte_count(&self) -> usize {
-        self.byte_limit - self.byte_position
-    }
-
-    /// Moves unread encoded bytes to the start of their storage.
-    fn compact_bytes(&mut self) {
-        if self.byte_position == 0 {
-            return;
-        }
-        self.bytes
-            .copy_within(self.byte_position..self.byte_limit, 0);
-        self.byte_limit -= self.byte_position;
-        self.byte_position = 0;
+        self.input.unread_len()
     }
 
     /// Ensures the encoded-byte storage can expose `required` unread bytes.
-    fn ensure_byte_capacity(&mut self, required: usize) {
-        if self.bytes.len() >= required {
-            return;
+    fn ensure_byte_capacity(&mut self, required: usize) -> io::Result<()> {
+        if self.input.capacity() >= required {
+            return Ok(());
         }
         let grown = self
-            .bytes
-            .len()
+            .input
+            .capacity()
             .saturating_mul(2)
             .max(required)
             .max(MIN_TEXT_BUFFER_CAPACITY);
-        self.bytes.resize(grown, 0);
+        self.input
+            .try_reserve_capacity(grown)
+            .map_err(|error| io::Error::new(io::ErrorKind::OutOfMemory, error))
     }
 
     /// Starts the decoder lifecycle before the first input operation.
@@ -229,29 +222,12 @@ where
     where
         I: Unpin,
     {
-        self.compact_bytes();
-        // Callers either cleared an empty window or grew the compacted window
-        // to the decoder's strictly larger input requirement.
-        debug_assert!(self.byte_limit < self.bytes.len());
-        loop {
-            let read = {
-                let input = &mut self.input;
-                let destination = &mut self.bytes[self.byte_limit..];
-                input.read_async(destination).await
-            };
-            match read {
-                Ok(0) => {
-                    self.eof = true;
-                    return Ok(());
-                }
-                Ok(read) => {
-                    self.byte_limit += read;
-                    return Ok(());
-                }
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) => return Err(error),
-            }
+        let read =
+            poll_fn(|cx| Pin::new(&mut self.input).poll_fill_more(cx)).await?;
+        if !read {
+            self.eof = true;
         }
+        Ok(())
     }
 
     /// Applies the configured policy to an incomplete encoded EOF tail.
@@ -262,7 +238,11 @@ where
                 "incomplete charset input at EOF",
             )),
             CodingErrorPolicy::Replace => {
-                self.byte_position = self.byte_limit;
+                let unread = self.input.unread_len();
+                // SAFETY: `unread` is the complete readable input window.
+                unsafe {
+                    self.input.consume(unread);
+                }
                 debug_assert!(!self.chars.is_empty());
                 self.chars[0] = CharsetDecodePolicy::DEFAULT_REPLACEMENT;
                 self.char_position = 0;
@@ -308,8 +288,6 @@ where
 
         loop {
             if self.unread_byte_count() == 0 {
-                self.byte_position = 0;
-                self.byte_limit = 0;
                 if self.eof {
                     return self.finish_decoder();
                 }
@@ -317,19 +295,17 @@ where
                 continue;
             }
 
-            let input_index = self.byte_position;
             let progress = self
                 .decoder
-                .transcode(
-                    &self.bytes[..self.byte_limit],
-                    input_index,
-                    self.chars.as_mut_slice(),
-                    0,
-                )
+                .transcode(self.input.unread(), 0, self.chars.as_mut_slice(), 0)
                 .map_err(decode_error_to_io)?;
             // `CharsetDecoder` constructs validated progress from the codec
             // engine. Invalid counts are rejected at that boundary.
-            self.byte_position += progress.read();
+            // SAFETY: The codec constructs validated progress from the
+            // currently supplied unread slice.
+            unsafe {
+                self.input.consume(progress.read());
+            }
             self.char_position = 0;
             self.char_limit = progress.written();
             if self.has_buffered_chars() {
@@ -342,8 +318,7 @@ where
                     "charset decoder without output must request more input",
                 );
             };
-            self.compact_bytes();
-            self.ensure_byte_capacity(required.get());
+            self.ensure_byte_capacity(required.get())?;
             self.read_more_async().await?;
             if self.eof && self.unread_byte_count() < required.get() {
                 return self.handle_incomplete_eof();
