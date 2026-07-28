@@ -7,7 +7,7 @@
 // =============================================================================
 // qubit-style: allow source-test-pair
 
-use std::{future::poll_fn, io, pin::Pin};
+use std::io;
 
 use qubit_codec::{TranscodeStatus, Transcoder};
 use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
@@ -187,7 +187,7 @@ where
     where
         I: Unpin,
     {
-        let read = poll_fn(|cx| Pin::new(&mut self.input).poll_fill_more(cx)).await?;
+        let read = self.input.fill_more_async().await?;
         if !read {
             self.eof = true;
         }
