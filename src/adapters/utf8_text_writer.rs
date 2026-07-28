@@ -8,17 +8,9 @@
 use std::io;
 
 use qubit_codec_text::Utf8Codec;
-use qubit_io::{
-    IntoInnerError,
-    Output,
-};
+use qubit_io::{Buffer, Output};
 
-use crate::{
-    CharsetTextWriter,
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-};
+use crate::{CharsetTextWriter, CodingErrorPolicy, LineEnding, TextWrite};
 
 /// Streaming UTF-8 text writer over a Qubit byte output.
 ///
@@ -50,11 +42,7 @@ where
     #[must_use]
     pub fn new(output: O) -> Self {
         Self {
-            writer: CharsetTextWriter::new(
-                output,
-                Utf8Codec,
-                CodingErrorPolicy::Strict,
-            ),
+            writer: CharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict),
         }
     }
 
@@ -129,40 +117,20 @@ where
         self.writer.finish()
     }
 
-    /// Finalizes output and returns the wrapped output recoverably.
+    /// Returns the wrapped byte output and every encoded byte still pending.
+    ///
+    /// This method performs no I/O and does not finish the UTF-8 encoder. Call
+    /// [`Self::finish`] first for normal completion; otherwise the returned
+    /// buffer contains encoded bytes that have not reached the returned output.
     ///
     /// # Returns
     ///
-    /// Returns the underlying output after pending bytes reach it.
-    ///
-    /// # Errors
-    ///
-    /// Returns the finish error together with this writer so callers can
-    /// repair a transient output failure and retry.
-    #[inline]
-    pub fn try_into_output(self) -> Result<O, IntoInnerError<Self>> {
-        match self.writer.try_into_output() {
-            Ok(output) => Ok(output),
-            Err(error) => {
-                let (error, writer) = error.into_parts();
-                Err(IntoInnerError::new(error, Self { writer }))
-            }
-        }
-    }
-
-    /// Finalizes output and returns the wrapped byte output.
-    ///
-    /// # Returns
-    ///
-    /// Returns the underlying output after pending bytes reach it.
-    ///
-    /// # Errors
-    ///
-    /// Returns the finalization error together with this writer so callers
-    /// can repair a transient output failure and retry.
-    #[inline]
-    pub fn into_output(self) -> Result<O, IntoInnerError<Self>> {
-        self.try_into_output()
+    /// Returns the wrapped output and pending encoded bytes in logical write
+    /// order.
+    #[must_use = "the returned output and pending buffer must be handled"]
+    #[inline(always)]
+    pub fn into_parts(self) -> (O, Buffer<u8>) {
+        self.writer.into_parts()
     }
 }
 

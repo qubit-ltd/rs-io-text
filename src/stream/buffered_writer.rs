@@ -8,25 +8,13 @@
 // qubit-style: allow coverage-cfg
 #[cfg(coverage)]
 use std::cell::Cell;
-use std::{
-    error::Error as StdError,
-    io,
-};
+use std::{error::Error as StdError, io};
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeEncodeOutput,
-    TranscodeEncoder,
-    nz,
-};
-use qubit_io::{
-    IntoInnerError,
-    Output,
-};
+use qubit_codec::{CapacityError, TranscodeEncodeOutput, TranscodeEncoder, nz};
+use qubit_io::{Buffer, Output};
 
 use crate::{
-    LineEnding,
-    TextWrite,
+    LineEnding, TextWrite,
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
         encode_error_to_io as shared_encode_error_to_io,
@@ -149,6 +137,24 @@ where
         self.line_ending
     }
 
+    /// Returns the wrapped byte writer and every encoded byte still pending.
+    ///
+    /// This method performs no I/O and does not finalize the encoder. Call
+    /// [`Self::finish`] first for normal completion; after a successful finish,
+    /// the returned buffer is empty. Calling this method before finishing
+    /// explicitly abandons encoder lifecycle output that has not yet been
+    /// emitted while transferring already encoded pending bytes to the caller.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte writer and pending encoded bytes in logical
+    /// write order.
+    #[must_use = "the returned inner writer and pending buffer must be handled"]
+    #[inline(always)]
+    pub fn into_parts(self) -> (W, Buffer<u8>) {
+        self.output.into_parts()
+    }
+
     /// Makes the next reset-capacity check fail in coverage builds.
     #[cfg(coverage)]
     #[doc(hidden)]
@@ -223,8 +229,7 @@ where
             reserve_result
         };
         reserve_result?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         assert!(
             available >= required,
             "insufficient reset capacity reserved in spare output buffer",
@@ -273,38 +278,6 @@ where
             self.finished = true;
         }
         self.output.flush()
-    }
-
-    /// Returns the wrapped byte writer after finishing, retaining failures.
-    ///
-    /// # Returns
-    ///
-    /// Returns the underlying byte writer after pending bytes reach it.
-    ///
-    /// # Errors
-    ///
-    /// Returns the finish error together with this writer so callers can
-    /// inspect pending state and retry a transient output failure.
-    pub fn try_into_inner(mut self) -> Result<W, IntoInnerError<Self>> {
-        if let Err(error) = self.finish() {
-            return Err(IntoInnerError::new(error, self));
-        }
-        let (inner, _) = self.output.into_parts();
-        Ok(inner)
-    }
-
-    /// Returns the wrapped byte writer after finishing and flushing.
-    ///
-    /// # Returns
-    ///
-    /// Returns the underlying byte writer after pending bytes reach it.
-    ///
-    /// # Errors
-    ///
-    /// Returns the finish error together with this writer so callers can
-    /// inspect pending state and retry a transient output failure.
-    pub fn into_inner(self) -> Result<W, IntoInnerError<Self>> {
-        self.try_into_inner()
     }
 }
 

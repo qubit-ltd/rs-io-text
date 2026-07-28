@@ -5,18 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    ErrorKind,
-    Write,
-};
+use std::io::{self, ErrorKind, Write};
 
 use qubit_io::Output;
-use qubit_io_text::{
-    LineEnding,
-    TextWrite,
-    Utf8TextWriter,
-};
+use qubit_io_text::{LineEnding, TextWrite, Utf8TextWriter};
 
 #[derive(Debug, Default)]
 struct OutputOnlyWriter {
@@ -60,8 +52,9 @@ fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
 
     writer.write_line("output中文")?;
     writer.finish()?;
-    let output = writer.into_output().map_err(|error| error.into_error())?;
+    let (output, pending) = writer.into_parts();
 
+    assert!(pending.is_empty());
     assert_eq!("output中文\n".as_bytes(), output.bytes.as_slice());
     Ok(())
 }
@@ -70,8 +63,7 @@ fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
 fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
-        let mut writer =
-            Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
+        let mut writer = Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
 
         writer.write_char('中')?;
         writer.write_chars(&['x', 'y'])?;
@@ -95,37 +87,35 @@ fn test_accessors_and_into_inner() -> std::io::Result<()> {
     writer.write_line("done")?;
     writer.finish()?;
 
-    let output = writer.into_output().map_err(|error| error.into_error())?;
+    let (output, pending) = writer.into_parts();
+    assert!(pending.is_empty());
     assert_eq!(b"prefix:done\n", output.as_slice());
     Ok(())
 }
 
 #[test]
-fn test_try_into_output_finishes_and_returns_output() -> std::io::Result<()> {
+fn test_finish_then_into_parts_returns_output() -> std::io::Result<()> {
     let mut writer = Utf8TextWriter::new(Vec::new());
     writer.write_str("recoverable")?;
 
-    let output = writer
-        .try_into_output()
-        .map_err(|error| error.into_error())?;
+    writer.finish()?;
+    let (output, pending) = writer.into_parts();
 
+    assert!(pending.is_empty());
     assert_eq!(b"recoverable", output.as_slice());
     Ok(())
 }
 
 #[test]
-fn test_into_output_returns_utf8_writer_after_failure() {
-    let writer = Utf8TextWriter::new(FailingWriter);
+fn test_finish_error_leaves_utf8_writer_available_for_retry() {
+    let mut writer = Utf8TextWriter::new(FailingWriter);
 
-    let error = match writer.into_output() {
-        Ok(_) => {
-            panic!("recoverable conversion should retain the UTF-8 writer")
-        }
-        Err(error) => error,
-    };
+    let error = writer
+        .finish()
+        .expect_err("finish should report write failure");
 
-    assert_eq!(ErrorKind::Other, error.error().kind());
-    let _ = error.writer().output();
+    assert_eq!(ErrorKind::Other, error.kind());
+    let _ = writer.output();
 }
 
 #[test]

@@ -376,7 +376,7 @@ fn test_buffered_reader_decodes_utf8_across_single_byte_refills()
 }
 
 #[test]
-fn test_buffered_reader_accessors_and_into_inner() -> std::io::Result<()> {
+fn test_buffered_reader_accessors() -> std::io::Result<()> {
     let decoder =
         CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut reader = BufferedReader::new(

@@ -7,22 +7,10 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodePolicy,
-    CharsetEncoder,
-};
-use qubit_io::{
-    IntoInnerError,
-    Output,
-};
+use qubit_codec_text::{CharsetCodec, CharsetEncodePolicy, CharsetEncoder};
+use qubit_io::{Buffer, Output};
 
-use crate::{
-    BufferedWriter,
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-};
+use crate::{BufferedWriter, CodingErrorPolicy, LineEnding, TextWrite};
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
@@ -96,11 +84,7 @@ where
     ) -> Self {
         let encoder = create_encoder(codec, policy);
         Self {
-            writer: BufferedWriter::with_capacity(
-                output,
-                encoder,
-                buffer_capacity,
-            ),
+            writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
         }
     }
 
@@ -125,7 +109,7 @@ where
     /// # Returns
     ///
     /// Returns the wrapped byte writer. Pending bytes may still be buffered.
-    #[must_use]
+    #[must_use = "the returned output and pending buffer must be handled"]
     #[inline(always)]
     pub const fn output(&self) -> &O {
         self.writer.inner()
@@ -157,40 +141,20 @@ where
         self.writer.finish()
     }
 
-    /// Returns the wrapped byte writer after finishing, retaining failures.
+    /// Returns the wrapped byte writer and every encoded byte still pending.
+    ///
+    /// This method performs no I/O and does not finish the encoder. Call
+    /// [`Self::finish`] first for normal completion; otherwise the returned
+    /// buffer contains encoded bytes that have not reached the returned output.
     ///
     /// # Returns
     ///
-    /// Returns the underlying byte writer after pending bytes reach it.
-    ///
-    /// # Errors
-    ///
-    /// Returns the finish error together with this writer so callers can
-    /// repair a transient output failure and retry.
-    #[inline]
-    pub fn try_into_output(self) -> Result<O, IntoInnerError<Self>> {
-        match self.writer.try_into_inner() {
-            Ok(output) => Ok(output),
-            Err(error) => {
-                let (error, writer) = error.into_parts();
-                Err(IntoInnerError::new(error, Self { writer }))
-            }
-        }
-    }
-
-    /// Returns the wrapped byte writer after finishing and flushing.
-    ///
-    /// # Returns
-    ///
-    /// Returns the underlying byte writer after pending bytes reach it.
-    ///
-    /// # Errors
-    ///
-    /// Returns the finish error together with this writer so callers can
-    /// repair a transient output failure and retry.
-    #[inline]
-    pub fn into_output(self) -> Result<O, IntoInnerError<Self>> {
-        self.try_into_output()
+    /// Returns the wrapped byte writer and pending encoded bytes in logical
+    /// write order.
+    #[must_use = "the returned output and pending buffer must be handled"]
+    #[inline(always)]
+    pub fn into_parts(self) -> (O, Buffer<u8>) {
+        self.writer.into_parts()
     }
 }
 
@@ -247,21 +211,15 @@ where
 ///
 /// Panics only when replacement mode cannot build a replacement encoder for
 /// the supplied codec, matching [`CharsetEncoder::new`] semantics.
-pub(crate) fn create_encoder<C>(
-    codec: C,
-    policy: CodingErrorPolicy,
-) -> CharsetEncoder<C>
+pub(crate) fn create_encoder<C>(codec: C, policy: CodingErrorPolicy) -> CharsetEncoder<C>
 where
     C: CharsetCodec<Unit = u8>,
 {
     match policy {
-        CodingErrorPolicy::Strict => CharsetEncoder::with_policy(
-            codec,
-            CharsetEncodePolicy::report(),
-        )
-        .expect(
-            "reporting encode policy does not require an encodable replacement",
-        ),
+        CodingErrorPolicy::Strict => {
+            CharsetEncoder::with_policy(codec, CharsetEncodePolicy::report())
+                .expect("reporting encode policy does not require an encodable replacement")
+        }
         CodingErrorPolicy::Replace => CharsetEncoder::new(codec),
     }
 }

@@ -10,12 +10,7 @@ use std::io;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::Input;
 
-use crate::{
-    CharsetTextReader,
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
-};
+use crate::{CharsetTextReader, CodingErrorPolicy, TextLineRead, TextRead};
 
 /// Streaming UTF-8 text reader over a Qubit byte input.
 ///
@@ -47,11 +42,7 @@ where
     #[must_use]
     pub fn new(input: I) -> Self {
         Self {
-            reader: CharsetTextReader::new(
-                input,
-                Utf8Codec,
-                CodingErrorPolicy::Strict,
-            ),
+            reader: CharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict),
         }
     }
 
@@ -103,20 +94,6 @@ where
     pub fn input_mut(&mut self) -> &mut I {
         self.reader.input_mut()
     }
-
-    /// Consumes this reader and returns the wrapped byte input.
-    ///
-    /// Any encoded bytes or decoded characters retained by this reader are
-    /// discarded.
-    ///
-    /// # Returns
-    ///
-    /// Returns the underlying byte input.
-    #[inline]
-    #[must_use]
-    pub fn into_input(self) -> I {
-        self.reader.into_input()
-    }
 }
 
 impl<I> TextRead for Utf8TextReader<I>
@@ -131,19 +108,12 @@ where
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }

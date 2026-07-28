@@ -7,31 +7,14 @@
 // =============================================================================
 // qubit-style: allow source-test-pair
 
-use std::{
-    future::poll_fn,
-    io,
-    pin::Pin,
-};
+use std::{future::poll_fn, io, pin::Pin};
 
-use qubit_codec::{
-    TranscodeStatus,
-    Transcoder,
-};
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-};
-use qubit_io::{
-    AsyncBufferedInput,
-    AsyncInput,
-};
+use qubit_codec::{TranscodeStatus, Transcoder};
+use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
+use qubit_io::{AsyncBufferedInput, AsyncInput};
 
 use crate::CodingErrorPolicy;
-use crate::io_error::{
-    capacity_error_to_io,
-    decode_error_to_io,
-};
+use crate::io_error::{capacity_error_to_io, decode_error_to_io};
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -80,12 +63,7 @@ where
     /// Returns a reader whose construction performs no input operation.
     #[must_use]
     pub fn new(input: I, codec: C, policy: CodingErrorPolicy) -> Self {
-        Self::new_with_buffer_capacity(
-            input,
-            codec,
-            policy,
-            DEFAULT_BUFFER_CAPACITY,
-        )
+        Self::new_with_buffer_capacity(input, codec, policy, DEFAULT_BUFFER_CAPACITY)
     }
 
     /// Creates an asynchronous charset reader with a requested buffer size.
@@ -109,8 +87,7 @@ where
         buffer_capacity: usize,
     ) -> Self {
         let capacity = buffer_capacity.max(MIN_TEXT_BUFFER_CAPACITY);
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
             input: AsyncBufferedInput::with_capacity(input, capacity),
             decoder,
@@ -145,18 +122,6 @@ where
     /// Returns the wrapped input.
     pub fn input_mut(&mut self) -> &mut I {
         self.input.inner_mut()
-    }
-
-    /// Consumes this reader and returns its asynchronous byte input.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped input. Buffered encoded bytes and decoded
-    /// characters are discarded.
-    #[must_use]
-    pub fn into_input(self) -> I {
-        let (input, _) = self.input.into_parts();
-        input
     }
 
     /// Returns whether at least one decoded character is buffered.
@@ -222,8 +187,7 @@ where
     where
         I: Unpin,
     {
-        let read =
-            poll_fn(|cx| Pin::new(&mut self.input).poll_fill_more(cx)).await?;
+        let read = poll_fn(|cx| Pin::new(&mut self.input).poll_fill_more(cx)).await?;
         if !read {
             self.eof = true;
         }
@@ -312,11 +276,8 @@ where
                 return Ok(true);
             }
 
-            let TranscodeStatus::NeedInput { required, .. } = progress.status()
-            else {
-                unreachable!(
-                    "charset decoder without output must request more input",
-                );
+            let TranscodeStatus::NeedInput { required, .. } = progress.status() else {
+                unreachable!("charset decoder without output must request more input",);
             };
             self.ensure_byte_capacity(required.get())?;
             self.read_more_async().await?;
@@ -394,10 +355,7 @@ where
     /// # Errors
     ///
     /// Returns input and decoding errors.
-    pub async fn read_to_string_async(
-        &mut self,
-        output: &mut String,
-    ) -> io::Result<usize> {
+    pub async fn read_to_string_async(&mut self, output: &mut String) -> io::Result<usize> {
         let mut count = 0;
         while self.fill_chars_async().await? {
             let chars = &self.chars[self.char_position..self.char_limit];
@@ -422,10 +380,7 @@ where
     /// # Errors
     ///
     /// Returns input and decoding errors.
-    pub async fn read_line_async(
-        &mut self,
-        output: &mut String,
-    ) -> io::Result<bool> {
+    pub async fn read_line_async(&mut self, output: &mut String) -> io::Result<bool> {
         let mut read = false;
         while self.fill_chars_async().await? {
             let chars = &self.chars[self.char_position..self.char_limit];

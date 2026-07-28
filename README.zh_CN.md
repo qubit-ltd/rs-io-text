@@ -78,15 +78,16 @@ where
         CodingErrorPolicy::Strict,
     );
     writer.write_line_async("hello").await?;
-    writer.into_output_async().await
+    writer.finish_async().await?;
+    let (output, pending) = writer.into_parts();
+    debug_assert!(pending.is_empty());
+    Ok(output)
 }
 ```
 
 在依赖 codec trailer 或底层 flush 结果前，必须调用 `finish()` 或
-`finish_async()`。同步的 `into_output()`、`into_inner()` 等消费型转换会在失败时
-通过 `IntoInnerError` 保留 writer，其 `try_` 形式是语义相同的兼容别名。异步
-writer 在转换失败后需要取回 writer 并重试时，应使用
-`try_into_output_async()`。
+`finish_async()`。finish 失败时 writer 仍由调用方持有，可检查或重试。finish 成功
+后，使用 `into_parts()` 可在不执行额外 I/O 的情况下取回 owned output。
 
 ## API 地图
 

@@ -195,17 +195,19 @@ where
     writer.write_line_async("header").await?;
     writer.write_str_async("body").await?;
     writer.finish_async().await?;
-    writer.into_output_async().await
+    let (output, pending) = writer.into_parts();
+    debug_assert!(pending.is_empty());
+    Ok(output)
 }
 ```
 
 Writer 还提供 `write_char_async`、`write_chars_async` 与 `flush_async`。Flush
 只排空编码字节，不结束 encoder；finish 会生成 codec 自己的尾部输出、排空字节并
-刷新底层。失败的 `finish_async()` 会保留 pending 状态，可再次调用重试；消费型
-转换失败时，`try_into_output_async()` 也会通过 `IntoInnerError` 保留完整 writer。
-对于同步的 `BufferedWriter`、`OutputTextWriter`、`CharsetTextWriter` 和
-`Utf8TextWriter`，默认的 `into_inner()` 或 `into_output()` 已经返回
-`IntoInnerError<Self>` 并保留 pending 状态；其 `try_` 方法是语义相同的兼容别名。
+刷新底层。失败的 `finish_async()` 会保留 pending 状态，可再次调用重试。`finish` 或
+`finish_async` 成功后，text writer 可通过 `into_parts()` 在不执行 I/O 的情况下取回
+owned output 与仍 pending 的编码字节。未完成时调用 `into_parts()` 会显式放弃尚未
+发出的 encoder lifecycle 输出。`OutputTextWriter` 是薄 adapter，其 `into_inner()`
+同样不会隐式 flush。
 
 挂起和取消不会丢失 pending 编码字节。但取消高层写操作时，文本前缀可能已经生效；
 除非外层协议允许重复前缀，否则不要盲目重试整个字符串。

@@ -6,21 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    Error,
-    ErrorKind,
-};
+use std::io::{Error, ErrorKind};
 
-use qubit_io::{
-    BufferedOutput,
-    Output,
-};
-use qubit_io_text::{
-    LineEnding,
-    OutputTextWriter,
-    StringCharOutput,
-    TextWrite,
-};
+use qubit_io::{BufferedOutput, Output};
+use qubit_io_text::{LineEnding, OutputTextWriter, StringCharOutput, TextWrite};
 
 #[derive(Debug)]
 struct FailingCharOutput;
@@ -55,8 +44,7 @@ fn test_write_text_to_char_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
         let output = StringCharOutput::new(&mut text);
-        let mut writer =
-            OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
+        let mut writer = OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
 
         writer.write_char('中')?;
         writer.write_chars(&['a', '🙂'])?;
@@ -108,8 +96,7 @@ fn test_new_accepts_already_buffered_output() -> std::io::Result<()> {
 fn test_from_boxed_wraps_unbuffered_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
-        let output: Box<dyn Output<Item = char> + '_> =
-            Box::new(StringCharOutput::new(&mut text));
+        let output: Box<dyn Output<Item = char> + '_> = Box::new(StringCharOutput::new(&mut text));
         let mut writer = OutputTextWriter::from_boxed(output);
 
         assert!(writer.get_ref().is_buffered());
@@ -127,12 +114,12 @@ fn test_from_boxed_keeps_buffered_output() -> std::io::Result<()> {
     {
         let output: Box<dyn Output<Item = char> + '_> =
             Box::new(BufferedOutput::new(StringCharOutput::new(&mut text)));
-        let mut writer = OutputTextWriter::from_boxed(output)
-            .with_line_ending(LineEnding::Cr);
+        let mut writer = OutputTextWriter::from_boxed(output).with_line_ending(LineEnding::Cr);
 
         assert!(writer.get_ref().is_buffered());
         writer.write_line("box")?;
-        let output = writer.into_inner().map_err(|error| error.into_error())?;
+        writer.flush()?;
+        let output = writer.into_inner();
         drop(output);
     }
 
@@ -141,51 +128,26 @@ fn test_from_boxed_keeps_buffered_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_into_inner_propagates_flush_error() {
+fn test_into_inner_does_not_flush_wrapped_output() {
     let mut writer = OutputTextWriter::new(FailingCharOutput);
 
     writer
         .write_str("pending")
         .expect("buffered write may succeed before flush");
-    let error = match writer.into_inner() {
-        Ok(_) => panic!("into_inner should propagate flush error"),
-        Err(error) => error,
-    };
-    assert_eq!(ErrorKind::Other, error.error().kind());
-    assert!(error.writer().get_ref().is_buffered());
-    let _writer = error.into_writer();
+    let output = writer.into_inner();
+    assert!(output.is_buffered());
 }
 
 #[test]
-fn test_try_into_inner_returns_writer_after_flush_error() {
-    let mut writer = OutputTextWriter::new(FailingCharOutput);
-    writer
-        .write_str("pending")
-        .expect("buffered write may succeed before flush");
-
-    let mut error = match writer.try_into_inner() {
-        Ok(_) => panic!("recoverable conversion should return the writer"),
-        Err(error) => error,
-    };
-
-    assert_eq!(ErrorKind::Other, error.error().kind());
-    assert!(error.writer().get_ref().is_buffered());
-    assert!(error.writer_mut().get_mut().is_buffered());
-    assert!(error.to_string().contains("write failed"));
-    assert!(std::error::Error::source(&error).is_some());
-    let mut writer = error.into_writer();
-    assert!(writer.get_mut().is_buffered());
-}
-
-#[test]
-fn test_into_inner_flushes_wrapped_output() -> std::io::Result<()> {
+fn test_flush_then_into_inner_flushes_wrapped_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
         let output = StringCharOutput::new(&mut text);
         let mut writer = OutputTextWriter::new(output);
 
         writer.write_str("value")?;
-        let output = writer.into_inner().map_err(|error| error.into_error())?;
+        writer.flush()?;
+        let output = writer.into_inner();
         drop(output);
     }
 

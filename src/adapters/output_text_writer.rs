@@ -8,17 +8,9 @@
 use std::fmt;
 use std::io;
 
-use qubit_io::{
-    BoxOutput,
-    BufferedOutput,
-    IntoInnerError,
-    Output,
-};
+use qubit_io::{BoxOutput, BufferedOutput, Output};
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, TextWrite};
 
 /// Default character chunk capacity for string writes.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -108,35 +100,18 @@ impl<'a> OutputTextWriter<'a> {
         self.output.as_mut()
     }
 
-    /// Flushes this writer and returns the wrapped output recoverably.
+    /// Returns the wrapped output without flushing it.
+    ///
+    /// Call [`TextWrite::flush`] before this method when pending characters
+    /// must reach the returned output before ownership is transferred.
     ///
     /// # Returns
-    /// The underlying boxed character output.
     ///
-    /// # Errors
-    /// Returns the flush error together with this writer so the operation can
-    /// be retried after a transient failure.
-    pub fn try_into_inner(
-        mut self,
-    ) -> Result<Box<dyn Output<Item = char> + 'a>, IntoInnerError<Self>> {
-        if let Err(error) = self.output.flush() {
-            return Err(IntoInnerError::new(error, self));
-        }
-        Ok(self.output)
-    }
-
-    /// Flushes this writer and returns the wrapped output recoverably.
-    ///
-    /// # Returns
-    /// The underlying boxed character output.
-    ///
-    /// # Errors
-    /// Returns the flush error together with this writer so the operation can
-    /// be retried after a transient failure.
-    pub fn into_inner(
-        self,
-    ) -> Result<Box<dyn Output<Item = char> + 'a>, IntoInnerError<Self>> {
-        self.try_into_inner()
+    /// Returns the underlying boxed character output.
+    #[must_use]
+    #[inline(always)]
+    pub fn into_inner(self) -> Box<dyn Output<Item = char> + 'a> {
+        self.output
     }
 }
 

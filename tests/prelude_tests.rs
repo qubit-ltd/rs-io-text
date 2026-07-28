@@ -8,28 +8,13 @@
 
 use std::convert::Infallible;
 
-use qubit_io::IntoInnerError;
 use qubit_io_text::prelude::{
-    CharsetReadExt,
-    CharsetWriteExt,
-    InputTextReader,
-    OutputTextWriter,
-    StrCharInput,
-    StrTextReader,
-    StringCharInput,
-    StringCharOutput,
-    TextRead,
-    TextWrite,
+    CharsetReadExt, CharsetWriteExt, InputTextReader, OutputTextWriter, StrCharInput,
+    StrTextReader, StringCharInput, StringCharOutput, TextRead, TextWrite,
 };
 
 #[test]
 fn test_prelude_exports_text_traits_and_adapters() -> Result<(), Infallible> {
-    let recoverable_error: Option<IntoInnerError<()>> = None;
-    assert!(recoverable_error.is_none());
-    let recoverable_error: IntoInnerError<()> =
-        qubit_io::IntoInnerError::new(std::io::Error::other("recoverable"), ());
-    assert_eq!("recoverable", recoverable_error.to_string());
-
     let mut reader = StrTextReader::new("text");
     let mut output = String::new();
 
@@ -63,24 +48,17 @@ fn test_prelude_exports_char_io_adapters() -> std::io::Result<()> {
 #[test]
 fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
     use qubit_codec_text::{
-        AsciiCodec,
-        CharsetDecodePolicy,
-        CharsetDecoder,
-        CharsetEncodePolicy,
-        CharsetEncoder,
+        AsciiCodec, CharsetDecodePolicy, CharsetDecoder, CharsetEncodePolicy, CharsetEncoder,
         Utf8Codec,
     };
     use qubit_io_text::prelude::{
-        BufferedReader,
-        BufferedWriter,
-        CharsetStringDecoder,
-        CharsetStringEncoder,
+        BufferedReader, BufferedWriter, CharsetStringDecoder, CharsetStringEncoder,
         CodingErrorPolicy,
     };
     use std::io::Cursor;
 
-    let mut reader = Cursor::new(b"text".to_vec())
-        .charset_text_reader(Utf8Codec, CodingErrorPolicy::Strict);
+    let mut reader =
+        Cursor::new(b"text".to_vec()).charset_text_reader(Utf8Codec, CodingErrorPolicy::Strict);
     let mut text = String::new();
     reader.read_to_string(&mut text)?;
     assert_eq!("text", text);
@@ -99,8 +77,7 @@ fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
         .expect("prelude string decoder should decode UTF-8");
     assert_eq!("D", decoded);
 
-    let decoder =
-        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut reader = BufferedReader::new(
         Cursor::new(b"B".to_vec()),
         decoder,
@@ -108,12 +85,13 @@ fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
     );
     assert_eq!(Some('B'), reader.read_char()?);
 
-    let encoder =
-        CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
-            .expect("UTF-8 strict encoder should be constructible");
+    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+        .expect("UTF-8 strict encoder should be constructible");
     let mut writer = BufferedWriter::new(Vec::new(), encoder);
     writer.write_str("C")?;
-    let output = writer.into_inner().map_err(|error| error.into_error())?;
+    writer.finish()?;
+    let (output, pending) = writer.into_parts();
+    assert!(pending.is_empty());
     assert_eq!(b"C", output.as_slice());
     Ok(())
 }

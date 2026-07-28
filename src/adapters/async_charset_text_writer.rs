@@ -9,27 +9,14 @@
 
 use std::io;
 
-use qubit_codec::{
-    TranscodeStatus,
-    Transcoder,
-};
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncoder,
-};
-use qubit_io::{
-    AsyncOutput,
-    IntoInnerError,
-};
+use qubit_codec::{TranscodeStatus, Transcoder};
+use qubit_codec_text::{CharsetCodec, CharsetEncoder};
+use qubit_io::AsyncOutput;
 
 use crate::{
-    CodingErrorPolicy,
-    LineEnding,
+    CodingErrorPolicy, LineEnding,
     adapters::charset_text_writer::create_encoder,
-    io_error::{
-        capacity_error_to_io,
-        encode_error_to_io,
-    },
+    io_error::{capacity_error_to_io, encode_error_to_io},
 };
 
 /// Default encoded-byte capacity used by asynchronous charset writers.
@@ -84,12 +71,7 @@ where
     /// replacement character.
     #[must_use]
     pub fn new(output: O, codec: C, policy: CodingErrorPolicy) -> Self {
-        Self::new_with_buffer_capacity(
-            output,
-            codec,
-            policy,
-            DEFAULT_BUFFER_CAPACITY,
-        )
+        Self::new_with_buffer_capacity(output, codec, policy, DEFAULT_BUFFER_CAPACITY)
     }
 
     /// Creates an asynchronous charset writer with a requested buffer size.
@@ -179,6 +161,26 @@ where
         self.line_ending
     }
 
+    /// Returns the wrapped output and every encoded byte still pending.
+    ///
+    /// This method performs no asynchronous I/O and does not finish the
+    /// encoder. Call [`Self::finish_async`] first for normal completion; after
+    /// a successful finish, the returned byte vector is empty. Calling this
+    /// method first explicitly abandons encoder lifecycle output that has not
+    /// been emitted while transferring already encoded bytes to the caller.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped output and pending bytes in logical write order.
+    #[must_use = "the returned output and pending bytes must be handled"]
+    pub fn into_parts(mut self) -> (O, Vec<u8>) {
+        let pending_start = self.byte_position;
+        let pending_end = self.byte_limit;
+        self.bytes.copy_within(pending_start..pending_end, 0);
+        self.bytes.truncate(pending_end - pending_start);
+        (self.output, self.bytes)
+    }
+
     /// Returns an error when encoding has already been finished.
     fn ensure_open(&self) -> io::Result<()> {
         if self.finished {
@@ -262,9 +264,7 @@ where
             self.byte_limit = progress.written();
             let required = match progress.status() {
                 TranscodeStatus::Complete => None,
-                TranscodeStatus::NeedOutput { required, .. } => {
-                    Some(required.get())
-                }
+                TranscodeStatus::NeedOutput { required, .. } => Some(required.get()),
                 TranscodeStatus::NeedInput { .. } => {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -304,10 +304,7 @@ where
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
     /// writer has been finished.
-    pub async fn write_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> io::Result<()> {
+    pub async fn write_chars_async(&mut self, chars: &[char]) -> io::Result<()> {
         self.ensure_open()?;
         if chars.is_empty() {
             return Ok(());
@@ -402,43 +399,5 @@ where
         }
         self.drain_pending_async().await?;
         self.output.flush_async().await
-    }
-
-    /// Finishes this writer and returns its output recoverably.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped output after all encoded bytes are accepted and the
-    /// output flush succeeds.
-    ///
-    /// # Errors
-    ///
-    /// Returns the finish error together with this writer so callers can
-    /// repair a transient asynchronous output failure and retry.
-    pub async fn try_into_output_async(
-        mut self,
-    ) -> Result<O, IntoInnerError<Self>> {
-        if let Err(error) = self.finish_async().await {
-            return Err(IntoInnerError::new(error, self));
-        }
-        Ok(self.output)
-    }
-
-    /// Finishes this writer and returns its asynchronous byte output.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped output after all encoded bytes are accepted and the
-    /// output flush succeeds.
-    ///
-    /// # Errors
-    ///
-    /// Returns encoder finalization or output errors. Because this method
-    /// consumes the writer, an error also consumes access to its retained
-    /// pending state; use [`Self::finish_async`] first when retry is required.
-    pub async fn into_output_async(self) -> io::Result<O> {
-        self.try_into_output_async()
-            .await
-            .map_err(IntoInnerError::into_error)
     }
 }

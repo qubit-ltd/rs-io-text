@@ -197,7 +197,9 @@ where
     writer.write_line_async("header").await?;
     writer.write_str_async("body").await?;
     writer.finish_async().await?;
-    writer.into_output_async().await
+    let (output, pending) = writer.into_parts();
+    debug_assert!(pending.is_empty());
+    Ok(output)
 }
 ```
 
@@ -205,12 +207,11 @@ The writer also provides `write_char_async`, `write_chars_async`, and
 `flush_async`. Flushing drains encoded bytes but does not finish the encoder.
 Finishing emits codec-owned trailing output, drains it, and flushes the
 underlying output. A failed `finish_async()` retains pending state and can be
-retried. `try_into_output_async()` also retains the complete writer inside
-`IntoInnerError` when a consuming conversion fails. For the synchronous
-`BufferedWriter`, `OutputTextWriter`, `CharsetTextWriter`, and
-`Utf8TextWriter`, the default `into_inner()` or `into_output()` conversion
-already returns `IntoInnerError<Self>` and retains pending state. Their
-`try_` methods are compatibility aliases with the same recoverable semantics.
+retried. After a successful `finish` or `finish_async`, text writers expose
+`into_parts()` to recover the owned output and any encoded bytes still pending
+without performing I/O. Calling `into_parts()` before finishing explicitly
+abandons encoder lifecycle output that has not yet been emitted. `OutputTextWriter`
+is a thin adapter: its `into_inner()` also performs no implicit flush.
 
 Pending encoded bytes survive suspension and cancellation. However, a cancelled
 high-level write may already have applied a text prefix. Do not retry the whole

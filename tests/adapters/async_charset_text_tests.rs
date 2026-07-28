@@ -11,35 +11,18 @@ use std::{
     io,
     num::NonZeroUsize,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
+    task::{Context, Poll, Waker},
 };
 
-use qubit_codec::{
-    Codec,
-    DecodeFailure,
-};
+use qubit_codec::{Codec, DecodeFailure};
 use qubit_codec_text::Utf8Codec;
 use qubit_codec_text::{
-    Charset,
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodeErrorKind,
-    CharsetEncodeError,
+    Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind, CharsetEncodeError,
     CharsetEncodeErrorKind,
 };
-use qubit_io::{
-    AsyncInput,
-    AsyncOutput,
-};
+use qubit_io::{AsyncInput, AsyncOutput};
 use qubit_io_text::{
-    AsyncCharsetTextReader,
-    AsyncCharsetTextWriter,
-    CodingErrorPolicy,
-    LineEnding,
+    AsyncCharsetTextReader, AsyncCharsetTextWriter, CodingErrorPolicy, LineEnding,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -216,10 +199,7 @@ impl AsyncInput for ChunkedAsyncInput {
         count: usize,
     ) -> Poll<io::Result<usize>> {
         if let Some(kind) = self.error.take() {
-            return Poll::Ready(Err(io::Error::new(
-                kind,
-                "scripted input failure",
-            )));
+            return Poll::Ready(Err(io::Error::new(kind, "scripted input failure")));
         }
         if self.pending {
             self.pending = false;
@@ -287,10 +267,7 @@ impl AsyncOutput for ChunkedAsyncOutput {
         count: usize,
     ) -> Poll<io::Result<usize>> {
         if let Some(kind) = self.write_error.take() {
-            return Poll::Ready(Err(io::Error::new(
-                kind,
-                "scripted output failure",
-            )));
+            return Poll::Ready(Err(io::Error::new(kind, "scripted output failure")));
         }
         if self.write_zero {
             self.write_zero = false;
@@ -307,15 +284,9 @@ impl AsyncOutput for ChunkedAsyncOutput {
         Poll::Ready(Ok(written))
     }
 
-    fn poll_flush(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         if let Some(kind) = self.flush_error.take() {
-            return Poll::Ready(Err(io::Error::new(
-                kind,
-                "scripted flush failure",
-            )));
+            return Poll::Ready(Err(io::Error::new(kind, "scripted flush failure")));
         }
         self.flushed = true;
         Poll::Ready(Ok(()))
@@ -341,10 +312,8 @@ where
 }
 
 #[test]
-fn async_charset_reader_decodes_across_pending_and_byte_boundaries()
--> io::Result<()> {
-    let input =
-        ChunkedAsyncInput::new("中🙂\nnext".as_bytes().to_vec(), 1, true);
+fn async_charset_reader_decodes_across_pending_and_byte_boundaries() -> io::Result<()> {
+    let input = ChunkedAsyncInput::new("中🙂\nnext".as_bytes().to_vec(), 1, true);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         input,
         Utf8Codec,
@@ -364,8 +333,7 @@ fn async_charset_reader_decodes_across_pending_and_byte_boundaries()
 }
 
 #[test]
-fn async_charset_reader_retains_partial_character_when_future_is_cancelled()
--> io::Result<()> {
+fn async_charset_reader_retains_partial_character_when_future_is_cancelled() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("中".as_bytes().to_vec(), 1, false);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         input,
@@ -387,22 +355,14 @@ fn async_charset_reader_retains_partial_character_when_future_is_cancelled()
 #[test]
 fn async_charset_reader_applies_incomplete_eof_policy() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(vec![0xE4, 0xB8], 1, true);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Replace,
-    );
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Replace);
     let mut text = String::new();
 
     assert_eq!(1, complete(reader.read_to_string_async(&mut text))?);
     assert_eq!("\u{FFFD}", text);
 
     let input = ChunkedAsyncInput::new(vec![0xE4, 0xB8], 1, true);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
     let error = complete(reader.read_char_async())
         .expect_err("strict mode must reject an incomplete EOF tail");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
@@ -410,14 +370,9 @@ fn async_charset_reader_applies_incomplete_eof_policy() -> io::Result<()> {
 }
 
 #[test]
-fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state()
--> io::Result<()> {
+fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"ab".to_vec(), 2, false);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
     let mut chars = Vec::new();
 
     assert_eq!(0, reader.input().position);
@@ -429,14 +384,12 @@ fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state()
     assert_eq!(['a', 'b'], chars.as_slice());
     assert_eq!(None, complete(reader.read_char_async())?);
 
-    let input = reader.into_input();
-    assert_eq!(2, input.position);
+    assert_eq!(2, reader.input().position);
     Ok(())
 }
 
 #[test]
-fn async_charset_reader_compacts_partial_tail_across_pending_reads()
--> io::Result<()> {
+fn async_charset_reader_compacts_partial_tail_across_pending_reads() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 3, true);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         input,
@@ -453,66 +406,42 @@ fn async_charset_reader_compacts_partial_tail_across_pending_reads()
 
 #[test]
 fn async_charset_reader_propagates_input_and_decode_errors() {
-    let input = ChunkedAsyncInput::new(Vec::new(), 1, false)
-        .with_error(io::ErrorKind::BrokenPipe);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
-    let error = complete(reader.read_char_async())
-        .expect_err("scripted input failure should propagate");
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false).with_error(io::ErrorKind::BrokenPipe);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
+    let error =
+        complete(reader.read_char_async()).expect_err("scripted input failure should propagate");
     assert_eq!(io::ErrorKind::BrokenPipe, error.kind());
 
     let input = ChunkedAsyncInput::new(vec![0xFF], 1, false);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
-    let error = complete(reader.read_char_async())
-        .expect_err("malformed UTF-8 should propagate");
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
+    let error = complete(reader.read_char_async()).expect_err("malformed UTF-8 should propagate");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
 
-    let input = ChunkedAsyncInput::new(Vec::new(), 1, false)
-        .with_error(io::ErrorKind::ConnectionReset);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let input =
+        ChunkedAsyncInput::new(Vec::new(), 1, false).with_error(io::ErrorKind::ConnectionReset);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
     let mut chars = Vec::new();
     let error = complete(reader.read_chars_async(&mut chars, 1))
         .expect_err("bulk read failure should propagate");
     assert_eq!(io::ErrorKind::ConnectionReset, error.kind());
 
-    let input = ChunkedAsyncInput::new(Vec::new(), 1, false)
-        .with_error(io::ErrorKind::ConnectionAborted);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let input =
+        ChunkedAsyncInput::new(Vec::new(), 1, false).with_error(io::ErrorKind::ConnectionAborted);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
     let mut text = String::new();
     let error = complete(reader.read_to_string_async(&mut text))
         .expect_err("string read failure should propagate");
     assert_eq!(io::ErrorKind::ConnectionAborted, error.kind());
 
-    let input = ChunkedAsyncInput::new(Vec::new(), 1, false)
-        .with_error(io::ErrorKind::TimedOut);
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false).with_error(io::ErrorKind::TimedOut);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
     let error = complete(reader.read_line_async(&mut text))
         .expect_err("line read failure should propagate");
     assert_eq!(io::ErrorKind::TimedOut, error.kind());
 }
 
 #[test]
-fn async_charset_reader_grows_lifecycle_and_incomplete_buffers()
--> io::Result<()> {
+fn async_charset_reader_grows_lifecycle_and_incomplete_buffers() -> io::Result<()> {
     let mut encoded = vec![0xF0];
     encoded.extend_from_slice(&[0; 7]);
     let input = ChunkedAsyncInput::new(encoded, 4, false);
@@ -538,8 +467,8 @@ fn async_charset_reader_propagates_lifecycle_errors() -> io::Result<()> {
         ScriptedCodec::new(ScriptedCodecMode::DecodeResetError),
         CodingErrorPolicy::Strict,
     );
-    let error = complete(reader.read_char_async())
-        .expect_err("decoder reset error should propagate");
+    let error =
+        complete(reader.read_char_async()).expect_err("decoder reset error should propagate");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
 
     let input = ChunkedAsyncInput::new(Vec::new(), 4, false);
@@ -549,15 +478,14 @@ fn async_charset_reader_propagates_lifecycle_errors() -> io::Result<()> {
         CodingErrorPolicy::Strict,
     );
     assert_eq!(Some('^'), complete(reader.read_char_async())?);
-    let error = complete(reader.read_char_async())
-        .expect_err("decoder finish error should propagate");
+    let error =
+        complete(reader.read_char_async()).expect_err("decoder finish error should propagate");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
     Ok(())
 }
 
 #[test]
-fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()>
-{
+fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(2, true);
     let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
         output,
@@ -570,22 +498,19 @@ fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()
     complete(writer.write_char_async('A'))?;
     complete(writer.write_chars_async(&['中', '🙂']))?;
     complete(writer.write_line_async("tail"))?;
-    let output = complete(writer.into_output_async())?;
+    complete(writer.finish_async())?;
+    let (output, pending) = writer.into_parts();
 
+    assert!(pending.is_empty());
     assert_eq!("A中🙂tail\r\n".as_bytes(), output.bytes.as_slice());
     assert!(output.flushed);
     Ok(())
 }
 
 #[test]
-fn async_charset_writer_retains_pending_bytes_when_future_is_cancelled()
--> io::Result<()> {
+fn async_charset_writer_retains_pending_bytes_when_future_is_cancelled() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(2, false);
-    let mut writer = AsyncCharsetTextWriter::new(
-        output,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict);
     let mut context = test_context();
 
     let mut future = Box::pin(writer.write_str_async("cancel-safe"));
@@ -593,21 +518,17 @@ fn async_charset_writer_retains_pending_bytes_when_future_is_cancelled()
     drop(future);
 
     complete(writer.finish_async())?;
-    let output = complete(writer.into_output_async())?;
+    let (output, pending) = writer.into_parts();
+    assert!(pending.is_empty());
     assert_eq!(b"cancel-safe", output.bytes.as_slice());
     Ok(())
 }
 
 #[test]
-fn async_charset_writer_accessors_empty_chunks_and_finished_state()
--> io::Result<()> {
+fn async_charset_writer_accessors_empty_chunks_and_finished_state() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(4, false);
-    let mut writer = AsyncCharsetTextWriter::new(
-        output,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    )
-    .with_line_ending(LineEnding::Cr);
+    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict)
+        .with_line_ending(LineEnding::Cr);
 
     assert_eq!(LineEnding::Cr, writer.configured_line_ending());
     assert!(writer.output().bytes.is_empty());
@@ -626,15 +547,14 @@ fn async_charset_writer_accessors_empty_chunks_and_finished_state()
     let error = complete(writer.write_chars_async(&['x']))
         .expect_err("character slice write after finish should fail");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
-    let error = complete(writer.write_str_async("x"))
-        .expect_err("string write after finish should fail");
+    let error =
+        complete(writer.write_str_async("x")).expect_err("string write after finish should fail");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
     Ok(())
 }
 
 #[test]
-fn async_charset_writer_grows_across_need_output_and_pending_writes()
--> io::Result<()> {
+fn async_charset_writer_grows_across_need_output_and_pending_writes() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(1, true);
     let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
         output,
@@ -644,35 +564,26 @@ fn async_charset_writer_grows_across_need_output_and_pending_writes()
     );
 
     complete(writer.write_chars_async(&['a', 'b', 'c', 'd', 'e']))?;
-    let output = complete(writer.into_output_async())?;
+    complete(writer.finish_async())?;
+    let (output, pending) = writer.into_parts();
+    assert!(pending.is_empty());
     assert_eq!(b"abcde", output.bytes.as_slice());
     Ok(())
 }
 
 #[test]
-fn async_charset_writer_retains_bytes_after_zero_and_write_errors()
--> io::Result<()> {
+fn async_charset_writer_retains_bytes_after_zero_and_write_errors() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(4, false).with_write_zero();
-    let mut writer = AsyncCharsetTextWriter::new(
-        output,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
-    let error = complete(writer.write_char_async('A'))
-        .expect_err("zero-length write should fail");
+    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict);
+    let error = complete(writer.write_char_async('A')).expect_err("zero-length write should fail");
     assert_eq!(io::ErrorKind::WriteZero, error.kind());
     complete(writer.flush_async())?;
     assert_eq!(b"A", writer.output().bytes.as_slice());
 
-    let output = ChunkedAsyncOutput::new(4, false)
-        .with_write_error(io::ErrorKind::BrokenPipe);
-    let mut writer = AsyncCharsetTextWriter::new(
-        output,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
-    let error = complete(writer.write_char_async('B'))
-        .expect_err("scripted write error should fail");
+    let output = ChunkedAsyncOutput::new(4, false).with_write_error(io::ErrorKind::BrokenPipe);
+    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict);
+    let error =
+        complete(writer.write_char_async('B')).expect_err("scripted write error should fail");
     assert_eq!(io::ErrorKind::BrokenPipe, error.kind());
     complete(writer.flush_async())?;
     assert_eq!(b"B", writer.output().bytes.as_slice());
@@ -681,46 +592,33 @@ fn async_charset_writer_retains_bytes_after_zero_and_write_errors()
 
 #[test]
 fn async_charset_writer_propagates_flush_errors() -> io::Result<()> {
-    let output = ChunkedAsyncOutput::new(4, false)
-        .with_flush_error(io::ErrorKind::BrokenPipe);
-    let mut writer = AsyncCharsetTextWriter::new(
-        output,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let output = ChunkedAsyncOutput::new(4, false).with_flush_error(io::ErrorKind::BrokenPipe);
+    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict);
 
-    let error = complete(writer.flush_async())
-        .expect_err("scripted flush error should propagate");
+    let error = complete(writer.flush_async()).expect_err("scripted flush error should propagate");
     assert_eq!(io::ErrorKind::BrokenPipe, error.kind());
     complete(writer.flush_async())?;
     Ok(())
 }
 
 #[test]
-fn async_charset_writer_try_into_output_returns_writer_after_error()
--> io::Result<()> {
-    let output = ChunkedAsyncOutput::new(4, false)
-        .with_flush_error(io::ErrorKind::BrokenPipe);
-    let writer = AsyncCharsetTextWriter::new(
-        output,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+fn async_charset_writer_finish_error_leaves_writer_available_for_retry() -> io::Result<()> {
+    let output = ChunkedAsyncOutput::new(4, false).with_flush_error(io::ErrorKind::BrokenPipe);
+    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict);
 
-    let error = complete(writer.try_into_output_async())
-        .expect_err("recoverable conversion should return the writer");
-    assert_eq!(io::ErrorKind::BrokenPipe, error.error().kind());
-    let writer = error.into_writer();
-    let output = complete(writer.try_into_output_async())
-        .map_err(|error| error.into_error())?;
+    let error =
+        complete(writer.finish_async()).expect_err("finish should report the scripted flush error");
+    assert_eq!(io::ErrorKind::BrokenPipe, error.kind());
+    complete(writer.finish_async())?;
+    let (output, pending) = writer.into_parts();
 
+    assert!(pending.is_empty());
     assert!(output.flushed);
     Ok(())
 }
 
 #[test]
-fn async_charset_writer_grows_and_emits_codec_lifecycle_output()
--> io::Result<()> {
+fn async_charset_writer_grows_and_emits_codec_lifecycle_output() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(64, false);
     let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
         output,
@@ -731,7 +629,8 @@ fn async_charset_writer_grows_and_emits_codec_lifecycle_output()
 
     complete(writer.write_char_async('A'))?;
     complete(writer.finish_async())?;
-    let output = complete(writer.into_output_async())?;
+    let (output, pending) = writer.into_parts();
+    assert!(pending.is_empty());
     assert_eq!(b"^A!", output.bytes.as_slice());
     Ok(())
 }
@@ -744,8 +643,8 @@ fn async_charset_writer_propagates_codec_lifecycle_errors() {
         ScriptedCodec::new(ScriptedCodecMode::EncodeResetError),
         CodingErrorPolicy::Strict,
     );
-    let error = complete(writer.write_char_async('A'))
-        .expect_err("encoder reset error should propagate");
+    let error =
+        complete(writer.write_char_async('A')).expect_err("encoder reset error should propagate");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
 
     let output = ChunkedAsyncOutput::new(64, false);
@@ -754,8 +653,8 @@ fn async_charset_writer_propagates_codec_lifecycle_errors() {
         ScriptedCodec::new(ScriptedCodecMode::EncodeValueError),
         CodingErrorPolicy::Strict,
     );
-    let error = complete(writer.write_char_async('A'))
-        .expect_err("encoder value error should propagate");
+    let error =
+        complete(writer.write_char_async('A')).expect_err("encoder value error should propagate");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
     assert_eq!(b"^", writer.output().bytes.as_slice());
 
@@ -765,17 +664,15 @@ fn async_charset_writer_propagates_codec_lifecycle_errors() {
         ScriptedCodec::new(ScriptedCodecMode::EncodeFinishError),
         CodingErrorPolicy::Strict,
     );
-    let error = complete(writer.finish_async())
-        .expect_err("encoder finish error should propagate");
+    let error = complete(writer.finish_async()).expect_err("encoder finish error should propagate");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
 
     let output = ChunkedAsyncOutput::new(64, false);
-    let writer = AsyncCharsetTextWriter::new(
+    let mut writer = AsyncCharsetTextWriter::new(
         output,
         ScriptedCodec::new(ScriptedCodecMode::EncodeResetError),
         CodingErrorPolicy::Strict,
     );
-    let error = complete(writer.into_output_async())
-        .expect_err("consuming finish error should propagate");
+    let error = complete(writer.finish_async()).expect_err("finish error should propagate");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
 }

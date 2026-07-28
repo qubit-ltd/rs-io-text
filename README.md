@@ -79,16 +79,17 @@ where
         CodingErrorPolicy::Strict,
     );
     writer.write_line_async("hello").await?;
-    writer.into_output_async().await
+    writer.finish_async().await?;
+    let (output, pending) = writer.into_parts();
+    debug_assert!(pending.is_empty());
+    Ok(output)
 }
 ```
 
 Call `finish()` or `finish_async()` before depending on codec trailers or the
-underlying output flush. Synchronous consuming conversions such as
-`into_output()` and `into_inner()` retain the writer in `IntoInnerError` on
-failure; their `try_` forms are compatibility aliases with the same semantics.
-For asynchronous writers, use `try_into_output_async()` when a failed
-conversion must return the writer for inspection and retry.
+underlying output flush. A failed finish retains the writer, so callers can
+inspect or retry it. After a successful finish, `into_parts()` recovers the
+owned output without performing further I/O.
 
 ## API Map
 
