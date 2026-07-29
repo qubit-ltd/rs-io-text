@@ -8,13 +8,25 @@
 // qubit-style: allow coverage-cfg
 #[cfg(coverage)]
 use std::cell::Cell;
-use std::{error::Error as StdError, io};
+use std::{
+    error::Error as StdError,
+    io,
+};
 
-use qubit_codec::{CapacityError, TranscodeEncodeOutput, TranscodeEncoder, nz};
-use qubit_io::{Buffer, Output};
+use qubit_codec::{
+    CapacityError,
+    TranscodeEncodeOutput,
+    TranscodeEncoder,
+    nz,
+};
+use qubit_io::{
+    Buffer,
+    Output,
+};
 
 use crate::{
-    LineEnding, TextWrite,
+    LineEnding,
+    TextWrite,
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
         encode_error_to_io as shared_encode_error_to_io,
@@ -229,7 +241,8 @@ where
             reserve_result
         };
         reserve_result?;
-        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
         assert!(
             available >= required,
             "insufficient reset capacity reserved in spare output buffer",

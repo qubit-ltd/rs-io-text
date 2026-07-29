@@ -6,14 +6,30 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{Cursor, ErrorKind};
+use std::io::{
+    Cursor,
+    ErrorKind,
+};
 
 use qubit_codec::{
-    CapacityError, TranscodeDomainError, TranscodeEncodeError, TranscodeEncoder, TranscodeProgress,
+    CapacityError,
+    TranscodeDomainError,
+    TranscodeEncodeError,
+    TranscodeEncoder,
+    TranscodeProgress,
     Transcoder,
 };
-use qubit_codec_text::{AsciiCodec, CharsetEncodePolicy, CharsetEncoder, Utf8Codec};
-use qubit_io_text::{BufferedWriter, LineEnding, TextWrite};
+use qubit_codec_text::{
+    AsciiCodec,
+    CharsetEncodePolicy,
+    CharsetEncoder,
+    Utf8Codec,
+};
+use qubit_io_text::{
+    BufferedWriter,
+    LineEnding,
+    TextWrite,
+};
 
 #[derive(Debug, Default)]
 struct PartialEncoder;
@@ -23,11 +39,18 @@ impl Transcoder for PartialEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<std::io::Error, char>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
@@ -43,7 +66,11 @@ impl Transcoder for PartialEncoder {
         Ok(TranscodeProgress::complete(read, 0))
     }
 
-    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
@@ -61,7 +88,10 @@ impl Transcoder for FinishByteEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<std::io::Error, char>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -69,7 +99,11 @@ impl Transcoder for FinishByteEncoder {
         Ok(1)
     }
 
-    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
@@ -84,7 +118,9 @@ impl Transcoder for FinishByteEncoder {
         Self::Error::ensure_output_index(output.len(), output_index)?;
         let mut read = 0;
         let mut written = 0;
-        while input_index + read < input.len() && output_index + written < output.len() {
+        while input_index + read < input.len()
+            && output_index + written < output.len()
+        {
             output[output_index + written] = input[input_index + read] as u8;
             read += 1;
             written += 1;
@@ -92,7 +128,11 @@ impl Transcoder for FinishByteEncoder {
         Ok(TranscodeProgress::complete(read, written))
     }
 
-    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Self::Error::ensure_output_index(output.len(), output_index)?;
         output[output_index] = b'!';
         Ok(1)
@@ -118,7 +158,10 @@ impl Transcoder for LifecycleEncoder {
         Ok(1)
     }
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -126,7 +169,11 @@ impl Transcoder for LifecycleEncoder {
         Ok(1)
     }
 
-    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         assert!(!self.started, "encoder reset must run exactly once");
         output[output_index] = b'^';
         self.started = true;
@@ -143,7 +190,9 @@ impl Transcoder for LifecycleEncoder {
         assert!(self.started, "encoder must reset before transcode");
         let mut read = 0;
         let mut written = 0;
-        while input_index + read < input.len() && output_index + written < output.len() {
+        while input_index + read < input.len()
+            && output_index + written < output.len()
+        {
             output[output_index + written] = input[input_index + read] as u8;
             read += 1;
             written += 1;
@@ -160,7 +209,11 @@ impl Transcoder for LifecycleEncoder {
         ))
     }
 
-    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         assert!(self.started, "encoder must reset before finish");
         assert!(!self.finished, "encoder finish must run exactly once");
         output[output_index] = b'!';
@@ -185,11 +238,18 @@ impl Transcoder for OverflowResetEncoder {
         Err(CapacityError::OutputLengthOverflow)
     }
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("capacity planning fails before reset")
     }
 
@@ -203,7 +263,11 @@ impl Transcoder for OverflowResetEncoder {
         unreachable!("capacity planning fails before transcode")
     }
 
-    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("capacity planning fails before finish")
     }
 }
@@ -220,11 +284,18 @@ impl Transcoder for OverreportedResetEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<std::io::Error, char>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Ok(1)
     }
 
@@ -238,7 +309,11 @@ impl Transcoder for OverreportedResetEncoder {
         unreachable!("reset contract violation fails before transcode")
     }
 
-    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("reset contract violation fails before finish")
     }
 }
@@ -255,11 +330,18 @@ impl Transcoder for ErrorResetEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<std::io::Error, char>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Err(TranscodeEncodeError::Domain(TranscodeDomainError::Reset {
             source: std::io::Error::other("reset failed"),
         }))
@@ -275,7 +357,11 @@ impl Transcoder for ErrorResetEncoder {
         unreachable!("reset failure prevents transcoding")
     }
 
-    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("reset failure prevents finishing")
     }
 }
@@ -292,11 +378,18 @@ impl Transcoder for ErrorFinishEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<std::io::Error, char>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
@@ -314,7 +407,11 @@ impl Transcoder for ErrorFinishEncoder {
         Ok(TranscodeProgress::complete(count, count))
     }
 
-    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Err(TranscodeEncodeError::Domain(TranscodeDomainError::Finish {
             source: std::io::Error::other("finish failed"),
         }))
@@ -326,10 +423,13 @@ impl TranscodeEncoder for ErrorFinishEncoder {
 }
 
 #[test]
-fn test_buffered_writer_encodes_utf8_into_shared_output_buffer() -> std::io::Result<()> {
-    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
-        .expect("strict UTF-8 encoder should be constructible");
-    let mut writer = BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
+fn test_buffered_writer_encodes_utf8_into_shared_output_buffer()
+-> std::io::Result<()> {
+    let encoder =
+        CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+            .expect("strict UTF-8 encoder should be constructible");
+    let mut writer =
+        BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
 
     writer.write_str("Aé🙂")?;
     writer.finish()?;
@@ -341,9 +441,11 @@ fn test_buffered_writer_encodes_utf8_into_shared_output_buffer() -> std::io::Res
 }
 
 #[test]
-fn test_buffered_writer_accessors_empty_writes_and_finish_state() -> std::io::Result<()> {
-    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
-        .expect("strict UTF-8 encoder should be constructible");
+fn test_buffered_writer_accessors_empty_writes_and_finish_state()
+-> std::io::Result<()> {
+    let encoder =
+        CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+            .expect("strict UTF-8 encoder should be constructible");
     let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder);
 
     assert_eq!(LineEnding::Lf, writer.configured_line_ending());
@@ -375,8 +477,9 @@ fn test_buffered_writer_accessors_empty_writes_and_finish_state() -> std::io::Re
 
 #[test]
 fn test_buffered_writer_flushes_exact_string_chunks() -> std::io::Result<()> {
-    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
-        .expect("strict UTF-8 encoder should be constructible");
+    let encoder =
+        CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+            .expect("strict UTF-8 encoder should be constructible");
     let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder);
     let text = "a".repeat(256);
 
@@ -391,7 +494,8 @@ fn test_buffered_writer_flushes_exact_string_chunks() -> std::io::Result<()> {
 
 #[test]
 fn test_buffered_writer_reports_incomplete_encoder_consumption() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), PartialEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), PartialEncoder);
 
     let error = writer
         .write_chars(&['x', 'y'])
@@ -402,7 +506,8 @@ fn test_buffered_writer_reports_incomplete_encoder_consumption() {
 
 #[test]
 fn test_buffered_writer_emits_finish_output() -> std::io::Result<()> {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), FinishByteEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), FinishByteEncoder);
 
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
@@ -413,9 +518,13 @@ fn test_buffered_writer_emits_finish_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_buffered_writer_runs_complete_lifecycle_on_first_write() -> std::io::Result<()> {
-    let mut writer =
-        BufferedWriter::with_capacity(Cursor::new(Vec::new()), LifecycleEncoder::default(), 1);
+fn test_buffered_writer_runs_complete_lifecycle_on_first_write()
+-> std::io::Result<()> {
+    let mut writer = BufferedWriter::with_capacity(
+        Cursor::new(Vec::new()),
+        LifecycleEncoder::default(),
+        1,
+    );
 
     writer.write_char('A')?;
     writer.write_char('B')?;
@@ -428,9 +537,13 @@ fn test_buffered_writer_runs_complete_lifecycle_on_first_write() -> std::io::Res
 }
 
 #[test]
-fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream() -> std::io::Result<()> {
-    let mut writer =
-        BufferedWriter::with_capacity(Cursor::new(Vec::new()), LifecycleEncoder::default(), 1);
+fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream()
+-> std::io::Result<()> {
+    let mut writer = BufferedWriter::with_capacity(
+        Cursor::new(Vec::new()),
+        LifecycleEncoder::default(),
+        1,
+    );
 
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
@@ -442,9 +555,11 @@ fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream() -> std::io::R
 
 #[test]
 fn test_buffered_writer_maps_encoder_errors_to_io_errors() {
-    let encoder = CharsetEncoder::with_policy(AsciiCodec, CharsetEncodePolicy::report())
-        .expect("strict ASCII encoder should be constructible");
-    let mut writer = BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
+    let encoder =
+        CharsetEncoder::with_policy(AsciiCodec, CharsetEncodePolicy::report())
+            .expect("strict ASCII encoder should be constructible");
+    let mut writer =
+        BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
 
     let error = writer
         .write_char('🙂')
@@ -455,7 +570,8 @@ fn test_buffered_writer_maps_encoder_errors_to_io_errors() {
 
 #[test]
 fn test_buffered_writer_reports_reset_capacity_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
 
     let error = writer
         .write_char('A')
@@ -467,7 +583,10 @@ fn test_buffered_writer_reports_reset_capacity_errors() {
 #[cfg(coverage)]
 #[test]
 fn test_buffered_writer_reports_reset_output_reserve_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), LifecycleEncoder::default());
+    let mut writer = BufferedWriter::new(
+        Cursor::new(Vec::new()),
+        LifecycleEncoder::default(),
+    );
 
     BufferedWriter::<Cursor<Vec<u8>>, LifecycleEncoder>::coverage_fail_next_reset_reserve();
     let error = writer
@@ -479,7 +598,8 @@ fn test_buffered_writer_reports_reset_output_reserve_errors() {
 
 #[test]
 fn test_buffered_writer_reports_reset_domain_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
 
     let error = writer
         .write_char('A')
@@ -487,13 +607,15 @@ fn test_buffered_writer_reports_reset_domain_errors() {
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
     let error = writer
         .write_str(&"a".repeat(256))
         .expect_err("chunk flush must propagate reset domain errors");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
     let error = writer
         .write_line("line")
         .expect_err("line content errors must stop before the line ending");
@@ -502,7 +624,8 @@ fn test_buffered_writer_reports_reset_domain_errors() {
 
 #[test]
 fn test_buffered_writer_reports_finish_domain_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
 
     let error = writer
         .finish()
@@ -513,7 +636,8 @@ fn test_buffered_writer_reports_finish_domain_errors() {
 
 #[test]
 fn test_buffered_writer_finish_propagates_lazy_reset_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
 
     let error = writer
         .finish()
@@ -525,7 +649,8 @@ fn test_buffered_writer_finish_propagates_lazy_reset_errors() {
 
 #[test]
 fn test_buffered_writer_finish_error_leaves_writer_available_for_retry() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
 
     let error = writer
         .finish()
@@ -538,17 +663,20 @@ fn test_buffered_writer_finish_error_leaves_writer_available_for_retry() {
 #[test]
 #[should_panic(expected = "reset wrote beyond its bound")]
 fn test_buffered_writer_rejects_overreported_reset_output() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), OverreportedResetEncoder);
+    let mut writer =
+        BufferedWriter::new(Cursor::new(Vec::new()), OverreportedResetEncoder);
 
     let _ = writer.write_char('A');
 }
 
 #[test]
-fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()> {
-    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
-        .expect("strict UTF-8 encoder should be constructible");
-    let mut writer =
-        BufferedWriter::new(Cursor::new(Vec::new()), encoder).with_line_ending(LineEnding::CrLf);
+fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()>
+{
+    let encoder =
+        CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+            .expect("strict UTF-8 encoder should be constructible");
+    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder)
+        .with_line_ending(LineEnding::CrLf);
 
     writer.write_line("line")?;
     writer.finish()?;

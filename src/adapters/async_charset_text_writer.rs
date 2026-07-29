@@ -9,14 +9,24 @@
 
 use std::io;
 
-use qubit_codec::{TranscodeStatus, Transcoder};
-use qubit_codec_text::{CharsetCodec, CharsetEncoder};
+use qubit_codec::{
+    TranscodeStatus,
+    Transcoder,
+};
+use qubit_codec_text::{
+    CharsetCodec,
+    CharsetEncoder,
+};
 use qubit_io::AsyncOutput;
 
 use crate::{
-    CodingErrorPolicy, LineEnding,
+    CodingErrorPolicy,
+    LineEnding,
     adapters::charset_text_writer::create_encoder,
-    io_error::{capacity_error_to_io, encode_error_to_io},
+    io_error::{
+        capacity_error_to_io,
+        encode_error_to_io,
+    },
 };
 
 /// Default encoded-byte capacity used by asynchronous charset writers.
@@ -71,7 +81,12 @@ where
     /// replacement character.
     #[must_use]
     pub fn new(output: O, codec: C, policy: CodingErrorPolicy) -> Self {
-        Self::new_with_buffer_capacity(output, codec, policy, DEFAULT_BUFFER_CAPACITY)
+        Self::new_with_buffer_capacity(
+            output,
+            codec,
+            policy,
+            DEFAULT_BUFFER_CAPACITY,
+        )
     }
 
     /// Creates an asynchronous charset writer with a requested buffer size.
@@ -264,7 +279,9 @@ where
             self.byte_limit = progress.written();
             let required = match progress.status() {
                 TranscodeStatus::Complete => None,
-                TranscodeStatus::NeedOutput { required, .. } => Some(required.get()),
+                TranscodeStatus::NeedOutput { required, .. } => {
+                    Some(required.get())
+                }
                 TranscodeStatus::NeedInput { .. } => {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -304,7 +321,10 @@ where
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
     /// writer has been finished.
-    pub async fn write_chars_async(&mut self, chars: &[char]) -> io::Result<()> {
+    pub async fn write_chars_async(
+        &mut self,
+        chars: &[char],
+    ) -> io::Result<()> {
         self.ensure_open()?;
         if chars.is_empty() {
             return Ok(());

@@ -5,10 +5,19 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{self, Cursor, ErrorKind, Read};
+use std::io::{
+    self,
+    Cursor,
+    ErrorKind,
+    Read,
+};
 
 use qubit_io::Input;
-use qubit_io_text::{TextLineRead, TextRead, Utf8TextReader};
+use qubit_io_text::{
+    TextLineRead,
+    TextRead,
+    Utf8TextReader,
+};
 
 struct InputOnlyReader {
     bytes: Vec<u8>,
@@ -37,7 +46,8 @@ impl Input for InputOnlyReader {
         let read = available.min(count);
         let input_end = self.position + read;
         let output_end = index + read;
-        output[index..output_end].copy_from_slice(&self.bytes[self.position..input_end]);
+        output[index..output_end]
+            .copy_from_slice(&self.bytes[self.position..input_end]);
         self.position = input_end;
         Ok(read)
     }
