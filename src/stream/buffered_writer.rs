@@ -151,11 +151,12 @@ where
 
     /// Returns the wrapped byte writer and every encoded byte still pending.
     ///
-    /// This method performs no I/O and does not finalize the encoder. Call
-    /// [`Self::finish`] first for normal completion; after a successful finish,
-    /// the returned buffer is empty. Calling this method before finishing
-    /// explicitly abandons encoder lifecycle output that has not yet been
-    /// emitted while transferring already encoded pending bytes to the caller.
+    /// This method does not call [`Self::finish`] or flush the wrapped byte
+    /// writer. Call [`Self::finish`] first for normal completion; after a
+    /// successful finish, the returned buffer is empty. Calling this method
+    /// before finishing explicitly abandons encoder lifecycle output that has
+    /// not yet been emitted while transferring already encoded pending bytes to
+    /// the caller.
     ///
     /// # Returns
     ///

@@ -178,11 +178,12 @@ where
 
     /// Returns the wrapped output and every encoded byte still pending.
     ///
-    /// This method performs no asynchronous I/O and does not finish the
-    /// encoder. Call [`Self::finish_async`] first for normal completion; after
-    /// a successful finish, the returned byte vector is empty. Calling this
-    /// method first explicitly abandons encoder lifecycle output that has not
-    /// been emitted while transferring already encoded bytes to the caller.
+    /// This method does not call [`Self::finish_async`] or
+    /// [`AsyncOutput::flush_async`] on the wrapped output. Call
+    /// [`Self::finish_async`] first for normal completion; after a successful
+    /// finish, the returned byte vector is empty. Calling this method first
+    /// explicitly abandons encoder lifecycle output that has not been emitted
+    /// while transferring already encoded bytes to the caller.
     ///
     /// # Returns
     ///

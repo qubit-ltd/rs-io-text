@@ -159,9 +159,10 @@ where
 
     /// Returns the wrapped byte writer and every encoded byte still pending.
     ///
-    /// This method performs no I/O and does not finish the encoder. Call
-    /// [`Self::finish`] first for normal completion; otherwise the returned
-    /// buffer contains encoded bytes that have not reached the returned output.
+    /// This method does not call [`Self::finish`] or flush the wrapped output.
+    /// Call [`Self::finish`] first for normal completion; otherwise the
+    /// returned buffer contains encoded bytes that have not reached the
+    /// returned output.
     ///
     /// # Returns
     ///
