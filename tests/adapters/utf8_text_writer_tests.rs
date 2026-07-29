@@ -5,18 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    ErrorKind,
-    Write,
-};
+use std::io::{self, ErrorKind, Write};
 
 use qubit_io::Output;
-use qubit_io_text::{
-    LineEnding,
-    TextWrite,
-    Utf8TextWriter,
-};
+use qubit_io_text::{LineEnding, TextWrite, Utf8TextWriter};
 
 #[derive(Debug, Default)]
 struct OutputOnlyWriter {
@@ -71,8 +63,7 @@ fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
 fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
-        let mut writer =
-            Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
+        let mut writer = Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
 
         writer.write_char('中')?;
         writer.write_chars(&['x', 'y'])?;
@@ -87,11 +78,10 @@ fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
 
 #[test]
 fn test_accessors_and_into_inner() -> std::io::Result<()> {
-    let output = Vec::new();
+    let output = b"prefix:".to_vec();
     let mut writer = Utf8TextWriter::with_capacity(output, 1);
 
-    assert!(writer.output().is_empty());
-    writer.output_mut().extend_from_slice(b"prefix:");
+    assert_eq!(b"prefix:", writer.output().as_slice());
     assert_eq!(LineEnding::Lf, writer.line_ending());
     writer.write_line("done")?;
     writer.finish()?;

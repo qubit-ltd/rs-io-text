@@ -5,33 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow coverage-cfg
-#[cfg(coverage)]
-use std::cell::Cell;
-use std::{
-    error::Error as StdError,
-    io,
-};
+use std::{error::Error as StdError, io};
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeEncodeOutput,
-    TranscodeEncoder,
-    nz,
-};
-use qubit_io::{
-    Buffer,
-    Output,
-};
+use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder, nz};
+use qubit_io::{Buffer, Output};
 
-use crate::{
-    LineEnding,
-    TextWrite,
-    io_error::{
-        capacity_error_to_io as shared_capacity_error_to_io,
-        encode_error_to_io as shared_encode_error_to_io,
-    },
-};
+use crate::{LineEnding, TextWrite, io_error::encode_error_to_io as shared_encode_error_to_io};
 
 /// Default byte buffer capacity used by buffered text writers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -133,16 +112,6 @@ where
         self.output.inner()
     }
 
-    /// Returns a mutable reference to the wrapped byte writer.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped writer. Flush first if it must observe all prior
-    /// text writes.
-    pub fn inner_mut(&mut self) -> &mut W {
-        self.output.inner_mut()
-    }
-
     /// Returns the configured line ending.
     #[must_use]
     pub const fn configured_line_ending(&self) -> LineEnding {
@@ -166,13 +135,6 @@ where
     #[inline(always)]
     pub fn into_parts(self) -> (W, Buffer<u8>) {
         self.output.into_parts()
-    }
-
-    /// Makes the next reset-capacity check fail in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_fail_next_reset_reserve() {
-        COVERAGE_FAIL_NEXT_RESET_RESERVE.with(|state| state.set(true));
     }
 
     /// Returns an error if this writer has already been finished.
@@ -210,7 +172,7 @@ where
     /// Returns encoding errors or I/O errors from the wrapped writer.
     fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
         self.ensure_started()?;
-        self.output.transcode_from(
+        self.output.transcode(
             &mut self.encoder,
             &mut encode_error_to_io,
             chars,
@@ -230,33 +192,8 @@ where
         if self.started {
             return Ok(());
         }
-        let required = self
-            .encoder
-            .max_reset_output_len()
-            .map_err(capacity_error_to_io)?;
-        let reserve_result = self.output.ensure_spare_capacity(required);
-        #[cfg(coverage)]
-        let reserve_result = if coverage_take_reset_reserve_failure() {
-            Err(io::Error::from(io::ErrorKind::OutOfMemory))
-        } else {
-            reserve_result
-        };
-        reserve_result?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
-        assert!(
-            available >= required,
-            "insufficient reset capacity reserved in spare output buffer",
-        );
-        let written = self
-            .encoder
-            .reset(units, output_index)
-            .map_err(encode_error_to_io)?;
-        assert!(written <= required, "reset wrote beyond its bound");
-        unsafe {
-            // SAFETY: Reset output is bounded by the capacity reserved above.
-            self.output.advance(written);
-        }
+        self.output
+            .reset(&mut self.encoder, &mut encode_error_to_io)?;
         self.started = true;
         Ok(())
     }
@@ -352,20 +289,4 @@ where
     E: StdError + Send + Sync + 'static,
 {
     shared_encode_error_to_io(error)
-}
-
-/// Converts capacity errors at the buffered-writer boundary.
-fn capacity_error_to_io(error: CapacityError) -> io::Error {
-    shared_capacity_error_to_io(error)
-}
-
-#[cfg(coverage)]
-thread_local! {
-    static COVERAGE_FAIL_NEXT_RESET_RESERVE: Cell<bool> = const { Cell::new(false) };
-}
-
-/// Returns and clears the synthetic reset-reserve failure request.
-#[cfg(coverage)]
-fn coverage_take_reset_reserve_failure() -> bool {
-    COVERAGE_FAIL_NEXT_RESET_RESERVE.with(|state| state.replace(false))
 }

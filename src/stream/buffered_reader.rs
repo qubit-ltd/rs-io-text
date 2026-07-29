@@ -5,27 +5,14 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{
-    error::Error as StdError,
-    io,
-};
+use std::{error::Error as StdError, io};
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeInput,
-    TranscodeDecoder,
-    nz,
-};
+use qubit_codec::{CapacityError, TranscodeDecodeInput, TranscodeDecoder, nz};
 use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::{
-    Input,
-    UncheckedSlice,
-};
+use qubit_io::{Input, UncheckedSlice};
 
 use crate::{
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
+    CodingErrorPolicy, TextLineRead, TextRead,
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
         decode_error_to_io as shared_decode_error_to_io,
@@ -95,12 +82,7 @@ where
     /// Returns a buffered text reader. The byte buffer is raised to at least
     /// four bytes so built-in Unicode byte codecs can retain incomplete tails.
     #[must_use]
-    pub fn with_capacity(
-        inner: R,
-        decoder: D,
-        policy: CodingErrorPolicy,
-        capacity: usize,
-    ) -> Self {
+    pub fn with_capacity(inner: R, decoder: D, policy: CodingErrorPolicy, capacity: usize) -> Self {
         let capacity = capacity.max(MIN_TEXT_BUFFER_CAPACITY);
         Self {
             input: TranscodeDecodeInput::with_capacity(inner, capacity),
@@ -123,16 +105,6 @@ where
     #[must_use]
     pub const fn inner(&self) -> &R {
         self.input.inner()
-    }
-
-    /// Returns a mutable reference to the wrapped byte reader.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped reader. Mutating it directly can invalidate
-    /// buffered bytes.
-    pub fn inner_mut(&mut self) -> &mut R {
-        self.input.inner_mut()
     }
 
     /// Consumes this reader and returns the wrapped byte reader.
@@ -197,11 +169,13 @@ where
         if self.chars.len() < required {
             self.chars.resize(required, '\0');
         }
-        let written = self
-            .decoder
-            .reset(self.chars.as_mut_slice(), 0)
-            .map_err(decode_error_to_io)?;
-        assert!(written <= required, "reset wrote beyond its bound");
+        let written = self.input.reset(
+            &mut self.decoder,
+            &mut decode_error_to_io,
+            self.chars.as_mut_slice(),
+            0,
+            required,
+        )?;
         self.started = true;
         self.char_position = 0;
         self.char_limit = written;
@@ -257,7 +231,7 @@ where
         if self.chars.len() < capacity {
             self.chars.resize(capacity, '\0');
         }
-        let written = self.input.finish_transcode_into(
+        let written = self.input.finish(
             &mut self.decoder,
             &mut decode_error_to_io,
             self.chars.as_mut_slice(),
@@ -286,7 +260,7 @@ where
         }
         self.clear_chars();
         let capacity = self.chars.len();
-        let written = self.input.transcode_into(
+        let written = self.input.transcode(
             &mut self.decoder,
             &mut decode_error_to_io,
             self.chars.as_mut_slice(),
@@ -318,18 +292,12 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe {
-            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
-        };
+        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max && self.fill_chars()? {
             let available = self.char_limit - self.char_position;
@@ -342,10 +310,7 @@ where
         Ok(count)
     }
 
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         while self.fill_chars()? {
             let chars = &self.chars[self.char_position..self.char_limit];
