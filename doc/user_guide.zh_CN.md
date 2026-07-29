@@ -1,8 +1,33 @@
 # Qubit IO Text 用户指南
 
-当应用层应处理 Unicode scalar value 和文本行，而不是编码后的字节时，使用
-`qubit-io-text`。Charset codec 由 `qubit-codec-text` 提供，字节流和字符流由
-`qubit-io` 提供。
+[English](user_guide.md) · [README](../README.zh_CN.md) ·
+[API 文档](https://docs.rs/qubit-io-text)
+
+本指南面向需要处理 Unicode 文本和文本行、而不是已编码字节的 Rust 应用，适用于
+`qubit-io-text` 0.3。Charset 算法来自 `qubit-codec-text`，字节流和字符流抽象来自
+`qubit-io`。
+
+## 概念模型
+
+同步 `TextRead`、`TextLineRead` 与 `TextWrite` 直接处理 Rust 的 `char` 和 `str`。
+Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或可配置 charset。
+
+| 需求 | 主要 API | 输入或输出 |
+| --- | --- | --- |
+| 内存中的 Unicode 文本 | `StrTextReader`、`StringTextReader`、`StringTextWriter` | 字符串 |
+| 字符流 | `InputTextReader`、`OutputTextWriter` | `Input<Item = char>`、`Output<Item = char>` |
+| 严格 UTF-8 字节 | `Utf8TextReader`、`Utf8TextWriter` | `Input<Item = u8>`、`Output<Item = u8>` |
+| 同步 charset 转换 | `CharsetTextReader`、`CharsetTextWriter` | `Input<Item = u8>`、`Output<Item = u8>` |
+| 运行时无关的异步转换 | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` | `AsyncInput<Item = u8>`、`AsyncOutput<Item = u8>` |
+
+`TextRead::read_to_string` 将内容追加到目标并返回追加的 Unicode scalar value 数量，
+而不是 UTF-8 字节数；`TextWrite::write_line` 会追加配置好的 `LineEnding`。
+
+## 贯穿场景：在字节流上保持 Unicode 文本
+
+假设应用收到一条 UTF-8 消息，添加一个以 CRLF 结束的 header 后，要将有效字节交给
+另一个组件。流程是在构造时确定 codec 和错误策略，写入文本，完成 codec 生命周期，
+再将同一批字节读回文本。
 
 ## 安装
 
@@ -11,67 +36,7 @@
 qubit-io-text = "0.3"
 ```
 
-## API 分层
-
-| 层级 | 主要 API | 底层 I/O |
-| --- | --- | --- |
-| 同步文本 trait | `TextRead`、`TextLineRead`、`TextWrite` | Unicode `char` 与 `str` |
-| 内存 adapter | `StrTextReader`、`StringTextReader`、`StringTextWriter`、`StringCharInput`、`StringCharOutput` | 字符串 |
-| 字符流桥接 | `InputTextReader`、`OutputTextWriter` | `Input<Item = char>`、`Output<Item = char>` |
-| UTF-8 便利层 | `Utf8TextReader`、`Utf8TextWriter` | `Input<Item = u8>`、`Output<Item = u8>` |
-| 同步 charset | `CharsetTextReader`、`CharsetTextWriter` | `Input<Item = u8>`、`Output<Item = u8>` |
-| 异步 charset | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` | `AsyncInput<Item = u8>`、`AsyncOutput<Item = u8>` |
-
-当前异步 API 位于 charset adapter 上，并没有为每个同步文本 trait 都定义一套异步
-对应物。
-
-## Unicode 文本 Trait
-
-`TextRead::read_to_string` 把文本追加到目标，并返回追加的 Unicode scalar value
-数量，而不是 UTF-8 字节数。
-
-```rust
-use qubit_io_text::{
-    StrTextReader,
-    TextRead,
-};
-
-let mut reader = StrTextReader::new("中🙂");
-let mut text = String::new();
-let count = reader.read_to_string(&mut text)?;
-
-assert_eq!(2, count);
-assert_eq!(7, text.len());
-assert_eq!("中🙂", text);
-# Ok::<(), core::convert::Infallible>(())
-```
-
-输入存在换行符时，`TextLineRead::read_line` 会把它附加到输出。
-`TextWrite::write_line` 则添加 writer 配置的 `LineEnding`。
-
-```rust
-use qubit_io_text::{
-    LineEnding,
-    StringTextWriter,
-    TextWrite,
-};
-
-let mut output = String::new();
-let mut writer =
-    StringTextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
-writer.write_line("first")?;
-
-assert_eq!("first\r\n", output);
-# Ok::<(), std::io::Error>(())
-```
-
-## 同步 Charset 流
-
-`CharsetTextReader<I, C>` 解码任意 `I: Input<Item = u8>`；
-`CharsetTextWriter<O, C>` 编码到任意 `O: Output<Item = u8>`。
-
-内置 codec 类型包括 `AsciiCodec`、`Latin1Codec`、`Utf8Codec`、
-`Utf16ByteCodec` 与 `Utf32ByteCodec`。
+## 核心流程
 
 ```rust
 use std::io::Cursor;
@@ -81,14 +46,20 @@ use qubit_io_text::{
     CharsetTextReader,
     CharsetTextWriter,
     CodingErrorPolicy,
+    LineEnding,
     TextRead,
     TextWrite,
 };
 
 let mut bytes = Vec::new();
-let mut writer =
-    CharsetTextWriter::new(&mut bytes, Utf8Codec, CodingErrorPolicy::Strict);
-writer.write_str("hello 中")?;
+let mut writer = CharsetTextWriter::new(
+    &mut bytes,
+    Utf8Codec,
+    CodingErrorPolicy::Strict,
+)
+.with_line_ending(LineEnding::CrLf);
+writer.write_line("subject: status")?;
+writer.write_str("中文")?;
 writer.finish()?;
 
 let mut reader = CharsetTextReader::new(
@@ -97,81 +68,30 @@ let mut reader = CharsetTextReader::new(
     CodingErrorPolicy::Strict,
 );
 let mut text = String::new();
-reader.read_to_string(&mut text)?;
-assert_eq!("hello 中", text);
+let chars = reader.read_to_string(&mut text)?;
+assert_eq!(19, chars);
+assert_eq!("subject: status\r\n中文", text);
 # Ok::<(), std::io::Error>(())
 ```
 
-`CharsetReadExt` 与 `CharsetWriteExt` 在 `Input` / `Output` 上提供构造和
-one-shot helper：
+依赖 codec 自己的尾部输出或底层 sink 已 flush 前，必须调用 `finish()`。finish 失败时
+writer 会被保留，调用方可以检查或重试。仅需一次转换时，可使用 `CharsetReadExt` 和
+`CharsetWriteExt` 的构造与 one-shot helper，无需长期保存 adapter。
 
-```rust
-use std::io::Cursor;
+## 策略、换行与 UTF-8
 
-use qubit_codec_text::Utf8Codec;
-use qubit_io_text::{
-    CharsetReadExt,
-    CharsetWriteExt,
-    CodingErrorPolicy,
-};
+`CodingErrorPolicy::Strict` 会报告畸形输入和无法编码的输出；
+`CodingErrorPolicy::Replace` 使用 codec 的替换值。策略在 adapter 构造时选定，因此
+不能在有状态 charset 流的中途改变。
 
-let mut input = Cursor::new(b"hello".to_vec());
-let text = input.read_to_string_with_charset(
-    Utf8Codec,
-    CodingErrorPolicy::Strict,
-)?;
+`LineEnding::Lf`、`LineEnding::CrLf` 和 `LineEnding::Cr` 决定 `write_line` 追加的
+内容。流确定为 UTF-8 时，可使用 `Utf8TextReader` 和 `Utf8TextWriter`，它们在相同的
+字节流边界提供严格的便利包装。
 
-let mut output = Vec::new();
-output.write_str_with_charset(
-    &text,
-    Utf8Codec,
-    CodingErrorPolicy::Strict,
-)?;
-# Ok::<(), std::io::Error>(())
-```
+## 异步流程
 
-## 异步 Charset Reader
-
-`AsyncCharsetTextReader` 拥有 `AsyncInput`、decoder、保留的字节缓冲和字符缓冲。
-构造过程不会触发 I/O。
-
-```rust
-use qubit_io::AsyncInput;
-use qubit_codec_text::Utf8Codec;
-use qubit_io_text::{
-    AsyncCharsetTextReader,
-    CodingErrorPolicy,
-};
-
-async fn read_document<I>(input: I) -> std::io::Result<String>
-where
-    I: AsyncInput<Item = u8> + Unpin,
-{
-    let mut reader = AsyncCharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
-    let mut text = String::new();
-    reader.read_to_string_async(&mut text).await?;
-    Ok(text)
-}
-```
-
-它提供：
-
-- `read_char_async`；
-- `read_chars_async`；
-- `read_to_string_async`；
-- `read_line_async`。
-
-Reader 会在下一个挂起点前把已经收到的字节提交到保留缓冲，因此取消读取不会丢失
-半个编码字符。`input()` 指向的底层流可能已经越过缓冲中的字节；
-`into_input()` 会丢弃所有文本缓冲状态。
-
-## 异步 Charset Writer
-
-`AsyncCharsetTextWriter` 拥有 `AsyncOutput`、有状态 encoder 和待写编码字节。
+异步 API 仅位于 charset adapter；并非每一个同步文本 trait 都有异步对应版本。构造过程
+不执行 I/O。
 
 ```rust
 use qubit_io::AsyncOutput;
@@ -192,8 +112,7 @@ where
         CodingErrorPolicy::Strict,
     )
     .with_line_ending(LineEnding::CrLf);
-    writer.write_line_async("header").await?;
-    writer.write_str_async("body").await?;
+    writer.write_line_async("subject: status").await?;
     writer.finish_async().await?;
     let (output, pending) = writer.into_parts();
     debug_assert!(pending.is_empty());
@@ -201,27 +120,33 @@ where
 }
 ```
 
-Writer 还提供 `write_char_async`、`write_chars_async` 与 `flush_async`。Flush
-只排空编码字节，不结束 encoder；finish 会生成 codec 自己的尾部输出、排空字节并
-刷新底层。失败的 `finish_async()` 会保留 pending 状态，可再次调用重试。`finish` 或
-`finish_async` 成功后，text writer 可通过 `into_parts()` 在不执行 I/O 的情况下取回
-owned output 与仍 pending 的编码字节。未完成时调用 `into_parts()` 会显式放弃尚未
-发出的 encoder lifecycle 输出。`OutputTextWriter` 是薄 adapter，其 `into_inner()`
-同样不会隐式 flush。
+异步 reader 会在挂起或取消时保留不完整编码字符。异步 writer 会保留 pending 编码字节，
+但取消高层写入仍可能使输出中留下文本前缀；除非外层协议允许重复前缀，否则不要整体
+重试字符串。
 
-挂起和取消不会丢失 pending 编码字节。但取消高层写操作时，文本前缀可能已经生效；
-除非外层协议允许重复前缀，否则不要盲目重试整个字符串。
+## 错误与诊断
 
-## 错误策略与 EOF
+- `Strict` 会报告畸形编码输入、不完整的 EOF 编码尾部和当前 codec 无法编码的 Unicode
+  文本。
+- `finish` 或 `finish_async` 失败后，writer 仍可用于重试。
+- 异步 reader 的 `input()` 可能已越过其缓冲文本，`into_input()` 会丢弃该缓冲状态。
+- `into_parts()` 不执行 I/O；在成功 finish 前调用它会明确放弃尚未发出的 codec
+  lifecycle 输出。
 
-`CodingErrorPolicy::Strict` 会报告 malformed 输入、不完整的编码 EOF 尾部和无法
-编码的输出；`CodingErrorPolicy::Replace` 使用 codec 的替换值。
+## 排障与最佳实践
 
-策略在 adapter 构造时确定，因此不会在一个有状态 charset 流的中途改变。
+| 症状 | 首先检查 |
+| --- | --- |
+| 换行符不符合预期 | 调用 `write_line` 前在 writer 上配置 `LineEnding`。 |
+| 解码拒绝数据 | 确认 codec，并有意选择 `Strict` 或 `Replace`。 |
+| 输出似乎不完整 | finish charset writer；仅 flush 不会结束 codec。 |
+| 异步重试导致文本重复 | 将之前的写入视为部分完成，采用 framing 或幂等机制。 |
 
-## UTF-8 便利 Adapter
+需要组合导入文本 trait 和 adapter 时，可使用 `qubit_io_text::prelude::*`。Codec 应从
+`qubit-codec-text` 导入，因为本 crate 不拥有 charset 算法。
 
-`Utf8TextReader` / `Utf8TextWriter` 是基于 `Input<Item = u8>` /
-`Output<Item = u8>` 的严格 UTF-8 便利包装。它们委托给
-`CharsetTextReader` / `CharsetTextWriter` 使用的同一套 buffered charset
-状态机；标准库流通过 Qubit 的 blanket adapter 使用，不再形成第二套核心 I/O 边界。
+## 延伸阅读
+
+- [README](../README.zh_CN.md) 与 [English README](../README.md)
+- [English user guide](user_guide.md)
+- [API 文档](https://docs.rs/qubit-io-text)

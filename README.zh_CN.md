@@ -7,9 +7,8 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-面向 Rust 的 Unicode 文本 trait，以及同步/异步 charset adapter。
-
-`qubit-io-text` 提供：
+`qubit-io-text` 让 Rust 应用处理 Unicode 文本和文本行，并在流边界明确指定字节编码。
+它提供：
 
 - 面向同步 Unicode 文本的 `TextRead`、`TextLineRead` 和 `TextWrite`；
 - `StrTextReader`、`StringCharInput`、`StringCharOutput`、
@@ -31,7 +30,7 @@ Charset 算法保留在 `qubit-codec-text`；本 crate 只负责在流上驱动�
 qubit-io-text = "0.3"
 ```
 
-## 同步示例
+## 快速开始：编码一条文本消息
 
 ```rust
 use qubit_codec_text::Utf8Codec;
@@ -58,7 +57,7 @@ assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
 # Ok::<(), std::io::Error>(())
 ```
 
-## 异步示例
+## 运行时无关的异步 API
 
 ```rust
 use qubit_io::AsyncOutput;
@@ -89,7 +88,7 @@ where
 `finish_async()`。finish 失败时 writer 仍由调用方持有，可检查或重试。finish 成功
 后，使用 `into_parts()` 可在不执行额外 I/O 的情况下取回 owned output。
 
-## API 地图
+## 核心能力
 
 | 领域 | API |
 | --- | --- |
@@ -105,8 +104,9 @@ where
 保留尚未被底层接收的编码字节。但取消高层写操作时，文本前缀可能已经生效，因此除非
 外层协议允许，否则不要盲目重试完整文本。
 
-详细说明见[中文用户指南](doc/user_guide.zh_CN.md)和
-[API 文档](https://docs.rs/qubit-io-text)。
+本 crate 不拥有 charset 算法，也不选择异步运行时。需要贯穿场景教程时，请参阅
+[中文用户指南](doc/user_guide.zh_CN.md)或 [English user guide](doc/user_guide.md)；
+全部公开项目请参阅 [API 文档](https://docs.rs/qubit-io-text)。
 
 ## 测试
 

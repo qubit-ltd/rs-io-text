@@ -7,9 +7,8 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Unicode text traits and synchronous/asynchronous charset adapters for Rust.
-
-`qubit-io-text` provides:
+`qubit-io-text` lets Rust applications handle Unicode text and lines while
+making byte encodings explicit at the stream boundary. It provides:
 
 - `TextRead`, `TextLineRead`, and `TextWrite` for synchronous Unicode text;
 - string and character-stream adapters such as `StrTextReader`,
@@ -32,7 +31,7 @@ streams without selecting an async runtime.
 qubit-io-text = "0.3"
 ```
 
-## Synchronous Example
+## Quick Start: Encode a Text Message
 
 ```rust
 use qubit_codec_text::Utf8Codec;
@@ -59,7 +58,7 @@ assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
 # Ok::<(), std::io::Error>(())
 ```
 
-## Asynchronous Example
+## Runtime-Neutral Async
 
 ```rust
 use qubit_io::AsyncOutput;
@@ -91,7 +90,7 @@ underlying output flush. A failed finish retains the writer, so callers can
 inspect or retry it. After a successful finish, `into_parts()` recovers the
 owned output without performing further I/O.
 
-## API Map
+## What It Provides
 
 | Area | API |
 | --- | --- |
@@ -108,7 +107,9 @@ and cancellation. Async writers retain encoded bytes until the output accepts
 them. A cancelled high-level write may nevertheless have applied a prefix, so
 do not blindly retry the whole text unless the surrounding protocol permits it.
 
-See the [user guide](doc/user_guide.md) and
+The crate does not own charset algorithms or select an async runtime. For a
+scenario-led tutorial, see the [user guide](doc/user_guide.md) or
+[中文用户指南](doc/user_guide.zh_CN.md); for every public item, see the
 [API reference](https://docs.rs/qubit-io-text).
 
 ## Testing
