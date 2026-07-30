@@ -5,12 +5,26 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{error::Error as StdError, io};
+use std::{
+    error::Error as StdError,
+    io,
+};
 
-use qubit_codec::{TranscodeEncodeOutput, TranscodeEncoder, nz};
-use qubit_io::{Buffer, Output};
+use qubit_codec::{
+    TranscodeEncodeOutput,
+    TranscodeEncoder,
+    nz,
+};
+use qubit_io::{
+    Buffer,
+    Output,
+};
 
-use crate::{LineEnding, TextWrite, io_error::encode_error_to_io as shared_encode_error_to_io};
+use crate::{
+    LineEnding,
+    TextWrite,
+    io_error::encode_error_to_io as shared_encode_error_to_io,
+};
 
 /// Default byte buffer capacity used by buffered text writers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -216,6 +230,9 @@ where
 
     /// Finishes codec-owned output and flushes pending bytes.
     ///
+    /// If finalization succeeds but delivery fails, calling this method again
+    /// retries delivery without finalizing the encoder a second time.
+    ///
     /// # Errors
     ///
     /// Returns encoding finalization errors or I/O errors from the wrapped
@@ -225,7 +242,7 @@ where
         if !self.finished {
             self.ensure_started()?;
             self.output
-                .finish(&mut self.encoder, &mut encode_error_to_io)?;
+                .finish_to_buffer(&mut self.encoder, &mut encode_error_to_io)?;
             self.finished = true;
         }
         self.output.flush()

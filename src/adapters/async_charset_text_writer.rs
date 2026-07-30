@@ -10,7 +10,7 @@
 use std::io;
 
 use qubit_codec::{
-    TranscodeStatus,
+    AsyncTranscodeEncodeOutput,
     Transcoder,
 };
 use qubit_codec_text::{
@@ -23,10 +23,7 @@ use crate::{
     CodingErrorPolicy,
     LineEnding,
     adapters::charset_text_writer::create_encoder,
-    io_error::{
-        capacity_error_to_io,
-        encode_error_to_io,
-    },
+    io_error::encode_error_to_io,
 };
 
 /// Default encoded-byte capacity used by asynchronous charset writers.
@@ -48,12 +45,9 @@ where
     O: AsyncOutput<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
-    output: O,
+    output: AsyncTranscodeEncodeOutput<O>,
     encoder: CharsetEncoder<C>,
     line_ending: LineEnding,
-    bytes: Vec<u8>,
-    byte_position: usize,
-    byte_limit: usize,
     started: bool,
     finished: bool,
 }
@@ -117,12 +111,9 @@ where
         let one_character = encoder.max_transcode_output_len(1).unwrap_or(1);
         let capacity = buffer_capacity.max(one_character).max(1);
         Self {
-            output,
+            output: AsyncTranscodeEncodeOutput::with_capacity(output, capacity),
             encoder,
             line_ending: LineEnding::Lf,
-            bytes: vec![0; capacity],
-            byte_position: 0,
-            byte_limit: 0,
             started: false,
             finished: false,
         }
@@ -151,7 +142,7 @@ where
     /// writer.
     #[must_use]
     pub const fn output(&self) -> &O {
-        &self.output
+        self.output.inner()
     }
 
     /// Returns a mutable reference to the asynchronous byte output.
@@ -163,7 +154,7 @@ where
     ///
     /// Returns the wrapped output.
     pub fn output_mut(&mut self) -> &mut O {
-        &mut self.output
+        self.output.inner_mut()
     }
 
     /// Returns the configured line ending.
@@ -189,12 +180,9 @@ where
     ///
     /// Returns the wrapped output and pending bytes in logical write order.
     #[must_use = "the returned output and pending bytes must be handled"]
-    pub fn into_parts(mut self) -> (O, Vec<u8>) {
-        let pending_start = self.byte_position;
-        let pending_end = self.byte_limit;
-        self.bytes.copy_within(pending_start..pending_end, 0);
-        self.bytes.truncate(pending_end - pending_start);
-        (self.output, self.bytes)
+    pub fn into_parts(self) -> (O, Vec<u8>) {
+        let (output, pending) = self.output.into_parts();
+        (output, pending.readable().to_vec())
     }
 
     /// Returns an error when encoding has already been finished.
@@ -207,15 +195,6 @@ where
         }
         Ok(())
     }
-
-    /// Ensures the encoded-byte storage has at least `required` slots.
-    fn ensure_byte_capacity(&mut self, required: usize) {
-        if self.bytes.len() >= required {
-            return;
-        }
-        let grown = self.bytes.len().saturating_mul(2).max(required).max(1);
-        self.bytes.resize(grown, 0);
-    }
 }
 
 impl<O, C> AsyncCharsetTextWriter<O, C>
@@ -223,78 +202,32 @@ where
     O: AsyncOutput<Item = u8> + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
-    /// Sends every retained encoded byte to the wrapped output.
-    async fn drain_pending_async(&mut self) -> io::Result<()> {
-        while self.byte_position < self.byte_limit {
-            let result = {
-                let output = &mut self.output;
-                let bytes = &self.bytes[self.byte_position..self.byte_limit];
-                output.write_async(bytes).await
-            };
-            match result {
-                Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
-                Ok(written) => self.byte_position += written,
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) => return Err(error),
-            }
-        }
-        self.byte_position = 0;
-        self.byte_limit = 0;
-        Ok(())
-    }
-
     /// Starts the encoder lifecycle and sends any stream prefix.
     async fn ensure_started_async(&mut self) -> io::Result<()> {
         if !self.started {
-            debug_assert_eq!(0, self.byte_limit);
-            let required = self
-                .encoder
-                .max_reset_output_len()
-                .map_err(capacity_error_to_io)?;
-            self.ensure_byte_capacity(required);
-            let written = self
-                .encoder
-                .reset(self.bytes.as_mut_slice(), 0)
-                .map_err(encode_error_to_io)?;
-            assert!(written <= required, "encoder reset exceeded its bound");
-            self.byte_position = 0;
-            self.byte_limit = written;
+            let mut map_error = encode_error_to_io;
+            self.output
+                .reset_async(&mut self.encoder, &mut map_error)
+                .await?;
             self.started = true;
         }
-        self.drain_pending_async().await
+        self.output.drain_async().await
     }
 
     /// Encodes and writes one complete character slice.
     async fn encode_chars_async(&mut self, chars: &[char]) -> io::Result<()> {
         self.ensure_started_async().await?;
-        let mut read_total = 0;
-        while read_total < chars.len() {
-            let progress = self
-                .encoder
-                .transcode(chars, read_total, self.bytes.as_mut_slice(), 0)
-                .map_err(encode_error_to_io)?;
-            // `CharsetEncoder` constructs validated progress from the codec
-            // engine. Invalid counts are rejected at that boundary.
-            read_total += progress.read();
-            self.byte_position = 0;
-            self.byte_limit = progress.written();
-            let required = match progress.status() {
-                TranscodeStatus::Complete => None,
-                TranscodeStatus::NeedOutput { required, .. } => {
-                    Some(required.get())
-                }
-                TranscodeStatus::NeedInput { .. } => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "charset encoder unexpectedly requested more input",
-                    ));
-                }
-            };
-            self.drain_pending_async().await?;
-            if let Some(required) = required {
-                self.ensure_byte_capacity(required);
-            }
-        }
+        let mut map_error = encode_error_to_io;
+        self.output
+            .transcode_async(
+                &mut self.encoder,
+                &mut map_error,
+                chars,
+                0,
+                chars.len(),
+            )
+            .await?;
+        self.output.drain_async().await?;
         Ok(())
     }
 
@@ -386,7 +319,6 @@ where
     ///
     /// Returns output write or flush errors.
     pub async fn flush_async(&mut self) -> io::Result<()> {
-        self.drain_pending_async().await?;
         self.output.flush_async().await
     }
 
@@ -404,21 +336,12 @@ where
     pub async fn finish_async(&mut self) -> io::Result<()> {
         if !self.finished {
             self.ensure_started_async().await?;
-            let required = self
-                .encoder
-                .max_finish_output_len()
-                .map_err(capacity_error_to_io)?;
-            self.ensure_byte_capacity(required);
-            let written = self
-                .encoder
-                .finish(self.bytes.as_mut_slice(), 0)
-                .map_err(encode_error_to_io)?;
-            assert!(written <= required, "encoder finish exceeded its bound");
-            self.byte_position = 0;
-            self.byte_limit = written;
+            let mut map_error = encode_error_to_io;
+            self.output
+                .finish_async(&mut self.encoder, &mut map_error)
+                .await?;
             self.finished = true;
         }
-        self.drain_pending_async().await?;
         self.output.flush_async().await
     }
 }
