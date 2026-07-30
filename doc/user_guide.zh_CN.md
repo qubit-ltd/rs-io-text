@@ -129,9 +129,13 @@ where
 - `Strict` 会报告畸形编码输入、不完整的 EOF 编码尾部和当前 codec 无法编码的 Unicode
   文本。
 - `finish` 或 `finish_async` 失败后，writer 仍可用于重试。
-- 异步 reader 的 `input()` 可能已越过其缓冲文本，`into_input()` 会丢弃该缓冲状态。
+- 异步 reader 的 `input()` 可能已越过其缓冲文本。
 - `into_parts()` 不执行 I/O；在成功 finish 前调用它会明确放弃尚未发出的 codec
   lifecycle 输出。
+- 当需要限制解码结果时，使用 `read_to_string_limited`、
+  `read_to_string_limited_async` 或
+  `read_to_string_with_charset_limited`。上限按该调用追加的 UTF-8 字节计算；
+  超限会返回 `InvalidData` 并将目标字符串恢复到调用前长度。它不限制原始输入字节。
 
 ## 排障与最佳实践
 

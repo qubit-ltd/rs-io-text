@@ -97,6 +97,39 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
         reader.read_to_string(&mut output)?;
         Ok(output)
     }
+
+    /// Reads remaining bytes as charset-encoded text with an append-size limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Charset codec used by the byte input.
+    /// - `policy`: Malformed input handling policy.
+    /// - `max_append_len`: Maximum UTF-8 byte length of the decoded result.
+    ///
+    /// # Returns
+    ///
+    /// Returns the decoded text when it fits within `max_append_len` bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns I/O or charset-decoding errors. Returns
+    /// [`io::ErrorKind::InvalidData`] when the decoded text exceeds
+    /// `max_append_len`.
+    fn read_to_string_with_charset_limited<C>(
+        &mut self,
+        codec: C,
+        policy: CodingErrorPolicy,
+        max_append_len: usize,
+    ) -> io::Result<String>
+    where
+        C: CharsetCodec<Unit = u8>,
+    {
+        let mut reader =
+            CharsetTextReader::new(InputRef::new(self), codec, policy);
+        let mut output = String::new();
+        reader.read_to_string_limited(&mut output, max_append_len)?;
+        Ok(output)
+    }
 }
 
 impl<R> CharsetReadExt for R where R: Input<Item = u8> + Sized {}

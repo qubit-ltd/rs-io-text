@@ -32,3 +32,11 @@ where
 pub(crate) fn capacity_error_to_io(error: CapacityError) -> io::Error {
     io::Error::new(io::ErrorKind::OutOfMemory, error)
 }
+
+/// Creates an error for decoded text that exceeds an append-size limit.
+pub(crate) fn text_append_limit_error(max_append_len: usize) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("decoded text exceeds the {max_append_len}-byte append limit"),
+    )
+}

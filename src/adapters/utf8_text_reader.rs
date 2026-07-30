@@ -10,7 +10,12 @@ use std::io;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::Input;
 
-use crate::{CharsetTextReader, CodingErrorPolicy, TextLineRead, TextRead};
+use crate::{
+    CharsetTextReader,
+    CodingErrorPolicy,
+    TextLineRead,
+    TextRead,
+};
 
 /// Streaming UTF-8 text reader over a Qubit byte input.
 ///
@@ -42,7 +47,11 @@ where
     #[must_use]
     pub fn new(input: I) -> Self {
         Self {
-            reader: CharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict),
+            reader: CharsetTextReader::new(
+                input,
+                Utf8Codec,
+                CodingErrorPolicy::Strict,
+            ),
         }
     }
 
@@ -81,6 +90,30 @@ where
     pub const fn input(&self) -> &I {
         self.reader.input()
     }
+
+    /// Appends decoded UTF-8 text while enforcing a UTF-8 byte limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append to.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of Unicode scalar values appended to `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or UTF-8 errors. Returns [`io::ErrorKind::InvalidData`]
+    /// and restores `output` to its original length when the decoded text
+    /// exceeds `max_append_len`.
+    pub fn read_to_string_limited(
+        &mut self,
+        output: &mut String,
+        max_append_len: usize,
+    ) -> io::Result<usize> {
+        self.reader.read_to_string_limited(output, max_append_len)
+    }
 }
 
 impl<I> TextRead for Utf8TextReader<I>
@@ -95,12 +128,19 @@ where
     }
 
     #[inline]
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }

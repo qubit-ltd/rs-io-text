@@ -13,7 +13,7 @@ use qubit_io_text::{
 };
 
 #[test]
-fn test_from_string_reads_owned_text() -> std::io::Result<()> {
+fn test_from_string_reads_owned_text() -> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new("alpha\nβeta".to_owned());
     let mut line = String::new();
 
@@ -26,7 +26,7 @@ fn test_from_string_reads_owned_text() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_chars_reads_owned_text() -> std::io::Result<()> {
+fn test_read_chars_reads_owned_text() -> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new("ab中".to_owned());
     let mut chars = Vec::new();
 
@@ -38,7 +38,8 @@ fn test_read_chars_reads_owned_text() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_chars_with_zero_max_does_not_advance() -> std::io::Result<()> {
+fn test_read_chars_with_zero_max_does_not_advance()
+-> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new("ab".to_owned());
     let mut chars = vec!['x'];
 
@@ -49,7 +50,8 @@ fn test_read_chars_with_zero_max_does_not_advance() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_to_string_appends_remaining_owned_text() -> std::io::Result<()> {
+fn test_read_to_string_appends_remaining_owned_text()
+-> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new("ab中".to_owned());
     let mut output = String::from("prefix:");
 
@@ -61,7 +63,7 @@ fn test_read_to_string_appends_remaining_owned_text() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_line_returns_false_at_eof() -> std::io::Result<()> {
+fn test_read_line_returns_false_at_eof() -> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new(String::new());
     let mut line = String::from("seed");
 
@@ -75,4 +77,17 @@ fn test_into_inner_returns_original_text() {
     let reader = StringTextReader::new("payload".to_owned());
 
     assert_eq!("payload", reader.into_inner());
+}
+
+#[test]
+fn test_string_text_reader_is_infallible() {
+    fn assert_infallible<T>(_: &T)
+    where
+        T: TextRead<Error = std::convert::Infallible>,
+    {
+    }
+
+    let reader = StringTextReader::new("payload".to_owned());
+
+    assert_infallible(&reader);
 }

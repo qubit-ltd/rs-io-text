@@ -27,6 +27,7 @@ use crate::CodingErrorPolicy;
 use crate::io_error::{
     capacity_error_to_io,
     decode_error_to_io,
+    text_append_limit_error,
 };
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
@@ -387,6 +388,46 @@ where
             output.extend(chars.iter());
             count += chars.len();
             self.char_position = self.char_limit;
+        }
+        Ok(count)
+    }
+
+    /// Asynchronously appends decoded text while enforcing a UTF-8 byte limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append to.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of Unicode scalar values appended to `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns input and decoding errors. Returns [`io::ErrorKind::InvalidData`]
+    /// and restores `output` to its original length when the next decoded
+    /// character would exceed `max_append_len`. Previously consumed characters
+    /// remain consumed by the reader.
+    pub async fn read_to_string_limited_async(
+        &mut self,
+        output: &mut String,
+        max_append_len: usize,
+    ) -> io::Result<usize> {
+        let initial_len = output.len();
+        let mut count = 0;
+        while self.fill_chars_async().await? {
+            while self.char_position < self.char_limit {
+                let ch = self.chars[self.char_position];
+                let appended_len = output.len() - initial_len;
+                if ch.len_utf8() > max_append_len.saturating_sub(appended_len) {
+                    output.truncate(initial_len);
+                    return Err(text_append_limit_error(max_append_len));
+                }
+                output.push(ch);
+                self.char_position += 1;
+                count += 1;
+            }
         }
         Ok(count)
     }

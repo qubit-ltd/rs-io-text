@@ -5,17 +5,31 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{error::Error as StdError, io};
+use std::{
+    error::Error as StdError,
+    io,
+};
 
-use qubit_codec::{CapacityError, TranscodeDecodeInput, TranscodeDecoder, nz};
+use qubit_codec::{
+    CapacityError,
+    TranscodeDecodeInput,
+    TranscodeDecoder,
+    nz,
+};
 use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::{Input, UncheckedSlice};
+use qubit_io::{
+    Input,
+    UncheckedSlice,
+};
 
 use crate::{
-    CodingErrorPolicy, TextLineRead, TextRead,
+    CodingErrorPolicy,
+    TextLineRead,
+    TextRead,
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
         decode_error_to_io as shared_decode_error_to_io,
+        text_append_limit_error,
     },
 };
 
@@ -39,7 +53,7 @@ where
 {
     input: TranscodeDecodeInput<R>,
     decoder: D,
-    policy: CodingErrorPolicy,
+    incomplete_eof_policy: CodingErrorPolicy,
     chars: Vec<char>,
     char_position: usize,
     char_limit: usize,
@@ -57,15 +71,26 @@ where
     ///
     /// - `inner`: Byte reader to decode lazily.
     /// - `decoder`: Streaming byte-to-character transcoder.
-    /// - `policy`: EOF incomplete-tail handling policy.
+    /// - `incomplete_eof_policy`: Handling policy for an incomplete encoded
+    ///   tail at EOF. It does not control malformed-input errors reported by
+    ///   `decoder`.
     ///
     /// # Returns
     ///
     /// Returns a buffered text reader. Construction does not read from
     /// `inner`.
     #[must_use]
-    pub fn new(inner: R, decoder: D, policy: CodingErrorPolicy) -> Self {
-        Self::with_capacity(inner, decoder, policy, DEFAULT_BUFFER_CAPACITY)
+    pub fn new(
+        inner: R,
+        decoder: D,
+        incomplete_eof_policy: CodingErrorPolicy,
+    ) -> Self {
+        Self::with_capacity(
+            inner,
+            decoder,
+            incomplete_eof_policy,
+            DEFAULT_BUFFER_CAPACITY,
+        )
     }
 
     /// Creates a buffered text reader with a requested byte buffer capacity.
@@ -74,7 +99,9 @@ where
     ///
     /// - `inner`: Byte reader to decode lazily.
     /// - `decoder`: Streaming byte-to-character transcoder.
-    /// - `policy`: EOF incomplete-tail handling policy.
+    /// - `incomplete_eof_policy`: Handling policy for an incomplete encoded
+    ///   tail at EOF. It does not control malformed-input errors reported by
+    ///   `decoder`.
     /// - `capacity`: Requested byte buffer capacity.
     ///
     /// # Returns
@@ -82,12 +109,17 @@ where
     /// Returns a buffered text reader. The byte buffer is raised to at least
     /// four bytes so built-in Unicode byte codecs can retain incomplete tails.
     #[must_use]
-    pub fn with_capacity(inner: R, decoder: D, policy: CodingErrorPolicy, capacity: usize) -> Self {
+    pub fn with_capacity(
+        inner: R,
+        decoder: D,
+        incomplete_eof_policy: CodingErrorPolicy,
+        capacity: usize,
+    ) -> Self {
         let capacity = capacity.max(MIN_TEXT_BUFFER_CAPACITY);
         Self {
             input: TranscodeDecodeInput::with_capacity(inner, capacity),
             decoder,
-            policy,
+            incomplete_eof_policy,
             chars: vec!['\0'; capacity],
             char_position: 0,
             char_limit: 0,
@@ -192,7 +224,7 @@ where
     ///
     /// Returns [`io::ErrorKind::InvalidData`] in strict mode.
     fn handle_incomplete_eof(&mut self) -> io::Result<bool> {
-        match self.policy {
+        match self.incomplete_eof_policy {
             CodingErrorPolicy::Strict => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "incomplete charset input at EOF",
@@ -277,6 +309,46 @@ where
         }
         self.handle_incomplete_eof()
     }
+
+    /// Appends decoded text while enforcing a UTF-8 byte limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append to.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of Unicode scalar values appended to `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors. Returns [`io::ErrorKind::InvalidData`]
+    /// and restores `output` to its original length when the next decoded
+    /// character would exceed `max_append_len`. Previously consumed characters
+    /// remain consumed by the reader.
+    pub fn read_to_string_limited(
+        &mut self,
+        output: &mut String,
+        max_append_len: usize,
+    ) -> io::Result<usize> {
+        let initial_len = output.len();
+        let mut count = 0;
+        while self.fill_chars()? {
+            while self.char_position < self.char_limit {
+                let ch = self.chars[self.char_position];
+                let appended_len = output.len() - initial_len;
+                if ch.len_utf8() > max_append_len.saturating_sub(appended_len) {
+                    output.truncate(initial_len);
+                    return Err(text_append_limit_error(max_append_len));
+                }
+                output.push(ch);
+                self.char_position += 1;
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
 }
 
 impl<R, D> TextRead for BufferedReader<R, D>
@@ -292,12 +364,18 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
+        let ch = unsafe {
+            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
+        };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max && self.fill_chars()? {
             let available = self.char_limit - self.char_position;
@@ -310,7 +388,10 @@ where
         Ok(count)
     }
 
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while self.fill_chars()? {
             let chars = &self.chars[self.char_position..self.char_limit];

@@ -137,10 +137,14 @@ the entire string unless the surrounding protocol permits duplicate prefixes.
 - `Strict` reports malformed encoded input, incomplete encoded EOF tails, and
   Unicode text that the selected codec cannot encode.
 - A failing `finish` or `finish_async` leaves the writer available for retry.
-- `input()` can be positioned beyond text already buffered by an async reader;
-  `into_input()` discards that buffered text state.
+- `input()` can be positioned beyond text already buffered by an async reader.
 - `into_parts()` performs no I/O. Calling it before a successful finish
   explicitly abandons codec lifecycle output that has not yet been emitted.
+- Use `read_to_string_limited`, `read_to_string_limited_async`, or
+  `read_to_string_with_charset_limited` when decoded output needs a bound.
+  The limit applies to UTF-8 bytes appended by that call; exceeding it
+  returns `InvalidData` and restores the destination string to its original
+  length. It does not impose a raw input-byte limit.
 
 ## Troubleshooting and Best Practices
 

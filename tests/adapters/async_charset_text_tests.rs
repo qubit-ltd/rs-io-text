@@ -784,3 +784,20 @@ fn async_charset_writer_propagates_codec_lifecycle_errors() {
         .expect_err("finish error should propagate");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
 }
+
+#[test]
+fn async_charset_reader_limited_read_rolls_back_appended_text() {
+    let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CodingErrorPolicy::Strict,
+    );
+    let mut output = String::from("prefix:");
+
+    let error = complete(reader.read_to_string_limited_async(&mut output, 3))
+        .expect_err("decoded text beyond the append limit must fail");
+
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("prefix:", output);
+}

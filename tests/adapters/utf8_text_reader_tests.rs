@@ -5,10 +5,19 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{self, Cursor, ErrorKind, Read};
+use std::io::{
+    self,
+    Cursor,
+    ErrorKind,
+    Read,
+};
 
 use qubit_io::Input;
-use qubit_io_text::{TextLineRead, TextRead, Utf8TextReader};
+use qubit_io_text::{
+    TextLineRead,
+    TextRead,
+    Utf8TextReader,
+};
 
 struct InputOnlyReader {
     bytes: Vec<u8>,
@@ -37,7 +46,8 @@ impl Input for InputOnlyReader {
         let read = available.min(count);
         let input_end = self.position + read;
         let output_end = index + read;
-        output[index..output_end].copy_from_slice(&self.bytes[self.position..input_end]);
+        output[index..output_end]
+            .copy_from_slice(&self.bytes[self.position..input_end]);
         self.position = input_end;
         Ok(read)
     }
@@ -258,4 +268,18 @@ fn test_read_char_reports_truncated_four_byte_sequence() {
         .read_char()
         .expect_err("truncated four-byte UTF-8 scalar must be rejected");
     assert_eq!(ErrorKind::InvalidData, error.kind());
+}
+
+#[test]
+fn test_utf8_reader_limited_read_rolls_back_appended_text() {
+    let input = Cursor::new("A中".as_bytes().to_vec());
+    let mut reader = Utf8TextReader::new(input);
+    let mut output = String::from("prefix:");
+
+    let error = reader
+        .read_to_string_limited(&mut output, 3)
+        .expect_err("decoded text beyond the append limit must fail");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("prefix:", output);
 }
