@@ -63,7 +63,8 @@ fn test_read_to_string_appends_remaining_owned_text()
 }
 
 #[test]
-fn test_read_line_returns_false_at_eof() -> Result<(), std::convert::Infallible> {
+fn test_read_line_returns_false_at_eof() -> Result<(), std::convert::Infallible>
+{
     let mut reader = StringTextReader::new(String::new());
     let mut line = String::from("seed");
 

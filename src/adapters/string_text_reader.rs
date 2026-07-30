@@ -71,7 +71,12 @@ impl TextRead for StringTextReader {
         output: &mut Vec<char>,
         max: usize,
     ) -> Result<usize, Self::Error> {
-        Ok(read_chars_at(self.text.as_str(), &mut self.position, output, max))
+        Ok(read_chars_at(
+            self.text.as_str(),
+            &mut self.position,
+            output,
+            max,
+        ))
     }
 
     #[inline]
@@ -79,7 +84,11 @@ impl TextRead for StringTextReader {
         &mut self,
         output: &mut String,
     ) -> Result<usize, Self::Error> {
-        Ok(read_to_string_at(self.text.as_str(), &mut self.position, output))
+        Ok(read_to_string_at(
+            self.text.as_str(),
+            &mut self.position,
+            output,
+        ))
     }
 }
 
