@@ -76,7 +76,7 @@ where
         Utf8Codec,
         CodingErrorPolicy::Strict,
     );
-    writer.write_line_async("hello").await?;
+    writer.write_line_fully_async("hello").await?;
     writer.finish_async().await?;
     let (output, pending) = writer.into_parts();
     debug_assert!(pending.is_empty());
@@ -100,9 +100,10 @@ where
 | 异步 charset | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` |
 | 策略 | `CodingErrorPolicy`、`LineEnding` |
 
-异步 charset reader 会在挂起或取消时保留未完成字符的编码字节；异步 writer 会
-保留尚未被底层接收的编码字节。但取消高层写操作时，文本前缀可能已经生效，因此除非
-外层协议允许，否则不要盲目重试完整文本。
+异步 charset reader 会在挂起或取消时保留未完成字符的编码字节。异步 writer 的
+`write_chars_async` 和 `write_str_async` 每次只提交一个可报告的前缀；按返回数量推进
+输入后再继续。`*_fully_async` 是便利循环，取消后可能已写入前缀，因此不要盲目重试
+完整文本。
 
 本 crate 不拥有 charset 算法，也不选择异步运行时。需要贯穿场景教程时，请参阅
 [中文用户指南](doc/user_guide.zh_CN.md)或 [English user guide](doc/user_guide.md)；

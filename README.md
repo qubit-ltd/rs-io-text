@@ -77,7 +77,7 @@ where
         Utf8Codec,
         CodingErrorPolicy::Strict,
     );
-    writer.write_line_async("hello").await?;
+    writer.write_line_fully_async("hello").await?;
     writer.finish_async().await?;
     let (output, pending) = writer.into_parts();
     debug_assert!(pending.is_empty());
@@ -103,9 +103,10 @@ owned output without performing further I/O.
 | Policy | `CodingErrorPolicy`, `LineEnding` |
 
 Async charset readers retain an incomplete encoded character across suspension
-and cancellation. Async writers retain encoded bytes until the output accepts
-them. A cancelled high-level write may nevertheless have applied a prefix, so
-do not blindly retry the whole text unless the surrounding protocol permits it.
+and cancellation. `write_chars_async` and `write_str_async` commit one
+reportable prefix and return its count; advance the source cursor before the
+next call. The `*_fully_async` convenience loops can apply a prefix before
+cancellation, so do not blindly retry the whole text.
 
 The crate does not own charset algorithms or select an async runtime. For a
 scenario-led tutorial, see the [user guide](doc/user_guide.md) or

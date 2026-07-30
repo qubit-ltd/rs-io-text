@@ -119,7 +119,7 @@ where
         CodingErrorPolicy::Strict,
     )
     .with_line_ending(LineEnding::CrLf);
-    writer.write_line_async("subject: status").await?;
+    writer.write_line_fully_async("subject: status").await?;
     writer.finish_async().await?;
     let (output, pending) = writer.into_parts();
     debug_assert!(pending.is_empty());
@@ -128,9 +128,11 @@ where
 ```
 
 The asynchronous reader retains incomplete encoded characters across suspension
-and cancellation. Async writers retain pending encoded bytes, but cancellation
-of a high-level write can still leave a text prefix in the output; do not retry
-the entire string unless the surrounding protocol permits duplicate prefixes.
+and cancellation. `write_chars_async` and `write_str_async` commit one
+reportable prefix and return its count; resume with the suffix. The
+`*_fully_async` convenience loops can still leave a text prefix after
+cancellation, so do not retry the entire string unless the surrounding protocol
+permits duplicate prefixes.
 
 ## Errors and Diagnostics
 

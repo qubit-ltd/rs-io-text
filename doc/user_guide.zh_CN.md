@@ -112,7 +112,7 @@ where
         CodingErrorPolicy::Strict,
     )
     .with_line_ending(LineEnding::CrLf);
-    writer.write_line_async("subject: status").await?;
+    writer.write_line_fully_async("subject: status").await?;
     writer.finish_async().await?;
     let (output, pending) = writer.into_parts();
     debug_assert!(pending.is_empty());
@@ -120,9 +120,10 @@ where
 }
 ```
 
-异步 reader 会在挂起或取消时保留不完整编码字符。异步 writer 会保留 pending 编码字节，
-但取消高层写入仍可能使输出中留下文本前缀；除非外层协议允许重复前缀，否则不要整体
-重试字符串。
+异步 reader 会在挂起或取消时保留不完整编码字符。异步 writer 的
+`write_chars_async` 与 `write_str_async` 每次提交一个可报告的前缀，并返回其长度；使用
+剩余后缀继续写入。`*_fully_async` 便利循环取消后仍可能留下文本前缀；除非外层协议允许
+重复前缀，否则不要整体重试字符串。
 
 ## 错误与诊断
 
