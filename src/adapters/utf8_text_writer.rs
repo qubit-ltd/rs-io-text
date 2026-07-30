@@ -25,6 +25,21 @@ use crate::{
 /// This is the strict UTF-8 convenience form of [`CharsetTextWriter`]. It
 /// shares the generic charset buffering and encoder state machine instead of
 /// exposing a separate `std::io::Write`-based core API.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::{TextWrite, Utf8TextWriter};
+///
+/// let mut bytes = Vec::new();
+/// let mut writer = Utf8TextWriter::new(&mut bytes);
+/// writer.write_str("hello")?;
+/// writer.finish()?;
+/// let (output, pending) = writer.into_parts();
+/// assert!(pending.readable().is_empty());
+/// assert_eq!(b"hello", output.as_slice());
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct Utf8TextWriter<O>
 where

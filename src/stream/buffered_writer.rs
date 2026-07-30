@@ -38,6 +38,24 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// buffered by [`qubit_codec::TranscodeEncodeOutput`].
 /// Encoder reset is started lazily before the first non-empty write, or before
 /// finishing an empty stream.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// use qubit_codec_text::{CharsetEncoder, Utf8Codec};
+/// use qubit_io_text::{BufferedWriter, TextWrite};
+///
+/// let encoder = CharsetEncoder::new(Utf8Codec);
+/// let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder);
+/// writer.write_str("hello")?;
+/// writer.finish()?;
+/// let (output, pending) = writer.into_parts();
+/// assert!(pending.readable().is_empty());
+/// assert_eq!(b"hello", output.get_ref().as_slice());
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct BufferedWriter<W, E>
 where

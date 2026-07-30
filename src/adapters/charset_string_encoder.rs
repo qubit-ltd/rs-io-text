@@ -37,6 +37,18 @@ const CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Type Parameters
 ///
 /// - `C`: Charset codec used to encode Unicode scalar values into target units.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec_text::Utf8Codec;
+/// use qubit_io_text::CharsetStringEncoder;
+///
+/// let mut encoder = CharsetStringEncoder::new(Utf8Codec);
+/// let encoded = encoder.encode_str("中文")?;
+/// assert_eq!("中文".as_bytes(), encoded.as_slice());
+/// # Ok::<(), qubit_codec_text::CharsetEncodeError>(())
+/// ```
 pub struct CharsetStringEncoder<C>
 where
     C: CharsetCodec,

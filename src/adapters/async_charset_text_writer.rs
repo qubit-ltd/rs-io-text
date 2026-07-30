@@ -39,6 +39,30 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// already produced by the stateful encoder. A cancelled high-level write can
 /// still be only partially applied; callers must not retry the whole text
 /// blindly unless their own protocol makes duplicate prefixes harmless.
+///
+/// # Examples
+///
+/// ```no_run
+/// use qubit_codec_text::Utf8Codec;
+/// use qubit_io::AsyncOutput;
+/// use qubit_io_text::{AsyncCharsetTextWriter, CodingErrorPolicy};
+///
+/// async fn write_all<O>(output: O) -> std::io::Result<O>
+/// where
+///     O: AsyncOutput<Item = u8> + Unpin,
+/// {
+///     let mut writer = AsyncCharsetTextWriter::new(
+///         output,
+///         Utf8Codec,
+///         CodingErrorPolicy::Strict,
+///     );
+///     writer.write_str_async("hello").await?;
+///     writer.finish_async().await?;
+///     let (output, pending) = writer.into_parts();
+///     debug_assert!(pending.is_empty());
+///     Ok(output)
+/// }
+/// ```
 #[derive(Debug)]
 pub struct AsyncCharsetTextWriter<O, C>
 where
@@ -241,6 +265,12 @@ where
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
     /// writer has been finished.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future can commit an encoded prefix to the wrapped
+    /// output. Unwritten bytes remain in this writer; resume this writer
+    /// instead of retrying the whole character independently.
     pub async fn write_char_async(&mut self, ch: char) -> io::Result<()> {
         self.write_chars_async(&[ch]).await
     }
@@ -255,6 +285,12 @@ where
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
     /// writer has been finished.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future can commit an encoded prefix to the wrapped
+    /// output. Unwritten bytes remain in this writer; resume this writer
+    /// instead of retrying the whole slice.
     pub async fn write_chars_async(
         &mut self,
         chars: &[char],
@@ -276,6 +312,12 @@ where
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
     /// writer has been finished.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future can commit an encoded prefix to the wrapped
+    /// output. Unwritten bytes remain in this writer; resume this writer
+    /// instead of retrying the whole string.
     pub async fn write_str_async(&mut self, text: &str) -> io::Result<()> {
         self.ensure_open()?;
         if text.is_empty() {
@@ -306,6 +348,11 @@ where
     /// # Errors
     ///
     /// Returns encoding or output errors.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future can commit a prefix of `line` or its line ending.
+    /// Resume this writer instead of retrying the whole line.
     pub async fn write_line_async(&mut self, line: &str) -> io::Result<()> {
         self.write_str_async(line).await?;
         self.write_str_async(self.line_ending.as_str()).await
@@ -318,6 +365,11 @@ where
     /// # Errors
     ///
     /// Returns output write or flush errors.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future can commit a pending-byte prefix. Remaining
+    /// bytes stay in this writer and `flush_async` can be called again.
     pub async fn flush_async(&mut self) -> io::Result<()> {
         self.output.flush_async().await
     }
@@ -333,6 +385,12 @@ where
     /// Returns encoder finalization or output errors. After encoder
     /// finalization succeeds, later text-write methods return
     /// [`io::ErrorKind::InvalidInput`] even when delivery still needs retrying.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future can finalize the encoder and commit a pending
+    /// byte prefix. Retry `finish_async` on the same writer; do not write more
+    /// text unless finalization has not yet succeeded.
     pub async fn finish_async(&mut self) -> io::Result<()> {
         if !self.finished {
             self.ensure_started_async().await?;

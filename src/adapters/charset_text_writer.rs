@@ -29,6 +29,26 @@ use crate::{
 /// This adapter is a charset-specific wrapper around [`BufferedWriter`]. It
 /// constructs the appropriate [`CharsetEncoder`] from the supplied codec and
 /// unmappable-character policy.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec_text::Utf8Codec;
+/// use qubit_io_text::{CharsetTextWriter, CodingErrorPolicy, TextWrite};
+///
+/// let mut bytes = Vec::new();
+/// let mut writer = CharsetTextWriter::new(
+///     &mut bytes,
+///     Utf8Codec,
+///     CodingErrorPolicy::Strict,
+/// );
+/// writer.write_str("中文")?;
+/// writer.finish()?;
+/// let (output, pending) = writer.into_parts();
+/// assert!(pending.readable().is_empty());
+/// assert_eq!("中文".as_bytes(), output.as_slice());
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct CharsetTextWriter<O, C>
 where
