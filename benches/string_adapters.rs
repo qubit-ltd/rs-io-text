@@ -10,8 +10,11 @@
 #[path = "support/tracking_allocator.rs"]
 mod tracking_allocator;
 
-use std::hint::black_box;
-use std::time::Duration;
+use std::{
+    hint::black_box,
+    io::Cursor,
+    time::Duration,
+};
 
 use criterion::{
     BenchmarkId,
@@ -30,6 +33,11 @@ use qubit_codec_text::{
 use qubit_io_text::{
     CharsetStringDecoder,
     CharsetStringEncoder,
+    CharsetTextReader,
+    CharsetTextWriter,
+    CodingErrorPolicy,
+    TextRead,
+    TextWrite,
 };
 
 use crate::tracking_allocator::measure_peak;
@@ -168,6 +176,67 @@ fn bench_owned_decode<C>(
     group.finish();
 }
 
+fn bench_streaming_charset(
+    criterion: &mut Criterion,
+    fixtures: &[(String, String)],
+) {
+    let mut group = criterion.benchmark_group("streaming_charset_utf8");
+    group.sample_size(SAMPLE_SIZE);
+    group.warm_up_time(Duration::from_secs(2));
+    group.measurement_time(Duration::from_secs(5));
+
+    for (fixture_name, input) in fixtures {
+        group.throughput(Throughput::Bytes(input.len() as u64));
+        group.bench_with_input(
+            BenchmarkId::new("read", fixture_name),
+            input,
+            |bencher, input| {
+                bencher.iter_batched(
+                    || Cursor::new(input.as_bytes().to_vec()),
+                    |input| {
+                        let mut reader = CharsetTextReader::new(
+                            input,
+                            Utf8Codec,
+                            CodingErrorPolicy::Strict,
+                        );
+                        let mut output = String::new();
+                        reader
+                            .read_to_string(&mut output)
+                            .expect("UTF-8 stream should decode");
+                        black_box(output);
+                    },
+                    criterion::BatchSize::SmallInput,
+                );
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("write", fixture_name),
+            input,
+            |bencher, input| {
+                bencher.iter_batched(
+                    || Cursor::new(Vec::with_capacity(input.len())),
+                    |output| {
+                        let mut writer = CharsetTextWriter::new(
+                            output,
+                            Utf8Codec,
+                            CodingErrorPolicy::Strict,
+                        );
+                        writer
+                            .write_str(input)
+                            .expect("UTF-8 stream should encode");
+                        writer.finish().expect("UTF-8 stream should finish");
+                        let (output, pending) = writer.into_parts();
+                        assert!(pending.readable().is_empty());
+                        black_box(output.into_inner());
+                    },
+                    criterion::BatchSize::SmallInput,
+                );
+            },
+        );
+    }
+    group.finish();
+}
+
 fn bench_string_adapters(criterion: &mut Criterion) {
     let fixtures = fixtures();
     let utf16 = Utf16ByteCodec::new(ByteOrder::LittleEndian);
@@ -185,6 +254,7 @@ fn bench_string_adapters(criterion: &mut Criterion) {
     bench_owned_decode(criterion, "utf8", Utf8Codec, &fixtures);
     bench_owned_decode(criterion, "utf16le", utf16, &fixtures);
     bench_owned_decode(criterion, "utf32le", utf32, &fixtures);
+    bench_streaming_charset(criterion, &fixtures);
 }
 
 criterion_group!(benches, bench_string_adapters);

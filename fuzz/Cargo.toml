@@ -1,0 +1,21 @@
+[package]
+name = "qubit-io-text-fuzz"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+qubit-codec-text = { path = "../../rs-codec-text" }
+qubit-io-text = { path = ".." }
+
+[[bin]]
+name = "charset_stream"
+path = "fuzz_targets/charset_stream.rs"
+test = false
+doc = false
+bench = false
