@@ -30,7 +30,7 @@ name = "qubit_io_text"
 doctest = true
 
 [dependencies]
-qubit-io = "0.14.0"
+qubit-io = "0.14"
 qubit-codec = { path = "../rs-codec", version = "0.11.0", features = ["io"] }
 qubit-codec-text = { path = "../rs-codec-text", version = "0.3.0" }
 
@@ -40,9 +40,6 @@ criterion = { version = "0.8", default-features = false }
 [[bench]]
 name = "string_adapters"
 harness = false
-
-[patch.crates-io]
-qubit-io = { path = "../rs-io" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
