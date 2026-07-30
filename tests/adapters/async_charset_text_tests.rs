@@ -434,6 +434,25 @@ fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state()
 }
 
 #[test]
+fn async_charset_reader_into_parts_preserves_unreturned_characters()
+-> io::Result<()> {
+    let input = ChunkedAsyncInput::new(b"abc".to_vec(), 3, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CodingErrorPolicy::Strict,
+    );
+
+    assert_eq!(Some('a'), complete(reader.read_char_async())?);
+
+    let (input, unread, _decoder, pending_chars) = reader.into_parts();
+    assert_eq!(3, input.position);
+    assert!(unread.readable().is_empty());
+    assert_eq!(['b', 'c'], pending_chars.as_slice());
+    Ok(())
+}
+
+#[test]
 fn async_charset_reader_compacts_partial_tail_across_pending_reads()
 -> io::Result<()> {
     let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 3, true);

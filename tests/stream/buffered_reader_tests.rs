@@ -390,8 +390,31 @@ fn test_buffered_reader_accessors() -> std::io::Result<()> {
     assert!(reader.read_line(&mut line)?);
     assert_eq!("abc\n", line);
 
-    let inner = reader.into_inner();
+    let (inner, unread, _decoder, pending_chars) = reader.into_parts();
     assert_eq!(4, inner.position());
+    assert!(unread.readable().is_empty());
+    assert!(pending_chars.is_empty());
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_into_parts_preserves_unreturned_characters()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"abc".to_vec()),
+        decoder,
+        CodingErrorPolicy::Strict,
+        4,
+    );
+
+    assert_eq!(Some('a'), reader.read_char()?);
+
+    let (inner, unread, _decoder, pending_chars) = reader.into_parts();
+    assert_eq!(3, inner.position());
+    assert!(unread.readable().is_empty());
+    assert_eq!(['b', 'c'], pending_chars.as_slice());
     Ok(())
 }
 

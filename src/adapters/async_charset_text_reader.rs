@@ -18,7 +18,10 @@ use qubit_codec_text::{
     CharsetDecodePolicy,
     CharsetDecoder,
 };
-use qubit_io::AsyncInput;
+use qubit_io::{
+    AsyncInput,
+    Buffer,
+};
 
 use crate::CodingErrorPolicy;
 use crate::io_error::{
@@ -39,6 +42,28 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// more encoded bytes is asynchronous. Bytes already obtained from the input
 /// are committed to this reader before another suspension point, so cancelling
 /// a read future does not discard a partially received encoded character.
+///
+/// # Examples
+///
+/// ```no_run
+/// use qubit_codec_text::Utf8Codec;
+/// use qubit_io::AsyncInput;
+/// use qubit_io_text::{AsyncCharsetTextReader, CodingErrorPolicy};
+///
+/// async fn read_all<I>(input: I) -> std::io::Result<String>
+/// where
+///     I: AsyncInput<Item = u8> + Unpin,
+/// {
+///     let mut reader = AsyncCharsetTextReader::new(
+///         input,
+///         Utf8Codec,
+///         CodingErrorPolicy::Strict,
+///     );
+///     let mut text = String::new();
+///     reader.read_to_string_async(&mut text).await?;
+///     Ok(text)
+/// }
+/// ```
 #[derive(Debug)]
 pub struct AsyncCharsetTextReader<I, C>
 where
@@ -137,6 +162,26 @@ where
     /// Returns the wrapped input.
     pub fn input_mut(&mut self) -> &mut I {
         self.input.inner_mut()
+    }
+
+    /// Consumes this reader and returns every component that may contain
+    /// unread logical input.
+    ///
+    /// The returned characters must be processed before continuing the text
+    /// stream. The returned byte buffer must be consumed before reading from
+    /// the wrapped input because the wrapped input can be physically ahead of
+    /// that buffer. This method does not finish the decoder.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped input, unread encoded bytes, decoder, and decoded
+    /// characters not yet returned by this reader, in that order.
+    #[must_use = "all returned reader state must be handled"]
+    pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<C>, Vec<char>) {
+        let (input, unread) = self.input.into_parts();
+        let pending_chars =
+            self.chars[self.char_position..self.char_limit].to_vec();
+        (input, unread, self.decoder, pending_chars)
     }
 
     /// Returns whether at least one decoded character is buffered.
@@ -271,6 +316,12 @@ where
     /// # Errors
     ///
     /// Returns input, decoder, or incomplete-EOF errors.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future retains fetched bytes and decoder state in this
+    /// reader. Retrying on the same reader does not discard a partial encoded
+    /// character.
     pub async fn read_char_async(&mut self) -> io::Result<Option<char>> {
         if !self.fill_chars_async().await? {
             return Ok(None);
@@ -294,6 +345,12 @@ where
     /// # Errors
     ///
     /// Returns input and decoding errors.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future retains reader state, but `output` can already
+    /// contain a successfully decoded prefix. Resume on the same reader and
+    /// do not append that prefix a second time.
     pub async fn read_chars_async(
         &mut self,
         output: &mut Vec<char>,
@@ -324,6 +381,12 @@ where
     /// # Errors
     ///
     /// Returns input and decoding errors.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future retains reader state, but `output` can already
+    /// contain a successfully decoded prefix. Resume on the same reader and
+    /// do not append that prefix a second time.
     pub async fn read_to_string_async(
         &mut self,
         output: &mut String,
@@ -351,10 +414,17 @@ where
     ///
     /// # Errors
     ///
-    /// Returns input and decoding errors. Returns [`io::ErrorKind::InvalidData`]
-    /// and restores `output` to its original length when the next decoded
-    /// character would exceed `max_append_len`. Previously consumed characters
-    /// remain consumed by the reader.
+    /// Returns input and decoding errors. Returns
+    /// [`io::ErrorKind::InvalidData`] and restores `output` to its original
+    /// length when the next decoded character would exceed
+    /// `max_append_len`. Previously consumed characters remain consumed by
+    /// the reader.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future retains reader state, but `output` can already
+    /// contain a successfully decoded prefix. Resume on the same reader and
+    /// do not append that prefix a second time.
     pub async fn read_to_string_limited_async(
         &mut self,
         output: &mut String,
@@ -392,6 +462,12 @@ where
     /// # Errors
     ///
     /// Returns input and decoding errors.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future retains reader state, but `output` can already
+    /// contain a successfully decoded line prefix. Resume on the same reader
+    /// and do not append that prefix a second time.
     pub async fn read_line_async(
         &mut self,
         output: &mut String,

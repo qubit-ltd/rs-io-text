@@ -11,7 +11,10 @@ use qubit_codec_text::{
     CharsetCodec,
     CharsetDecoder,
 };
-use qubit_io::Input;
+use qubit_io::{
+    Buffer,
+    Input,
+};
 
 use crate::{
     BufferedReader,
@@ -25,6 +28,25 @@ use crate::{
 /// This adapter is a charset-specific wrapper around [`BufferedReader`]. It
 /// constructs the appropriate [`CharsetDecoder`] from the supplied codec and
 /// malformed-input policy.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// use qubit_codec_text::Utf8Codec;
+/// use qubit_io_text::{CharsetTextReader, CodingErrorPolicy, TextRead};
+///
+/// let mut reader = CharsetTextReader::new(
+///     Cursor::new("中文".as_bytes().to_vec()),
+///     Utf8Codec,
+///     CodingErrorPolicy::Strict,
+/// );
+/// let mut text = String::new();
+/// reader.read_to_string(&mut text)?;
+/// assert_eq!("中文", text);
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct CharsetTextReader<I, C>
 where
@@ -106,6 +128,24 @@ where
         self.reader.inner()
     }
 
+    /// Consumes this reader and returns every component that may contain
+    /// unread logical input.
+    ///
+    /// The returned characters must be processed before continuing the text
+    /// stream. The returned byte buffer must be consumed before reading from
+    /// the wrapped input because the wrapped input can be physically ahead of
+    /// that buffer. This method does not finish the decoder.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped input, unread encoded bytes, decoder, and decoded
+    /// characters not yet returned by this reader, in that order.
+    #[must_use = "all returned reader state must be handled"]
+    #[inline]
+    pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<C>, Vec<char>) {
+        self.reader.into_parts()
+    }
+
     /// Appends decoded text while enforcing a UTF-8 byte limit.
     ///
     /// # Parameters
@@ -121,7 +161,8 @@ where
     ///
     /// Returns input or decoding errors. Returns [`io::ErrorKind::InvalidData`]
     /// and restores `output` to its original length when the decoded text
-    /// exceeds `max_append_len`.
+    /// exceeds `max_append_len`. Previously consumed characters remain
+    /// consumed by the reader.
     pub fn read_to_string_limited(
         &mut self,
         output: &mut String,

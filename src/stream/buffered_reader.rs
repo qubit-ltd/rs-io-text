@@ -18,6 +18,7 @@ use qubit_codec::{
 };
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_io::{
+    Buffer,
     Input,
     UncheckedSlice,
 };
@@ -46,6 +47,26 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// characters are exposed through [`TextRead`].
 /// Decoder reset is started lazily on the first read attempt, and any values
 /// emitted by reset are returned before decoded source characters.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
+/// use qubit_io_text::{BufferedReader, CodingErrorPolicy, TextRead};
+///
+/// let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+/// let mut reader = BufferedReader::new(
+///     Cursor::new("hello".as_bytes().to_vec()),
+///     decoder,
+///     CodingErrorPolicy::Strict,
+/// );
+/// let mut text = String::new();
+/// reader.read_to_string(&mut text)?;
+/// assert_eq!("hello", text);
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct BufferedReader<R, D>
 where
@@ -139,16 +160,24 @@ where
         self.input.inner()
     }
 
-    /// Consumes this reader and returns the wrapped byte reader.
+    /// Consumes this reader and returns every component that may contain
+    /// unread logical input.
+    ///
+    /// The returned characters must be processed before continuing the text
+    /// stream. The returned byte buffer must be consumed before reading from
+    /// the wrapped input because the wrapped input can be physically ahead of
+    /// that buffer. This method does not finish the decoder.
     ///
     /// # Returns
     ///
-    /// Returns the underlying reader. Buffered encoded bytes and decoded
-    /// characters are discarded.
-    #[must_use]
-    pub fn into_inner(self) -> R {
-        let (inner, _) = self.input.into_parts();
-        inner
+    /// Returns the wrapped input, unread encoded bytes, decoder, and decoded
+    /// characters not yet returned by this reader, in that order.
+    #[must_use = "all returned reader state must be handled"]
+    pub fn into_parts(self) -> (R, Buffer<u8>, D, Vec<char>) {
+        let (inner, unread) = self.input.into_parts();
+        let pending_chars =
+            self.chars[self.char_position..self.char_limit].to_vec();
+        (inner, unread, self.decoder, pending_chars)
     }
 
     /// Returns whether decoded characters are currently buffered.

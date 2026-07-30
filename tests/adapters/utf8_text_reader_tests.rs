@@ -123,6 +123,20 @@ fn test_new_accessors_expose_wrapped_input() {
 }
 
 #[test]
+fn test_utf8_text_reader_into_parts_preserves_unreturned_characters()
+-> std::io::Result<()> {
+    let mut reader = Utf8TextReader::new(Cursor::new(b"abc".to_vec()));
+
+    assert_eq!(Some('a'), reader.read_char()?);
+
+    let (input, unread, _decoder, pending_chars) = reader.into_parts();
+    assert_eq!(3, input.position());
+    assert!(unread.readable().is_empty());
+    assert_eq!(['b', 'c'], pending_chars.as_slice());
+    Ok(())
+}
+
+#[test]
 fn test_read_char_covers_utf8_widths_and_eof() -> std::io::Result<()> {
     let input = Cursor::new("aé中🙂".as_bytes().to_vec());
     let mut reader = Utf8TextReader::new(input);

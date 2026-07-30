@@ -7,8 +7,14 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::Utf8Codec;
-use qubit_io::Input;
+use qubit_codec_text::{
+    CharsetDecoder,
+    Utf8Codec,
+};
+use qubit_io::{
+    Buffer,
+    Input,
+};
 
 use crate::{
     CharsetTextReader,
@@ -22,6 +28,20 @@ use crate::{
 /// This is the strict UTF-8 convenience form of [`CharsetTextReader`]. It
 /// shares the same buffering and decoder state machine instead of introducing
 /// a separate `std::io::Read`-based stream boundary.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// use qubit_io_text::{TextRead, Utf8TextReader};
+///
+/// let mut reader = Utf8TextReader::new(Cursor::new("hello".as_bytes().to_vec()));
+/// let mut text = String::new();
+/// reader.read_to_string(&mut text)?;
+/// assert_eq!("hello", text);
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct Utf8TextReader<I>
 where
@@ -91,6 +111,26 @@ where
         self.reader.input()
     }
 
+    /// Consumes this reader and returns every component that may contain
+    /// unread logical input.
+    ///
+    /// The returned characters must be processed before continuing the text
+    /// stream. The returned byte buffer must be consumed before reading from
+    /// the wrapped input because the wrapped input can be physically ahead of
+    /// that buffer. This method does not finish the decoder.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped input, unread UTF-8 bytes, decoder, and decoded
+    /// characters not yet returned by this reader, in that order.
+    #[must_use = "all returned reader state must be handled"]
+    #[inline]
+    pub fn into_parts(
+        self,
+    ) -> (I, Buffer<u8>, CharsetDecoder<Utf8Codec>, Vec<char>) {
+        self.reader.into_parts()
+    }
+
     /// Appends decoded UTF-8 text while enforcing a UTF-8 byte limit.
     ///
     /// # Parameters
@@ -106,7 +146,8 @@ where
     ///
     /// Returns input or UTF-8 errors. Returns [`io::ErrorKind::InvalidData`]
     /// and restores `output` to its original length when the decoded text
-    /// exceeds `max_append_len`.
+    /// exceeds `max_append_len`. Previously consumed characters remain
+    /// consumed by the reader.
     pub fn read_to_string_limited(
         &mut self,
         output: &mut String,

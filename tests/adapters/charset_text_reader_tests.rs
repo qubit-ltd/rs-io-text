@@ -121,6 +121,24 @@ fn test_accessors_expose_wrapped_reader() {
 }
 
 #[test]
+fn test_charset_text_reader_into_parts_preserves_unreturned_characters()
+-> std::io::Result<()> {
+    let mut reader = CharsetTextReader::new(
+        Cursor::new(b"abc".to_vec()),
+        Utf8Codec,
+        CodingErrorPolicy::Strict,
+    );
+
+    assert_eq!(Some('a'), reader.read_char()?);
+
+    let (input, unread, _decoder, pending_chars) = reader.into_parts();
+    assert_eq!(3, input.position());
+    assert!(unread.readable().is_empty());
+    assert_eq!(['b', 'c'], pending_chars.as_slice());
+    Ok(())
+}
+
+#[test]
 fn test_read_chars_after_decoding() -> std::io::Result<()> {
     let mut reader = CharsetTextReader::new(
         Cursor::new("中文".as_bytes().to_vec()),
@@ -308,11 +326,8 @@ fn test_charset_read_ext_reads_one_shot_text() -> std::io::Result<()> {
 #[test]
 fn test_charset_reader_limited_read_rolls_back_appended_text() {
     let input = Cursor::new("A中".as_bytes().to_vec());
-    let mut reader = CharsetTextReader::new(
-        input,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut reader =
+        CharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict);
     let mut output = String::from("prefix:");
 
     let error = reader
