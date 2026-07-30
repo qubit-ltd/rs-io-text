@@ -35,10 +35,10 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// Asynchronously encodes Unicode text into a charset byte output.
 ///
 /// Encoded bytes live in this writer until the wrapped output accepts them.
-/// Consequently, cancelling a write future never loses or duplicates bytes
-/// already produced by the stateful encoder. A cancelled high-level write can
-/// still be only partially applied; callers must not retry the whole text
-/// blindly unless their own protocol makes duplicate prefixes harmless.
+/// Each `write_*_async` operation returns after one encoder step, before any
+/// later output poll, and reports exactly how much source it committed. Use
+/// the explicit `*_fully_async` methods when a complete source range is
+/// required; those convenience loops can commit a prefix before cancellation.
 ///
 /// # Examples
 ///
@@ -56,7 +56,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 ///         Utf8Codec,
 ///         CodingErrorPolicy::Strict,
 ///     );
-///     writer.write_str_async("hello").await?;
+///     writer.write_str_fully_async("hello").await?;
 ///     writer.finish_async().await?;
 ///     let (output, pending) = writer.into_parts();
 ///     debug_assert!(pending.is_empty());
@@ -143,7 +143,7 @@ where
         }
     }
 
-    /// Sets the line ending used by [`Self::write_line_async`].
+    /// Sets the line ending used by [`Self::write_line_fully_async`].
     ///
     /// # Parameters
     ///
@@ -238,11 +238,15 @@ where
         self.output.drain_async().await
     }
 
-    /// Encodes and writes one complete character slice.
-    async fn encode_chars_async(&mut self, chars: &[char]) -> io::Result<()> {
+    /// Encodes one character-slice progress step.
+    async fn encode_chars_async(
+        &mut self,
+        chars: &[char],
+    ) -> io::Result<usize> {
         self.ensure_started_async().await?;
         let mut map_error = encode_error_to_io;
-        self.output
+        let progress = self
+            .output
             .transcode_async(
                 &mut self.encoder,
                 &mut map_error,
@@ -251,8 +255,7 @@ where
                 chars.len(),
             )
             .await?;
-        self.output.drain_async().await?;
-        Ok(())
+        Ok(progress.read())
     }
 
     /// Asynchronously writes one character.
@@ -268,11 +271,12 @@ where
     ///
     /// # Cancellation safety
     ///
-    /// Cancelling this future can commit an encoded prefix to the wrapped
-    /// output. Unwritten bytes remain in this writer; resume this writer
-    /// instead of retrying the whole character independently.
+    /// This operation consumes its one supplied character before any later
+    /// output poll, so cancellation does not leave an ambiguous source cursor.
     pub async fn write_char_async(&mut self, ch: char) -> io::Result<()> {
-        self.write_chars_async(&[ch]).await
+        let consumed = self.write_chars_async(&[ch]).await?;
+        debug_assert_eq!(1, consumed);
+        Ok(())
     }
 
     /// Asynchronously writes a character slice.
@@ -288,18 +292,34 @@ where
     ///
     /// # Cancellation safety
     ///
-    /// Cancelling this future can commit an encoded prefix to the wrapped
-    /// output. Unwritten bytes remain in this writer; resume this writer
-    /// instead of retrying the whole slice.
+    /// This operation returns after one encoder step. Advance the caller's
+    /// source cursor by the returned count before calling it again.
     pub async fn write_chars_async(
         &mut self,
         chars: &[char],
-    ) -> io::Result<()> {
+    ) -> io::Result<usize> {
         self.ensure_open()?;
         if chars.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         self.encode_chars_async(chars).await
+    }
+
+    /// Asynchronously writes an entire character slice.
+    ///
+    /// # Cancellation safety
+    ///
+    /// This convenience loop can consume a prefix before cancellation. Resume
+    /// it with the unconsumed suffix rather than replaying the whole slice.
+    pub async fn write_chars_fully_async(
+        &mut self,
+        chars: &[char],
+    ) -> io::Result<()> {
+        let mut index = 0;
+        while index < chars.len() {
+            index += self.write_chars_async(&chars[index..]).await?;
+        }
+        Ok(())
     }
 
     /// Asynchronously writes a UTF-8 Rust string through the selected charset.
@@ -315,26 +335,42 @@ where
     ///
     /// # Cancellation safety
     ///
-    /// Cancelling this future can commit an encoded prefix to the wrapped
-    /// output. Unwritten bytes remain in this writer; resume this writer
-    /// instead of retrying the whole string.
-    pub async fn write_str_async(&mut self, text: &str) -> io::Result<()> {
+    /// This operation returns the UTF-8 byte length of the committed character
+    /// prefix. Resume with `&text[returned..]`.
+    pub async fn write_str_async(&mut self, text: &str) -> io::Result<usize> {
         self.ensure_open()?;
         if text.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
+        let mut byte_ends = [0; DEFAULT_CHAR_CHUNK_CAPACITY];
         let mut char_count = 0;
-        for ch in text.chars() {
+        for (byte_index, ch) in text.char_indices() {
             chars[char_count] = ch;
+            byte_ends[char_count] = byte_index + ch.len_utf8();
             char_count += 1;
             if char_count == DEFAULT_CHAR_CHUNK_CAPACITY {
-                self.encode_chars_async(&chars).await?;
-                char_count = 0;
+                break;
             }
         }
-        if char_count != 0 {
-            self.encode_chars_async(&chars[..char_count]).await?;
+        let consumed = self.write_chars_async(&chars[..char_count]).await?;
+        Ok(byte_ends[consumed - 1])
+    }
+
+    /// Asynchronously writes an entire UTF-8 Rust string through the selected
+    /// charset.
+    ///
+    /// # Cancellation safety
+    ///
+    /// This convenience loop can consume a UTF-8 prefix before cancellation.
+    /// Resume it with the unconsumed suffix rather than replaying the string.
+    pub async fn write_str_fully_async(
+        &mut self,
+        text: &str,
+    ) -> io::Result<()> {
+        let mut offset = 0;
+        while offset < text.len() {
+            offset += self.write_str_async(&text[offset..]).await?;
         }
         Ok(())
     }
@@ -351,11 +387,13 @@ where
     ///
     /// # Cancellation safety
     ///
-    /// Cancelling this future can commit a prefix of `line` or its line ending.
-    /// Resume this writer instead of retrying the whole line.
-    pub async fn write_line_async(&mut self, line: &str) -> io::Result<()> {
-        self.write_str_async(line).await?;
-        self.write_str_async(self.line_ending.as_str()).await
+    /// This convenience operation can commit a prefix before cancellation.
+    pub async fn write_line_fully_async(
+        &mut self,
+        line: &str,
+    ) -> io::Result<()> {
+        self.write_str_fully_async(line).await?;
+        self.write_str_fully_async(self.line_ending.as_str()).await
     }
 
     /// Asynchronously drains encoded bytes and flushes the wrapped output.

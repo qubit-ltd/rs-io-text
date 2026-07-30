@@ -586,8 +586,8 @@ fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()
     .with_line_ending(LineEnding::CrLf);
 
     complete(writer.write_char_async('A'))?;
-    complete(writer.write_chars_async(&['中', '🙂']))?;
-    complete(writer.write_line_async("tail"))?;
+    complete(writer.write_chars_fully_async(&['中', '🙂']))?;
+    complete(writer.write_line_fully_async("tail"))?;
     complete(writer.finish_async())?;
     let (output, pending) = writer.into_parts();
 
@@ -598,7 +598,7 @@ fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()
 }
 
 #[test]
-fn async_charset_writer_retains_pending_bytes_when_future_is_cancelled()
+fn async_charset_writer_commits_source_before_later_delivery_can_pend()
 -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(2, false);
     let mut writer = AsyncCharsetTextWriter::new(
@@ -609,7 +609,7 @@ fn async_charset_writer_retains_pending_bytes_when_future_is_cancelled()
     let mut context = test_context();
 
     let mut future = Box::pin(writer.write_str_async("cancel-safe"));
-    assert!(future.as_mut().poll(&mut context).is_pending());
+    assert!(future.as_mut().poll(&mut context).is_ready());
     drop(future);
 
     complete(writer.finish_async())?;
@@ -633,9 +633,9 @@ fn async_charset_writer_accessors_empty_chunks_and_finished_state()
     assert_eq!(LineEnding::Cr, writer.configured_line_ending());
     assert!(writer.output().bytes.is_empty());
     writer.output_mut().max_chunk = 4;
-    complete(writer.write_chars_async(&[]))?;
-    complete(writer.write_str_async(""))?;
-    complete(writer.write_str_async(&"a".repeat(256)))?;
+    assert_eq!(0, complete(writer.write_chars_async(&[]))?);
+    assert_eq!(0, complete(writer.write_str_async(""))?);
+    complete(writer.write_str_fully_async(&"a".repeat(256)))?;
     complete(writer.flush_async())?;
     assert!(writer.output().flushed);
     complete(writer.finish_async())?;
@@ -664,7 +664,7 @@ fn async_charset_writer_grows_across_need_output_and_pending_writes()
         1,
     );
 
-    complete(writer.write_chars_async(&['a', 'b', 'c', 'd', 'e']))?;
+    complete(writer.write_chars_fully_async(&['a', 'b', 'c', 'd', 'e']))?;
     complete(writer.finish_async())?;
     let (output, pending) = writer.into_parts();
     assert!(pending.is_empty());
@@ -681,7 +681,8 @@ fn async_charset_writer_retains_bytes_after_zero_and_write_errors()
         Utf8Codec,
         CodingErrorPolicy::Strict,
     );
-    let error = complete(writer.write_char_async('A'))
+    complete(writer.write_char_async('A'))?;
+    let error = complete(writer.flush_async())
         .expect_err("zero-length write should fail");
     assert_eq!(io::ErrorKind::WriteZero, error.kind());
     complete(writer.flush_async())?;
@@ -694,7 +695,8 @@ fn async_charset_writer_retains_bytes_after_zero_and_write_errors()
         Utf8Codec,
         CodingErrorPolicy::Strict,
     );
-    let error = complete(writer.write_char_async('B'))
+    complete(writer.write_char_async('B'))?;
+    let error = complete(writer.flush_async())
         .expect_err("scripted write error should fail");
     assert_eq!(io::ErrorKind::BrokenPipe, error.kind());
     complete(writer.flush_async())?;

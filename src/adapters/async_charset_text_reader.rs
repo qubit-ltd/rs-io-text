@@ -11,6 +11,8 @@ use std::io;
 
 use qubit_codec::{
     AsyncTranscodeDecodeInput,
+    AsyncTranscodeDecodeStep,
+    TranscodeStatus,
     Transcoder,
 };
 use qubit_codec_text::{
@@ -277,27 +279,56 @@ where
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        self.clear_chars();
-        let char_capacity = self.chars.len();
-        let written = self
-            .input
-            .transcode_async(
-                &mut self.decoder,
-                &mut decode_error_to_io,
-                self.chars.as_mut_slice(),
-                0,
-                char_capacity,
-            )
-            .await?;
-        self.char_position = 0;
-        self.char_limit = written;
-        if self.has_buffered_chars() {
-            return Ok(true);
-        }
-        if self.unread_byte_count() == 0 {
-            self.finish_decoder()
-        } else {
-            self.handle_incomplete_eof()
+        loop {
+            self.clear_chars();
+            let char_capacity = self.chars.len();
+            match self
+                .input
+                .transcode_async(
+                    &mut self.decoder,
+                    &mut decode_error_to_io,
+                    self.chars.as_mut_slice(),
+                    0,
+                    char_capacity,
+                )
+                .await?
+            {
+                AsyncTranscodeDecodeStep::EndOfInput => {
+                    return if self.unread_byte_count() == 0 {
+                        self.finish_decoder()
+                    } else {
+                        self.handle_incomplete_eof()
+                    };
+                }
+                AsyncTranscodeDecodeStep::Progress(progress) => {
+                    self.char_position = 0;
+                    self.char_limit = progress.written();
+                    if self.has_buffered_chars() {
+                        return Ok(true);
+                    }
+                    match progress.status() {
+                        TranscodeStatus::Complete => continue,
+                        TranscodeStatus::NeedInput { required, .. } => {
+                            if !self
+                                .input
+                                .fill_until_async(required.get())
+                                .await?
+                            {
+                                return if self.unread_byte_count() == 0 {
+                                    self.finish_decoder()
+                                } else {
+                                    self.handle_incomplete_eof()
+                                };
+                            }
+                        }
+                        TranscodeStatus::NeedOutput { required, .. } => {
+                            if self.chars.len() < required.get() {
+                                self.chars.resize(required.get(), '\0');
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
