@@ -517,15 +517,7 @@ fn map_encode_error(
     charset: qubit_codec_text::Charset,
     error: TranscodeEncodeError<CharsetEncodeError, char>,
 ) -> CharsetEncodeError {
-    match error {
-        TranscodeEncodeError::Failure(failure) => {
-            CharsetEncodeError::map_transcode_failure(charset, failure)
-        }
-        TranscodeEncodeError::Unencodable { input_index, value } => {
-            CharsetEncodeError::map_unencodable(charset, input_index, value)
-        }
-        TranscodeEncodeError::Domain(error) => error.into_source(),
-    }
+    CharsetEncodeError::from_transcode_error(charset, error)
 }
 
 /// Maps a chunk-local unencodable index to the complete string index.
