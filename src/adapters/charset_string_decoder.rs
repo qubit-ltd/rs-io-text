@@ -425,12 +425,7 @@ fn map_decode_error(
     charset: Charset,
     error: TranscodeDecodeError<CharsetDecodeError>,
 ) -> CharsetDecodeError {
-    match error {
-        TranscodeDecodeError::Failure(failure) => {
-            CharsetDecodeError::map_transcode_failure(charset, failure)
-        }
-        TranscodeDecodeError::Domain(error) => error.into_source(),
-    }
+    CharsetDecodeError::from_transcode_error(charset, error)
 }
 
 /// Maps a bounded finish-buffer index to the complete decoded output index.

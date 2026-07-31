@@ -43,7 +43,9 @@ impl Codec for NonDefaultUnitCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &char) -> bool {
         value.is_ascii()
@@ -99,7 +101,9 @@ impl Codec for HugeEncodeBoundsCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = usize::MAX;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = usize::MAX;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = usize::MAX;
 
     fn can_encode_value(&self, value: &char) -> bool {
         value.is_ascii()
@@ -155,7 +159,9 @@ impl Codec for UnderreportedEncodeLenCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &char) -> bool {
         value.is_ascii()
@@ -198,7 +204,9 @@ impl Codec for EncodeResetErrorCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -249,7 +257,9 @@ impl Codec for EncodeFlushErrorCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_FINISH_UNITS: usize = 1;
 
@@ -458,7 +468,7 @@ fn test_charset_string_encoder_encode_str_into_reports_unmappable_input() {
 
 #[test]
 #[should_panic(
-    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+    expected = "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE"
 )]
 fn test_charset_string_encoder_encode_str_panics_when_encode_len_exceeds_codec_maximum()
  {
