@@ -1,0 +1,8 @@
+[package]
+name = "readme-quick-start"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+qubit-io-text = { path = "../../.." }

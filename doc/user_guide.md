@@ -38,7 +38,13 @@ reads the same bytes back as text.
 ```toml
 [dependencies]
 qubit-io-text = "0.3"
+qubit-codec-text = "0.3"
+qubit-io = "0.14"
 ```
+
+This guide uses `Utf8Codec` and `AsyncOutput`, which are owned by
+`qubit-codec-text` and `qubit-io`; Rust consumers must declare those crates as
+direct dependencies.
 
 ## Core Workflow
 
@@ -93,7 +99,8 @@ through a stateful charset stream.
 `LineEnding::Lf`, `LineEnding::CrLf`, and `LineEnding::Cr` control what
 `write_line` appends. If the stream is known to be UTF-8, `Utf8TextReader` and
 `Utf8TextWriter` provide strict convenience wrappers over the same byte-stream
-boundary.
+boundary. `TextLineRead::read_line` recognizes only `\n` as a terminator and
+retains a preceding `\r`; it does not split standalone CR-terminated lines.
 
 ## Async Workflow
 
@@ -146,7 +153,8 @@ permits duplicate prefixes.
   `read_to_string_with_charset_limited` when decoded output needs a bound.
   The limit applies to UTF-8 bytes appended by that call; exceeding it
   returns `InvalidData` and restores the destination string to its original
-  length. It does not impose a raw input-byte limit.
+  length. The reader can still consume or read ahead in the underlying input,
+  and the limit does not impose a raw input-byte bound.
 
 ## Troubleshooting and Best Practices
 

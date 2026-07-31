@@ -226,8 +226,7 @@ fn bench_streaming_charset(
                             .expect("UTF-8 stream should encode");
                         writer.finish().expect("UTF-8 stream should finish");
                         let (output, pending) = writer.into_parts();
-                        assert!(pending.readable().is_empty());
-                        black_box(output.into_inner());
+                        let _ = black_box((output.into_inner(), pending));
                     },
                     criterion::BatchSize::SmallInput,
                 );

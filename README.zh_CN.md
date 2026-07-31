@@ -30,31 +30,38 @@ Charset 算法保留在 `qubit-codec-text`；本 crate 只负责在流上驱动�
 qubit-io-text = "0.3"
 ```
 
-## 快速开始：编码一条文本消息
+## 快速开始：编码一条 UTF-8 文本消息
 
 ```rust
-use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
-    CharsetTextWriter,
-    CodingErrorPolicy,
     LineEnding,
     TextWrite,
+    Utf8TextWriter,
 };
 
 let mut bytes = Vec::new();
-let mut writer = CharsetTextWriter::new(
-    &mut bytes,
-    Utf8Codec,
-    CodingErrorPolicy::Strict,
-)
-.with_line_ending(LineEnding::CrLf);
+let mut writer = Utf8TextWriter::new(&mut bytes)
+    .with_line_ending(LineEnding::CrLf);
 
 writer.write_line("hello")?;
 writer.write_str("中文")?;
 writer.finish()?;
 
-assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
+let (output, pending) = writer.into_parts();
+assert!(pending.readable().is_empty());
+assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
 # Ok::<(), std::io::Error>(())
+```
+
+## Charset 与异步依赖
+
+Charset 和异步示例使用这些 crate 所拥有的类型，因此消费方应显式声明直接依赖：
+
+```toml
+[dependencies]
+qubit-io-text = "0.3"
+qubit-codec-text = "0.3"
+qubit-io = "0.14"
 ```
 
 ## 运行时无关的异步 API

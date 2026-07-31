@@ -31,31 +31,39 @@ streams without selecting an async runtime.
 qubit-io-text = "0.3"
 ```
 
-## Quick Start: Encode a Text Message
+## Quick Start: Encode a UTF-8 Text Message
 
 ```rust
-use qubit_codec_text::Utf8Codec;
 use qubit_io_text::{
-    CharsetTextWriter,
-    CodingErrorPolicy,
     LineEnding,
     TextWrite,
+    Utf8TextWriter,
 };
 
 let mut bytes = Vec::new();
-let mut writer = CharsetTextWriter::new(
-    &mut bytes,
-    Utf8Codec,
-    CodingErrorPolicy::Strict,
-)
-.with_line_ending(LineEnding::CrLf);
+let mut writer = Utf8TextWriter::new(&mut bytes)
+    .with_line_ending(LineEnding::CrLf);
 
 writer.write_line("hello")?;
 writer.write_str("中文")?;
 writer.finish()?;
 
-assert_eq!("hello\r\n中文".as_bytes(), bytes.as_slice());
+let (output, pending) = writer.into_parts();
+assert!(pending.readable().is_empty());
+assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
 # Ok::<(), std::io::Error>(())
+```
+
+## Charset and Async Dependencies
+
+Charset and async examples use types owned by these crates, so declare them
+directly in the consuming package:
+
+```toml
+[dependencies]
+qubit-io-text = "0.3"
+qubit-codec-text = "0.3"
+qubit-io = "0.14"
 ```
 
 ## Runtime-Neutral Async

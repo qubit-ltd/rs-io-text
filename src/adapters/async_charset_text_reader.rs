@@ -270,6 +270,23 @@ where
         Ok(written > 0)
     }
 
+    /// Finalizes decoding or applies the configured incomplete-EOF policy.
+    ///
+    /// # Returns
+    ///
+    /// Returns whether finalization made a decoded character available.
+    ///
+    /// # Errors
+    ///
+    /// Returns decoder finalization or strict incomplete-EOF errors.
+    fn finish_at_eof(&mut self) -> io::Result<bool> {
+        if self.unread_byte_count() == 0 {
+            self.finish_decoder()
+        } else {
+            self.handle_incomplete_eof()
+        }
+    }
+
     /// Decodes enough retained input to make one character available.
     async fn fill_chars_async(&mut self) -> io::Result<bool>
     where
@@ -294,11 +311,7 @@ where
                 .await?
             {
                 AsyncTranscodeDecodeStep::EndOfInput => {
-                    return if self.unread_byte_count() == 0 {
-                        self.finish_decoder()
-                    } else {
-                        self.handle_incomplete_eof()
-                    };
+                    return self.finish_at_eof();
                 }
                 AsyncTranscodeDecodeStep::Progress(progress) => {
                     self.char_position = 0;
@@ -314,11 +327,7 @@ where
                                 .fill_until_async(required.get())
                                 .await?
                             {
-                                return if self.unread_byte_count() == 0 {
-                                    self.finish_decoder()
-                                } else {
-                                    self.handle_incomplete_eof()
-                                };
+                                return self.finish_at_eof();
                             }
                         }
                         TranscodeStatus::NeedOutput { required, .. } => {

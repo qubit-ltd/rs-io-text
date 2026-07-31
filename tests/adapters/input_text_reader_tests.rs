@@ -254,3 +254,19 @@ fn test_read_line_preserves_batched_tail_for_next_read() -> std::io::Result<()>
     assert_eq!("c", line);
     Ok(())
 }
+
+#[test]
+fn test_into_parts_preserves_batched_line_tail() -> std::io::Result<()> {
+    let input = StringCharInput::new("a\nbc".to_owned());
+    let mut reader = InputTextReader::new(input);
+    let mut line = String::new();
+
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("a\n", line);
+    let (mut input, pending) = reader.into_parts();
+    assert_eq!(vec!['b', 'c'], pending);
+
+    let mut output = ['\0'];
+    assert_eq!(0, input.read_fully(&mut output)?);
+    Ok(())
+}

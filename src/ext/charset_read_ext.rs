@@ -114,7 +114,8 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     ///
     /// Returns I/O or charset-decoding errors. Returns
     /// [`io::ErrorKind::InvalidData`] when the decoded text exceeds
-    /// `max_append_len`.
+    /// `max_append_len`. The wrapped input can still be consumed or read ahead
+    /// before that error is returned.
     fn read_to_string_with_charset_limited<C>(
         &mut self,
         codec: C,

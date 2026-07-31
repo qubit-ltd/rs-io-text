@@ -34,7 +34,12 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 ```toml
 [dependencies]
 qubit-io-text = "0.3"
+qubit-codec-text = "0.3"
+qubit-io = "0.14"
 ```
+
+本指南使用由 `qubit-codec-text` 和 `qubit-io` 提供的 `Utf8Codec` 与
+`AsyncOutput`；Rust 消费方必须将这两个 crate 声明为直接依赖。
 
 ## 核心流程
 
@@ -86,7 +91,8 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 
 `LineEnding::Lf`、`LineEnding::CrLf` 和 `LineEnding::Cr` 决定 `write_line` 追加的
 内容。流确定为 UTF-8 时，可使用 `Utf8TextReader` 和 `Utf8TextWriter`，它们在相同的
-字节流边界提供严格的便利包装。
+字节流边界提供严格的便利包装。`TextLineRead::read_line` 只将 `\n` 识别为行终止符，
+会保留其前的 `\r`，不会按单独的 CR 终止行拆分。
 
 ## 异步流程
 
@@ -136,7 +142,8 @@ where
 - 当需要限制解码结果时，使用 `read_to_string_limited`、
   `read_to_string_limited_async` 或
   `read_to_string_with_charset_limited`。上限按该调用追加的 UTF-8 字节计算；
-  超限会返回 `InvalidData` 并将目标字符串恢复到调用前长度。它不限制原始输入字节。
+  超限会返回 `InvalidData` 并将目标字符串恢复到调用前长度。reader 仍可能消费或预读
+  底层输入，且该上限不限制原始输入字节。
 
 ## 排障与最佳实践
 

@@ -95,10 +95,22 @@ impl<'a> InputTextReader<'a> {
         self.input.as_mut()
     }
 
-    /// Returns the wrapped input.
+    /// Returns the wrapped input and characters retained after a line boundary.
+    ///
+    /// # Returns
+    ///
+    /// Returns the underlying boxed character input and pending characters in
+    /// logical read order.
+    #[must_use = "the returned input and pending characters must be handled"]
+    pub fn into_parts(self) -> (Box<dyn Input<Item = char> + 'a>, Vec<char>) {
+        (self.input, self.pending.into_iter().collect())
+    }
+
+    /// Returns the wrapped input while discarding pending characters.
     ///
     /// Pending characters already read past a line boundary are discarded;
-    /// the returned input remains positioned after those characters.
+    /// the returned input remains positioned after those characters. Use
+    /// [`Self::into_parts`] when those characters must be preserved.
     ///
     /// # Returns
     /// The underlying boxed character input.
