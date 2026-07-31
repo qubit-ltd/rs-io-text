@@ -95,7 +95,9 @@ impl Codec for NeedOutputCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     fn encode_len(&self, value: &char) -> usize {
         if *value == 'B' { 2 } else { 1 }

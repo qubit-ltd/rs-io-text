@@ -42,7 +42,9 @@ impl Codec for InvalidInputErrorCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -93,7 +95,9 @@ impl Codec for HugeDecodeResetBoundsCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_RESET_VALUES: usize = usize::MAX;
 
@@ -135,7 +139,9 @@ impl Codec for DecodeResetErrorCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
@@ -186,7 +192,9 @@ impl Codec for HugeDecodeFinishBoundsCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_FINISH_VALUES: usize = usize::MAX;
 
@@ -231,7 +239,9 @@ impl Codec for DecodeFlushErrorCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
