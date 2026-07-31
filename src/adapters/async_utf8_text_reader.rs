@@ -1,9 +1,15 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::{
+    Deref,
+    DerefMut,
+};
 
 use qubit_codec_text::Utf8Codec;
 use qubit_io::AsyncInput;
 
-use crate::{AsyncCharsetTextReader, CodingErrorPolicy};
+use crate::{
+    AsyncCharsetTextReader,
+    CodingErrorPolicy,
+};
 
 /// Convenience asynchronous UTF-8 reader.
 #[derive(Debug)]
@@ -29,7 +35,11 @@ where
 
     /// Creates a UTF-8 reader with an explicit byte capacity.
     #[must_use]
-    pub fn with_capacity(input: I, policy: CodingErrorPolicy, capacity: usize) -> Self {
+    pub fn with_capacity(
+        input: I,
+        policy: CodingErrorPolicy,
+        capacity: usize,
+    ) -> Self {
         Self(AsyncCharsetTextReader::new_with_buffer_capacity(
             input, Utf8Codec, policy, capacity,
         ))

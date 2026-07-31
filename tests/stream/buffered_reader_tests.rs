@@ -39,20 +39,63 @@ impl Transcoder for ExpandingDecoder {
     type Input = u8;
     type Output = char;
     type Error = TranscodeDecodeError<std::io::Error>;
-    fn max_transcode_output_len(&self, _: usize) -> Result<usize, CapacityError> { Ok(5) }
-    fn max_finish_output_len(&self) -> Result<usize, CapacityError> { Ok(0) }
-    fn reset(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> { Self::Error::ensure_output_index(output.len(), index)?; Ok(0) }
-    fn transcode(&mut self, input: &[u8], index: usize, output: &mut [char], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    fn max_transcode_output_len(
+        &self,
+        _: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(5)
+    }
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
         Self::Error::ensure_output_index(output.len(), output_index)?;
-        if input.len() == index { return Ok(TranscodeProgress::complete(0, 0)); }
+        if input.len() == index {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
         let available = output.len() - output_index;
-        if available < 5 { return Ok(TranscodeProgress::new(qubit_codec::TranscodeStatus::need_output(output_index, NonZeroUsize::new(5).unwrap(), available), 0, 0)); }
-        for slot in &mut output[output_index..output_index + 5] { *slot = 'x'; }
+        if available < 5 {
+            return Ok(TranscodeProgress::new(
+                qubit_codec::TranscodeStatus::need_output(
+                    output_index,
+                    NonZeroUsize::new(5).unwrap(),
+                    available,
+                ),
+                0,
+                0,
+            ));
+        }
+        for slot in &mut output[output_index..output_index + 5] {
+            *slot = 'x';
+        }
         Ok(TranscodeProgress::complete(1, 5))
     }
-    fn finish(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> { Self::Error::ensure_output_index(output.len(), index)?; Ok(0) }
+    fn finish(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
 }
-impl TranscodeDecoder for ExpandingDecoder { type DecodeError = std::io::Error; }
+impl TranscodeDecoder for ExpandingDecoder {
+    type DecodeError = std::io::Error;
+}
 
 #[derive(Debug, Default)]
 struct FinishCharDecoder;
@@ -402,7 +445,10 @@ fn test_buffered_reader_decodes_utf8_across_single_byte_refills()
 fn test_buffered_reader_preserves_need_output_for_expanding_decoder()
 -> std::io::Result<()> {
     let mut reader = BufferedReader::with_capacity(
-        Cursor::new(vec![1]), ExpandingDecoder, CodingErrorPolicy::Strict, 1,
+        Cursor::new(vec![1]),
+        ExpandingDecoder,
+        CodingErrorPolicy::Strict,
+        1,
     );
     let mut output = String::new();
     assert_eq!(5, reader.read_to_string(&mut output)?);

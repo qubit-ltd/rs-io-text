@@ -340,7 +340,8 @@ where
         }
         match progress.status() {
             TranscodeStatus::NeedOutput { .. } => {
-                self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
+                self.chars
+                    .resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
                 return self.fill_chars();
             }
             TranscodeStatus::Complete => {
