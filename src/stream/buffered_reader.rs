@@ -14,6 +14,7 @@ use qubit_codec::{
     CapacityError,
     TranscodeDecodeInput,
     TranscodeDecoder,
+    TranscodeStatus,
     nz,
 };
 use qubit_codec_text::CharsetDecodePolicy;
@@ -321,20 +322,40 @@ where
         }
         self.clear_chars();
         let capacity = self.chars.len();
-        let written = self.input.transcode(
+        let progress = self.input.transcode_step(
             &mut self.decoder,
             &mut decode_error_to_io,
             self.chars.as_mut_slice(),
             0,
             capacity,
         )?;
+        let Some(progress) = progress else {
+            return self.finish_decoder();
+        };
+        let written = progress.written();
         self.char_position = 0;
         self.char_limit = written;
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        if self.input.unread_len() == 0 {
-            return self.finish_decoder();
+        match progress.status() {
+            TranscodeStatus::NeedOutput { .. } => {
+                self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
+                return self.fill_chars();
+            }
+            TranscodeStatus::Complete => {
+                if self.input.unread_len() == 0 {
+                    return self.finish_decoder();
+                }
+            }
+            TranscodeStatus::NeedInput { required, .. } => {
+                if self.input.fill_until(required.get())? {
+                    return self.fill_chars();
+                }
+                if self.input.unread_len() == 0 {
+                    return self.finish_decoder();
+                }
+            }
         }
         self.handle_incomplete_eof()
     }

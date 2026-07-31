@@ -309,8 +309,9 @@ where
     ///
     /// # Cancellation safety
     ///
-    /// This convenience loop can consume a prefix before cancellation. Resume
-    /// it with the unconsumed suffix rather than replaying the whole slice.
+    /// This convenience loop is not cancellation-safe. After cancellation,
+    /// its source position cannot be recovered reliably; use the single-step
+    /// API for cancellation-sensitive code.
     pub async fn write_chars_fully_async(
         &mut self,
         chars: &[char],
@@ -362,8 +363,9 @@ where
     ///
     /// # Cancellation safety
     ///
-    /// This convenience loop can consume a UTF-8 prefix before cancellation.
-    /// Resume it with the unconsumed suffix rather than replaying the string.
+    /// This convenience loop is not cancellation-safe. After cancellation,
+    /// its source position cannot be recovered reliably; use the single-step
+    /// API for cancellation-sensitive code.
     pub async fn write_str_fully_async(
         &mut self,
         text: &str,
@@ -387,7 +389,8 @@ where
     ///
     /// # Cancellation safety
     ///
-    /// This convenience operation can commit a prefix before cancellation.
+    /// This convenience operation is not cancellation-safe. Use the single
+    /// step APIs for cancellation-sensitive code.
     pub async fn write_line_fully_async(
         &mut self,
         line: &str,

@@ -137,9 +137,9 @@ where
 The asynchronous reader retains incomplete encoded characters across suspension
 and cancellation. `write_chars_async` and `write_str_async` commit one
 reportable prefix and return its count; resume with the suffix. The
-`*_fully_async` convenience loops can still leave a text prefix after
-cancellation, so do not retry the entire string unless the surrounding protocol
-permits duplicate prefixes.
+`*_fully_async` convenience loops are not cancellation-safe: after
+cancellation their source position cannot be recovered reliably. Use the
+single-step APIs for cancellation-sensitive protocols.
 
 ## Errors and Diagnostics
 

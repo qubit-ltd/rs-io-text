@@ -109,8 +109,8 @@ where
 
 异步 charset reader 会在挂起或取消时保留未完成字符的编码字节。异步 writer 的
 `write_chars_async` 和 `write_str_async` 每次只提交一个可报告的前缀；按返回数量推进
-输入后再继续。`*_fully_async` 是便利循环，取消后可能已写入前缀，因此不要盲目重试
-完整文本。
+输入后再继续。`*_fully_async` 是便利循环，取消后无法可靠恢复其源位置；取消敏感场景
+只使用单步 API，不要重试完整文本。
 
 本 crate 不拥有 charset 算法，也不选择异步运行时。需要贯穿场景教程时，请参阅
 [中文用户指南](doc/user_guide.zh_CN.md)或 [English user guide](doc/user_guide.md)；
