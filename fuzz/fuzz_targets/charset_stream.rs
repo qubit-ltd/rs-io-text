@@ -67,6 +67,7 @@ fn fuzz_replacing_utf8(data: &[u8]) {
         reader
             .read_to_string(&mut output)
             .expect("replacement decoding must complete for in-memory input");
+        assert_eq!(String::from_utf8_lossy(data), output);
     }
 }
 
