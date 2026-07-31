@@ -113,8 +113,9 @@ owned output without performing further I/O.
 Async charset readers retain an incomplete encoded character across suspension
 and cancellation. `write_chars_async` and `write_str_async` commit one
 reportable prefix and return its count; advance the source cursor before the
-next call. The `*_fully_async` convenience loops can apply a prefix before
-cancellation, so do not blindly retry the whole text.
+next call. The `*_fully_async` convenience loops are not cancellation-safe:
+after cancellation their source position cannot be recovered reliably. Use
+the single-step APIs for cancellation-sensitive protocols.
 
 The crate does not own charset algorithms or select an async runtime. For a
 scenario-led tutorial, see the [user guide](doc/user_guide.md) or

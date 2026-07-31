@@ -9,6 +9,8 @@
 
 mod async_charset_text_reader;
 mod async_charset_text_writer;
+mod async_utf8_text_reader;
+mod async_utf8_text_writer;
 mod charset_string_decoder;
 mod charset_string_encoder;
 mod charset_text_reader;
@@ -27,6 +29,8 @@ mod utf8_text_writer;
 
 pub use async_charset_text_reader::AsyncCharsetTextReader;
 pub use async_charset_text_writer::AsyncCharsetTextWriter;
+pub use async_utf8_text_reader::AsyncUtf8TextReader;
+pub use async_utf8_text_writer::AsyncUtf8TextWriter;
 pub use charset_string_decoder::CharsetStringDecoder;
 pub use charset_string_encoder::CharsetStringEncoder;
 pub use charset_text_reader::CharsetTextReader;
