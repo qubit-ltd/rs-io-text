@@ -28,6 +28,8 @@ mod traits;
 pub use adapters::{
     AsyncCharsetTextReader,
     AsyncCharsetTextWriter,
+    AsyncUtf8TextReader,
+    AsyncUtf8TextWriter,
     CharsetStringDecoder,
     CharsetStringEncoder,
     CharsetTextReader,
