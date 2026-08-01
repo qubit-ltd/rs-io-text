@@ -284,7 +284,7 @@ where
 
         let mut input_cursor = input_index;
         loop {
-            let progress = match self.decoder.transcode(
+            let progress = match self.decoder.transcode_eof(
                 input,
                 input_cursor,
                 &mut chars,
