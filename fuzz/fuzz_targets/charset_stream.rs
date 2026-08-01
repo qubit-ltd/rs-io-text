@@ -88,9 +88,7 @@ fn fuzz_utf8_round_trip(data: &[u8]) {
         writer
             .write_str(text)
             .expect("valid UTF-8 must encode in strict mode");
-        writer
-            .finish()
-            .expect("in-memory UTF-8 writer must finish");
+        writer.finish().expect("in-memory UTF-8 writer must finish");
         let (output, pending) = writer.into_parts();
         assert!(pending.readable().is_empty());
 
