@@ -71,9 +71,7 @@ impl Transcoder for ExpandingDecoder {
         if available < 5 {
             return Ok(TranscodeProgress::new(
                 qubit_codec::TranscodeStatus::need_output(
-                    output_index,
                     NonZeroUsize::new(5).unwrap(),
-                    available,
                 ),
                 0,
                 0,
