@@ -7,16 +7,8 @@
 // =============================================================================
 //! Allocation tracking used by the owned string-adapter benchmark.
 
-use std::alloc::{
-    GlobalAlloc,
-    Layout,
-    System,
-};
-use std::sync::atomic::{
-    AtomicBool,
-    AtomicUsize,
-    Ordering,
-};
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static CURRENT: AtomicUsize = AtomicUsize::new(0);
@@ -41,11 +33,9 @@ impl TrackingAllocator {
         if !ENABLED.load(Ordering::Relaxed) {
             return;
         }
-        let _ = CURRENT.fetch_update(
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-            |current| Some(current.saturating_sub(size)),
-        );
+        let _ = CURRENT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            Some(current.saturating_sub(size))
+        });
     }
 }
 
@@ -75,15 +65,9 @@ unsafe impl GlobalAlloc for TrackingAllocator {
         unsafe { System.dealloc(pointer, layout) };
     }
 
-    unsafe fn realloc(
-        &self,
-        pointer: *mut u8,
-        old_layout: Layout,
-        new_size: usize,
-    ) -> *mut u8 {
+    unsafe fn realloc(&self, pointer: *mut u8, old_layout: Layout, new_size: usize) -> *mut u8 {
         // SAFETY: The request is forwarded unchanged to the system allocator.
-        let new_pointer =
-            unsafe { System.realloc(pointer, old_layout, new_size) };
+        let new_pointer = unsafe { System.realloc(pointer, old_layout, new_size) };
         if !new_pointer.is_null() && ENABLED.load(Ordering::Relaxed) {
             if new_size >= old_layout.size() {
                 Self::add(new_size - old_layout.size());

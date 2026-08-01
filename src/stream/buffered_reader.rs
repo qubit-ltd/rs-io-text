@@ -5,33 +5,17 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{
-    error::Error as StdError,
-    io,
-};
+use std::{error::Error as StdError, io};
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeInput,
-    TranscodeDecoder,
-    TranscodeStatus,
-    nz,
-};
+use qubit_codec::{CapacityError, TranscodeDecodeInput, TranscodeDecoder, TranscodeStatus, nz};
 use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::{
-    Buffer,
-    Input,
-    UncheckedSlice,
-};
+use qubit_io::{Buffer, Input, UncheckedSlice};
 
 use crate::{
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
+    CodingErrorPolicy, TextLineRead, TextRead,
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
-        decode_error_to_io as shared_decode_error_to_io,
-        text_append_limit_error,
+        decode_error_to_io as shared_decode_error_to_io, text_append_limit_error,
     },
 };
 
@@ -102,11 +86,7 @@ where
     /// Returns a buffered text reader. Construction does not read from
     /// `inner`.
     #[must_use]
-    pub fn new(
-        inner: R,
-        decoder: D,
-        incomplete_eof_policy: CodingErrorPolicy,
-    ) -> Self {
+    pub fn new(inner: R, decoder: D, incomplete_eof_policy: CodingErrorPolicy) -> Self {
         Self::with_capacity(
             inner,
             decoder,
@@ -176,8 +156,7 @@ where
     #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> (R, Buffer<u8>, D, Vec<char>) {
         let (inner, unread) = self.input.into_parts();
-        let pending_chars =
-            self.chars[self.char_position..self.char_limit].to_vec();
+        let pending_chars = self.chars[self.char_position..self.char_limit].to_vec();
         (inner, unread, self.decoder, pending_chars)
     }
 
@@ -340,7 +319,8 @@ where
         }
         match progress.status() {
             TranscodeStatus::NeedOutput { .. } => {
-                self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
+                self.chars
+                    .resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
                 return self.fill_chars();
             }
             TranscodeStatus::Complete => {
@@ -414,18 +394,12 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe {
-            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
-        };
+        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max && self.fill_chars()? {
             let available = self.char_limit - self.char_position;
@@ -438,10 +412,7 @@ where
         Ok(count)
     }
 
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         while self.fill_chars()? {
             let chars = &self.chars[self.char_position..self.char_limit];

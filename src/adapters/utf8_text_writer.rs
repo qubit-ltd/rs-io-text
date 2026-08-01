@@ -8,17 +8,9 @@
 use std::io;
 
 use qubit_codec_text::Utf8Codec;
-use qubit_io::{
-    Buffer,
-    Output,
-};
+use qubit_io::{Buffer, Output};
 
-use crate::{
-    CharsetTextWriter,
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-};
+use crate::{CharsetTextWriter, CodingErrorPolicy, LineEnding, TextWrite};
 
 /// Streaming UTF-8 text writer over a Qubit byte output.
 ///
@@ -65,11 +57,7 @@ where
     #[must_use]
     pub fn new(output: O) -> Self {
         Self {
-            writer: CharsetTextWriter::new(
-                output,
-                Utf8Codec,
-                CodingErrorPolicy::Strict,
-            ),
+            writer: CharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict),
         }
     }
 

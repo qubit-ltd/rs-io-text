@@ -9,18 +9,9 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeEncodeError,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::{CapacityError, TranscodeEncodeError, TranscodeStatus, Transcoder};
 use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodeError,
-    CharsetEncodeErrorKind,
-    CharsetEncodePolicy,
-    CharsetEncoder,
+    CharsetCodec, CharsetEncodeError, CharsetEncodeErrorKind, CharsetEncodePolicy, CharsetEncoder,
     UnmappableAction,
 };
 use qubit_io::try_reserve_vec;
@@ -98,10 +89,7 @@ where
     ///
     /// Returns [`CharsetEncodeError`] when `policy` uses replacement and the
     /// replacement character cannot be encoded by `codec`.
-    pub fn with_policy(
-        codec: C,
-        policy: CharsetEncodePolicy,
-    ) -> Result<Self, CharsetEncodeError> {
+    pub fn with_policy(codec: C, policy: CharsetEncodePolicy) -> Result<Self, CharsetEncodeError> {
         Ok(Self {
             encoder: CharsetEncoder::with_policy(codec, policy)?,
         })
@@ -152,8 +140,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
-        COVERAGE_RESERVE_FAIL_AFTER
-            .with(|state| state.set(successful_attempts));
+        COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Makes the next capacity-bound operation fail in coverage builds.
@@ -167,8 +154,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_fail_capacity_bound_after(successful_attempts: usize) {
-        COVERAGE_CAPACITY_FAIL_AFTER
-            .with(|state| state.set(successful_attempts));
+        COVERAGE_CAPACITY_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Clears coverage-only reserve failure hooks.
@@ -218,12 +204,7 @@ where
         output_index: usize,
         required: usize,
     ) -> Result<(), CharsetEncodeError> {
-        ensure_owned_capacity(
-            &mut Vec::<u8>::new(),
-            output_index,
-            required,
-            charset,
-        )
+        ensure_owned_capacity(&mut Vec::<u8>::new(), output_index, required, charset)
     }
 
     /// Encodes a complete string into an owned output buffer.
@@ -240,17 +221,13 @@ where
     ///
     /// Returns [`CharsetEncodeError`] when sizing or reserving the output, or
     /// when encoder reset, transcoding, or finalization fails.
-    pub fn encode_str(
-        &mut self,
-        input: &str,
-    ) -> Result<Vec<C::Unit>, CharsetEncodeError>
+    pub fn encode_str(&mut self, input: &str) -> Result<Vec<C::Unit>, CharsetEncodeError>
     where
         C::Unit: Default,
     {
         let charset = self.encoder.charset();
         let mut output = Vec::new();
-        let reset_capacity =
-            map_capacity_bound(self.encoder.max_reset_output_len(), charset)?;
+        let reset_capacity = map_capacity_bound(self.encoder.max_reset_output_len(), charset)?;
         ensure_owned_capacity(&mut output, 0, reset_capacity, charset)?;
         let mut output_cursor = match self.encoder.reset(&mut output, 0) {
             Ok(written) => written,
@@ -265,45 +242,27 @@ where
             if chunk_len == 0 {
                 break;
             }
-            let required = map_capacity_bound(
-                self.encoder.max_transcode_output_len(chunk_len),
-                charset,
-            )?;
-            ensure_owned_capacity(
-                &mut output,
-                output_cursor,
-                required,
-                charset,
-            )?;
-            let progress = match self.encoder.transcode(
-                &chunk[..chunk_len],
-                0,
-                &mut output,
-                output_cursor,
-            ) {
-                Ok(progress) => progress,
-                Err(error) => {
-                    return Err(map_chunk_encode_error(
-                        charset,
-                        error,
-                        input_offset,
-                    ));
-                }
-            };
+            let required =
+                map_capacity_bound(self.encoder.max_transcode_output_len(chunk_len), charset)?;
+            ensure_owned_capacity(&mut output, output_cursor, required, charset)?;
+            let progress =
+                match self
+                    .encoder
+                    .transcode(&chunk[..chunk_len], 0, &mut output, output_cursor)
+                {
+                    Ok(progress) => progress,
+                    Err(error) => {
+                        return Err(map_chunk_encode_error(charset, error, input_offset));
+                    }
+                };
             output_cursor += progress.written();
             // The pre-sized output uses the encoder's maximum bound, and the
             // transcode engine validates complete consumption.
             input_offset += progress.read();
         }
 
-        let finish_capacity =
-            map_capacity_bound(self.encoder.max_finish_output_len(), charset)?;
-        ensure_owned_capacity(
-            &mut output,
-            output_cursor,
-            finish_capacity,
-            charset,
-        )?;
+        let finish_capacity = map_capacity_bound(self.encoder.max_finish_output_len(), charset)?;
+        ensure_owned_capacity(&mut output, output_cursor, finish_capacity, charset)?;
         output_cursor += match self.encoder.finish(&mut output, output_cursor) {
             Ok(written) => written,
             Err(error) => return Err(map_encode_error(charset, error)),
@@ -363,25 +322,17 @@ where
             if chunk_len == 0 {
                 break;
             }
-            map_capacity_bound(
-                self.encoder.max_transcode_output_len(chunk_len),
-                charset,
-            )?;
-            let progress = match self.encoder.transcode(
-                &chunk[..chunk_len],
-                0,
-                output,
-                output_cursor,
-            ) {
-                Ok(progress) => progress,
-                Err(error) => {
-                    return Err(map_chunk_encode_error(
-                        charset,
-                        error,
-                        input_offset,
-                    ));
-                }
-            };
+            map_capacity_bound(self.encoder.max_transcode_output_len(chunk_len), charset)?;
+            let progress =
+                match self
+                    .encoder
+                    .transcode(&chunk[..chunk_len], 0, output, output_cursor)
+                {
+                    Ok(progress) => progress,
+                    Err(error) => {
+                        return Err(map_chunk_encode_error(charset, error, input_offset));
+                    }
+                };
             output_cursor += progress.written();
             if let TranscodeStatus::NeedOutput {
                 output_index,
@@ -539,11 +490,7 @@ fn map_chunk_encode_error(
     let error = match error {
         TranscodeEncodeError::Unencodable { input_index, value } => {
             let input_index = input_offset.saturating_add(input_index);
-            return CharsetEncodeError::map_unencodable(
-                charset,
-                input_index,
-                value,
-            );
+            return CharsetEncodeError::map_unencodable(charset, input_index, value);
         }
         error => map_encode_error(charset, error),
     };
@@ -551,11 +498,7 @@ fn map_chunk_encode_error(
         CharsetEncodeErrorKind::InvalidOutputIndex { .. }
         | CharsetEncodeErrorKind::BufferTooSmall { .. }
         | CharsetEncodeErrorKind::OutputLengthOverflow => error,
-        kind => CharsetEncodeError::new(
-            charset,
-            kind,
-            input_offset.saturating_add(error.index()),
-        ),
+        kind => CharsetEncodeError::new(charset, kind, input_offset.saturating_add(error.index())),
     }
 }
 
@@ -632,9 +575,7 @@ fn coverage_should_fail_reserve() -> bool {
 ///
 /// Returns an output-length-overflow error at the sentinel maximum index.
 #[inline]
-fn output_length_overflow(
-    charset: qubit_codec_text::Charset,
-) -> CharsetEncodeError {
+fn output_length_overflow(charset: qubit_codec_text::Charset) -> CharsetEncodeError {
     CharsetEncodeError::new(
         charset,
         CharsetEncodeErrorKind::OutputLengthOverflow,

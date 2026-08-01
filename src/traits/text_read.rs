@@ -36,11 +36,7 @@ pub trait TextRead {
     ///
     /// # Errors
     /// Returns an implementation-specific error when reading a character fails.
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max {
             let Some(ch) = self.read_char()? else {
@@ -64,10 +60,7 @@ pub trait TextRead {
     /// # Errors
     /// Returns an implementation-specific error when the source cannot be read
     /// or decoded.
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         while let Some(ch) = self.read_char()? {
             output.push(ch);

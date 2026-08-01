@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_io_text::{
-    CodingErrorPolicy,
-    LineEnding,
-};
+use qubit_io_text::{CodingErrorPolicy, LineEnding};
 
 #[test]
 fn test_public_value_defaults_are_stable() {

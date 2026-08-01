@@ -9,16 +9,9 @@
 use std::io;
 
 use qubit_codec_text::CharsetCodec;
-use qubit_io::{
-    Output,
-    OutputRef,
-};
+use qubit_io::{Output, OutputRef};
 
-use crate::{
-    CharsetTextWriter,
-    CodingErrorPolicy,
-    TextWrite,
-};
+use crate::{CharsetTextWriter, CodingErrorPolicy, TextWrite};
 
 /// Extension methods for writing charset-encoded text to byte streams.
 pub trait CharsetWriteExt: Output<Item = u8> + Sized {
@@ -63,9 +56,7 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        CharsetTextWriter::new_with_buffer_capacity(
-            self, codec, policy, capacity,
-        )
+        CharsetTextWriter::new_with_buffer_capacity(self, codec, policy, capacity)
     }
 
     /// Writes one string as charset-encoded text.
@@ -89,8 +80,7 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut writer =
-            CharsetTextWriter::new(OutputRef::new(self), codec, policy);
+        let mut writer = CharsetTextWriter::new(OutputRef::new(self), codec, policy);
         writer.write_str(text)?;
         writer.finish()
     }

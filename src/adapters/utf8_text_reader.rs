@@ -7,21 +7,10 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetDecoder,
-    Utf8Codec,
-};
-use qubit_io::{
-    Buffer,
-    Input,
-};
+use qubit_codec_text::{CharsetDecoder, Utf8Codec};
+use qubit_io::{Buffer, Input};
 
-use crate::{
-    CharsetTextReader,
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
-};
+use crate::{CharsetTextReader, CodingErrorPolicy, TextLineRead, TextRead};
 
 /// Streaming UTF-8 text reader over a Qubit byte input.
 ///
@@ -67,11 +56,7 @@ where
     #[must_use]
     pub fn new(input: I) -> Self {
         Self {
-            reader: CharsetTextReader::new(
-                input,
-                Utf8Codec,
-                CodingErrorPolicy::Strict,
-            ),
+            reader: CharsetTextReader::new(input, Utf8Codec, CodingErrorPolicy::Strict),
         }
     }
 
@@ -125,9 +110,7 @@ where
     /// characters not yet returned by this reader, in that order.
     #[must_use = "all returned reader state must be handled"]
     #[inline]
-    pub fn into_parts(
-        self,
-    ) -> (I, Buffer<u8>, CharsetDecoder<Utf8Codec>, Vec<char>) {
+    pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<Utf8Codec>, Vec<char>) {
         self.reader.into_parts()
     }
 
@@ -169,19 +152,12 @@ where
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }

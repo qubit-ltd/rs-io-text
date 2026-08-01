@@ -7,11 +7,7 @@
 // =============================================================================
 use std::io::Result;
 
-use qubit_io::{
-    Output,
-    UncheckedSlice,
-    try_reserve_string,
-};
+use qubit_io::{Output, UncheckedSlice, try_reserve_string};
 
 /// Character output over a borrowed [`String`].
 ///

@@ -10,27 +10,13 @@
 use std::io;
 
 use qubit_codec::{
-    AsyncTranscodeDecodeInput,
-    AsyncTranscodeDecodeStep,
-    TranscodeStatus,
-    Transcoder,
+    AsyncTranscodeDecodeInput, AsyncTranscodeDecodeStep, TranscodeStatus, Transcoder,
 };
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-};
-use qubit_io::{
-    AsyncInput,
-    Buffer,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
+use qubit_io::{AsyncInput, Buffer};
 
 use crate::CodingErrorPolicy;
-use crate::io_error::{
-    capacity_error_to_io,
-    decode_error_to_io,
-    text_append_limit_error,
-};
+use crate::io_error::{capacity_error_to_io, decode_error_to_io, text_append_limit_error};
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -100,12 +86,7 @@ where
     /// Returns a reader whose construction performs no input operation.
     #[must_use]
     pub fn new(input: I, codec: C, policy: CodingErrorPolicy) -> Self {
-        Self::new_with_buffer_capacity(
-            input,
-            codec,
-            policy,
-            DEFAULT_BUFFER_CAPACITY,
-        )
+        Self::new_with_buffer_capacity(input, codec, policy, DEFAULT_BUFFER_CAPACITY)
     }
 
     /// Creates an asynchronous charset reader with a requested buffer size.
@@ -129,8 +110,7 @@ where
         buffer_capacity: usize,
     ) -> Self {
         let capacity = buffer_capacity.max(MIN_TEXT_BUFFER_CAPACITY);
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+        let decoder = CharsetDecoder::with_policy(codec, policy.decode_policy());
         Self {
             input: AsyncTranscodeDecodeInput::with_capacity(input, capacity),
             decoder,
@@ -181,8 +161,7 @@ where
     #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<C>, Vec<char>) {
         let (input, unread) = self.input.into_parts();
-        let pending_chars =
-            self.chars[self.char_position..self.char_limit].to_vec();
+        let pending_chars = self.chars[self.char_position..self.char_limit].to_vec();
         (input, unread, self.decoder, pending_chars)
     }
 
@@ -322,11 +301,7 @@ where
                     match progress.status() {
                         TranscodeStatus::Complete => continue,
                         TranscodeStatus::NeedInput { required, .. } => {
-                            if !self
-                                .input
-                                .fill_until_async(required.get())
-                                .await?
-                            {
+                            if !self.input.fill_until_async(required.get()).await? {
                                 return self.finish_at_eof();
                             }
                         }
@@ -427,10 +402,7 @@ where
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded prefix. Resume on the same reader and
     /// do not append that prefix a second time.
-    pub async fn read_to_string_async(
-        &mut self,
-        output: &mut String,
-    ) -> io::Result<usize> {
+    pub async fn read_to_string_async(&mut self, output: &mut String) -> io::Result<usize> {
         let mut count = 0;
         while self.fill_chars_async().await? {
             let chars = &self.chars[self.char_position..self.char_limit];
@@ -508,10 +480,7 @@ where
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded line prefix. Resume on the same reader
     /// and do not append that prefix a second time.
-    pub async fn read_line_async(
-        &mut self,
-        output: &mut String,
-    ) -> io::Result<bool> {
+    pub async fn read_line_async(&mut self, output: &mut String) -> io::Result<bool> {
         let mut read = false;
         while self.fill_chars_async().await? {
             let chars = &self.chars[self.char_position..self.char_limit];

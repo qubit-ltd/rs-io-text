@@ -8,16 +8,9 @@
 use std::fmt;
 use std::io;
 
-use qubit_io::{
-    BoxOutput,
-    BufferedOutput,
-    Output,
-};
+use qubit_io::{BoxOutput, BufferedOutput, Output};
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::{LineEnding, TextWrite};
 
 /// Default character chunk capacity for string writes.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;

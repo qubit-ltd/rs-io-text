@@ -8,14 +8,8 @@
 use std::convert::Infallible;
 
 use crate::{
-    TextLineRead,
-    TextRead,
-    adapters::text_cursor::{
-        read_char_at,
-        read_chars_at,
-        read_line_at,
-        read_to_string_at,
-    },
+    TextLineRead, TextRead,
+    adapters::text_cursor::{read_char_at, read_chars_at, read_line_at, read_to_string_at},
 };
 
 /// Text reader over an owned string.
@@ -66,11 +60,7 @@ impl TextRead for StringTextReader {
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         Ok(read_chars_at(
             self.text.as_str(),
             &mut self.position,
@@ -80,10 +70,7 @@ impl TextRead for StringTextReader {
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         Ok(read_to_string_at(
             self.text.as_str(),
             &mut self.position,

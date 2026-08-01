@@ -11,17 +11,9 @@ use core::num::NonZeroUsize;
 use qubit_codec::Codec;
 use qubit_codec_text::Utf8Codec;
 use qubit_codec_text::{
-    Charset,
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodeErrorKind,
-    CharsetDecodePolicy,
-    CharsetDecodeResult,
-    CharsetEncodeError,
-    CharsetEncodeErrorKind,
-    CharsetEncodeResult,
-    MalformedAction,
-    Utf32U32Codec,
+    Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind, CharsetDecodePolicy,
+    CharsetDecodeResult, CharsetEncodeError, CharsetEncodeErrorKind, CharsetEncodeResult,
+    MalformedAction, Utf32U32Codec,
 };
 use qubit_io_text::CharsetStringDecoder;
 
@@ -50,13 +42,9 @@ impl Codec for InvalidInputErrorCodec {
         &mut self,
         _input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         let kind = CharsetDecodeErrorKind::malformed_unknown();
-        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index)
-            .into_codec_failure())
+        Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index).into_codec_failure())
     }
 
     unsafe fn encode(
@@ -105,10 +93,7 @@ impl Codec for HugeDecodeResetBoundsCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -158,10 +143,7 @@ impl Codec for DecodeResetErrorCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -202,10 +184,7 @@ impl Codec for HugeDecodeFinishBoundsCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -247,10 +226,7 @@ impl Codec for DecodeFlushErrorCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -301,10 +277,7 @@ fn test_charset_string_decoder_decode_to_string_crosses_character_windows() {
 
 #[test]
 fn test_charset_string_decoder_rolls_back_after_late_malformed_input() {
-    let mut decoder = CharsetStringDecoder::with_policy(
-        Utf8Codec,
-        CharsetDecodePolicy::report(),
-    );
+    let mut decoder = CharsetStringDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut input = vec![b'A'; 300];
     input.push(0xff);
     let mut output = String::from("seed:");
@@ -349,8 +322,7 @@ fn test_charset_string_decoder_decode_to_string_into_starts_at_input_index() {
 }
 
 #[test]
-fn test_charset_string_decoder_decode_to_string_into_reports_invalid_input_index()
- {
+fn test_charset_string_decoder_decode_to_string_into_reports_invalid_input_index() {
     let mut decoder = CharsetStringDecoder::new(Utf8Codec);
     let mut output = String::from("unchanged");
 
@@ -397,17 +369,8 @@ fn test_charset_string_decoder_decode_to_string_reports_incomplete_tail() {
 
 #[cfg(coverage)]
 mod coverage_tests {
-    use qubit_codec::{
-        TranscodeDecodeError,
-        TranscodeDomainError,
-        TranscodeFailure,
-    };
-    use qubit_codec_text::{
-        Charset,
-        CharsetDecodeError,
-        CharsetDecodeErrorKind,
-        Utf8Codec,
-    };
+    use qubit_codec::{TranscodeDecodeError, TranscodeDomainError, TranscodeFailure};
+    use qubit_codec_text::{Charset, CharsetDecodeError, CharsetDecodeErrorKind, Utf8Codec};
     use qubit_io_text::CharsetStringDecoder;
 
     fn reset_coverage_hooks() {
@@ -475,13 +438,10 @@ mod coverage_tests {
 
     #[test]
     fn test_charset_string_decoder_maps_framework_and_finish_errors() {
-        let error =
-            CharsetStringDecoder::<Utf8Codec>::coverage_map_decode_error(
-                Charset::UTF_8,
-                TranscodeDecodeError::Failure(
-                    TranscodeFailure::insufficient_output(3, 2, 1),
-                ),
-            );
+        let error = CharsetStringDecoder::<Utf8Codec>::coverage_map_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::insufficient_output(3, 2, 1)),
+        );
         assert_eq!(
             CharsetDecodeErrorKind::BufferTooSmall {
                 required: 2,
@@ -496,39 +456,31 @@ mod coverage_tests {
             CharsetDecodeErrorKind::OutputLengthOverflow,
             usize::MAX,
         );
-        let error =
-            CharsetStringDecoder::<Utf8Codec>::coverage_map_finish_decode_error(
-                Charset::UTF_8,
-                TranscodeDecodeError::Domain(TranscodeDomainError::finish(
-                    overflow,
-                )),
-                7,
-            );
+        let error = CharsetStringDecoder::<Utf8Codec>::coverage_map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Domain(TranscodeDomainError::finish(overflow)),
+            7,
+        );
         assert_eq!(overflow, error);
     }
 }
 
 #[test]
 fn test_charset_string_decoder_decode_to_string_offsets_domain_errors() {
-    let mut decoder = CharsetStringDecoder::with_policy(
-        InvalidInputErrorCodec,
-        CharsetDecodePolicy::report(),
-    );
+    let mut decoder =
+        CharsetStringDecoder::with_policy(InvalidInputErrorCodec, CharsetDecodePolicy::report());
     let mut output = String::new();
 
     let error = decoder
         .decode_to_string_into(b"xxA", 2, &mut output)
-        .expect_err(
-            "decode error should be reported at the absolute input index",
-        );
+        .expect_err("decode error should be reported at the absolute input index");
 
     assert_eq!(CharsetDecodeErrorKind::malformed_unknown(), error.kind());
     assert_eq!(2, error.index());
 }
 
 #[test]
-fn test_charset_string_decoder_decode_to_string_reports_finish_capacity_overflow()
- {
+fn test_charset_string_decoder_decode_to_string_reports_finish_capacity_overflow() {
     let mut decoder = CharsetStringDecoder::new(HugeDecodeFinishBoundsCodec);
 
     let error = decoder
@@ -539,8 +491,7 @@ fn test_charset_string_decoder_decode_to_string_reports_finish_capacity_overflow
 }
 
 #[test]
-fn test_charset_string_decoder_decode_to_string_reports_char_reserve_overflow()
-{
+fn test_charset_string_decoder_decode_to_string_reports_char_reserve_overflow() {
     let mut decoder = CharsetStringDecoder::new(HugeDecodeResetBoundsCodec);
 
     let error = decoder

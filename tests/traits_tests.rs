@@ -6,11 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_io_text::{
-    TextLineRead,
-    TextRead,
-    TextWrite,
-};
+use qubit_io_text::{TextLineRead, TextRead, TextWrite};
 
 #[derive(Debug, Eq, PartialEq)]
 struct ReadError;

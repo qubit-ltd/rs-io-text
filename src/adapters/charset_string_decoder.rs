@@ -9,24 +9,12 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{
-    TranscodeDecodeError,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::{TranscodeDecodeError, TranscodeStatus, Transcoder};
 use qubit_codec_text::{
-    Charset,
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodeErrorKind,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-    MalformedAction,
+    Charset, CharsetCodec, CharsetDecodeError, CharsetDecodeErrorKind, CharsetDecodePolicy,
+    CharsetDecoder, MalformedAction,
 };
-use qubit_io::{
-    try_reserve_string,
-    try_reserve_vec,
-};
+use qubit_io::{try_reserve_string, try_reserve_vec};
 
 const CHAR_CHUNK_CAPACITY: usize = 256;
 
@@ -143,8 +131,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
-        COVERAGE_RESERVE_FAIL_AFTER
-            .with(|state| state.set(successful_attempts));
+        COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Shrinks the next character buffer capacity in coverage builds.
@@ -197,10 +184,7 @@ where
     ///
     /// Returns [`CharsetDecodeError`] when decoding fails, output sizing
     /// overflows, or the complete input ends with an incomplete sequence.
-    pub fn decode_to_string(
-        &mut self,
-        input: &[C::Unit],
-    ) -> Result<String, CharsetDecodeError> {
+    pub fn decode_to_string(&mut self, input: &[C::Unit]) -> Result<String, CharsetDecodeError> {
         let mut output = String::new();
         self.decode_to_string_into(input, 0, &mut output)?;
         Ok(output)
@@ -271,8 +255,7 @@ where
         };
         let char_capacity = reset_capacity.max(CHAR_CHUNK_CAPACITY);
         #[cfg(coverage)]
-        let char_capacity =
-            char_capacity.saturating_sub(coverage_take_char_capacity_shrink());
+        let char_capacity = char_capacity.saturating_sub(coverage_take_char_capacity_shrink());
         let mut chars = Vec::new();
         ensure_char_capacity(&mut chars, char_capacity, self.charset)?;
         let reset_written = match self.decoder.reset(&mut chars, 0) {
@@ -284,20 +267,17 @@ where
 
         let mut input_cursor = input_index;
         loop {
-            let progress = match self.decoder.transcode(
-                input,
-                input_cursor,
-                &mut chars,
-                0,
-            ) {
+            let progress = match self
+                .decoder
+                .transcode_eof(input, input_cursor, &mut chars, 0)
+            {
                 Ok(progress) => progress,
                 Err(error) => {
                     return Err(map_decode_error(self.charset, error));
                 }
             };
             append_chars(output, &chars[..progress.written()], self.charset)?;
-            let Some(next_output_char_count) =
-                output_char_count.checked_add(progress.written())
+            let Some(next_output_char_count) = output_char_count.checked_add(progress.written())
             else {
                 return Err(output_length_overflow(self.charset));
             };
@@ -314,20 +294,12 @@ where
                         required: required.get(),
                         available,
                     };
-                    return Err(CharsetDecodeError::new(
-                        self.charset,
-                        kind,
-                        input_index,
-                    ));
+                    return Err(CharsetDecodeError::new(self.charset, kind, input_index));
                 }
                 TranscodeStatus::NeedOutput { required, .. } => {
                     if progress.read() == 0 && progress.written() == 0 {
                         let required = required.get().max(CHAR_CHUNK_CAPACITY);
-                        ensure_char_capacity(
-                            &mut chars,
-                            required,
-                            self.charset,
-                        )?;
+                        ensure_char_capacity(&mut chars, required, self.charset)?;
                     }
                 }
             }

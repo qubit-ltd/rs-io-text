@@ -7,10 +7,7 @@
 // =============================================================================
 use std::io::Result;
 
-use qubit_io::{
-    Input,
-    UncheckedSlice,
-};
+use qubit_io::{Input, UncheckedSlice};
 
 /// Character input over a borrowed string slice.
 ///

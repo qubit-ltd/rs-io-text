@@ -8,11 +8,7 @@
 
 use std::convert::Infallible;
 
-use qubit_io_text::{
-    StrTextReader,
-    TextLineRead,
-    TextRead,
-};
+use qubit_io_text::{StrTextReader, TextLineRead, TextRead};
 
 #[test]
 fn test_read_char_returns_unicode_scalars() -> Result<(), Infallible> {

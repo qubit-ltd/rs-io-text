@@ -5,19 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    Cursor,
-    ErrorKind,
-    Read,
-};
+use std::io::{self, Cursor, ErrorKind, Read};
 
 use qubit_io::Input;
-use qubit_io_text::{
-    TextLineRead,
-    TextRead,
-    Utf8TextReader,
-};
+use qubit_io_text::{TextLineRead, TextRead, Utf8TextReader};
 
 struct InputOnlyReader {
     bytes: Vec<u8>,
@@ -46,8 +37,7 @@ impl Input for InputOnlyReader {
         let read = available.min(count);
         let input_end = self.position + read;
         let output_end = index + read;
-        output[index..output_end]
-            .copy_from_slice(&self.bytes[self.position..input_end]);
+        output[index..output_end].copy_from_slice(&self.bytes[self.position..input_end]);
         self.position = input_end;
         Ok(read)
     }
@@ -123,8 +113,7 @@ fn test_new_accessors_expose_wrapped_input() {
 }
 
 #[test]
-fn test_utf8_text_reader_into_parts_preserves_unreturned_characters()
--> std::io::Result<()> {
+fn test_utf8_text_reader_into_parts_preserves_unreturned_characters() -> std::io::Result<()> {
     let mut reader = Utf8TextReader::new(Cursor::new(b"abc".to_vec()));
 
     assert_eq!(Some('a'), reader.read_char()?);
