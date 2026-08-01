@@ -305,11 +305,8 @@ where
             input_cursor += progress.read();
             match progress.status() {
                 TranscodeStatus::Complete => break,
-                TranscodeStatus::NeedInput {
-                    input_index,
-                    required,
-                    available,
-                } => {
+                TranscodeStatus::NeedInput { required } => {
+                    let available = input.len().saturating_sub(input_cursor);
                     let kind = CharsetDecodeErrorKind::IncompleteSequence {
                         required: required.get(),
                         available,
@@ -317,7 +314,7 @@ where
                     return Err(CharsetDecodeError::new(
                         self.charset,
                         kind,
-                        input_index,
+                        input_cursor,
                     ));
                 }
                 TranscodeStatus::NeedOutput { required, .. } => {

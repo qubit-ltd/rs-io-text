@@ -202,9 +202,7 @@ impl Transcoder for LifecycleEncoder {
             return Ok(TranscodeProgress::complete(read, written));
         }
         Ok(TranscodeProgress::need_output(
-            output_index + written,
             core::num::NonZeroUsize::MIN,
-            0,
             read,
             written,
         ))

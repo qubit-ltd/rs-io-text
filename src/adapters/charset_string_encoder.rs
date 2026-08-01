@@ -383,19 +383,15 @@ where
                 }
             };
             output_cursor += progress.written();
-            if let TranscodeStatus::NeedOutput {
-                output_index,
-                required,
-                available,
-            } = progress.status()
-            {
+            if let TranscodeStatus::NeedOutput { required } = progress.status() {
+                let available = output.len().saturating_sub(output_cursor);
                 return Err(CharsetEncodeError::new(
                     charset,
                     CharsetEncodeErrorKind::BufferTooSmall {
                         required: required.get(),
                         available,
                     },
-                    output_index,
+                    output_cursor,
                 ));
             }
             input_offset += progress.read();
