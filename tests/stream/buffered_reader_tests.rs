@@ -53,7 +53,7 @@ impl Transcoder for ExpandingDecoder {
         output: &mut [char],
         index: usize,
     ) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
         Ok(0)
     }
     fn transcode(
@@ -63,7 +63,7 @@ impl Transcoder for ExpandingDecoder {
         output: &mut [char],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         if input.len() == index {
             return Ok(TranscodeProgress::complete(0, 0));
         }
@@ -87,7 +87,7 @@ impl Transcoder for ExpandingDecoder {
         output: &mut [char],
         index: usize,
     ) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
         Ok(0)
     }
 }
@@ -119,7 +119,7 @@ impl Transcoder for FinishCharDecoder {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -138,7 +138,7 @@ impl Transcoder for FinishCharDecoder {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         output[output_index] = '!';
         Ok(1)
     }
@@ -245,7 +245,7 @@ impl Transcoder for OverflowFinishDecoder {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
