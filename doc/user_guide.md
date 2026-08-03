@@ -51,11 +51,14 @@ direct dependencies.
 ```rust
 use std::io::Cursor;
 
-use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::{
+    CharsetDecodePolicy,
+    CharsetEncodePolicy,
+    Utf8Codec,
+};
 use qubit_io_text::{
     CharsetTextReader,
     CharsetTextWriter,
-    CodingErrorPolicy,
     LineEnding,
     TextRead,
     TextWrite,
@@ -65,7 +68,7 @@ let mut bytes = Vec::new();
 let mut writer = CharsetTextWriter::new(
     &mut bytes,
     Utf8Codec,
-    CodingErrorPolicy::Strict,
+    CharsetEncodePolicy::report(),
 )
 .with_line_ending(LineEnding::CrLf);
 writer.write_line("subject: status")?;
@@ -75,7 +78,7 @@ writer.finish()?;
 let mut reader = CharsetTextReader::new(
     Cursor::new(bytes),
     Utf8Codec,
-    CodingErrorPolicy::Strict,
+    CharsetDecodePolicy::report(),
 );
 let mut text = String::new();
 let chars = reader.read_to_string(&mut text)?;
@@ -91,10 +94,9 @@ construction and one-shot helpers when a persistent adapter is unnecessary.
 
 ## Policies, Lines, and UTF-8
 
-Choose `CodingErrorPolicy::Strict` to report malformed input and unencodable
-output, or `CodingErrorPolicy::Replace` to use the codec replacement value.
-The policy is chosen during adapter construction, so it cannot change midway
-through a stateful charset stream.
+Choose `CharsetDecodePolicy` for malformed input and `CharsetEncodePolicy` for
+unencodable output. Each policy can report, ignore, or replace with its own
+configured replacement value, and is chosen during adapter construction.
 
 `LineEnding::Lf`, `LineEnding::CrLf`, and `LineEnding::Cr` control what
 `write_line` appends. If the stream is known to be UTF-8, `Utf8TextReader` and
@@ -109,10 +111,9 @@ for every synchronous text trait. Construction performs no I/O.
 
 ```rust
 use qubit_io::AsyncOutput;
-use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io_text::{
     AsyncCharsetTextWriter,
-    CodingErrorPolicy,
     LineEnding,
 };
 
@@ -123,7 +124,7 @@ where
     let mut writer = AsyncCharsetTextWriter::new(
         output,
         Utf8Codec,
-        CodingErrorPolicy::Strict,
+        CharsetEncodePolicy::report(),
     )
     .with_line_ending(LineEnding::CrLf);
     writer.write_line_fully_async("subject: status").await?;

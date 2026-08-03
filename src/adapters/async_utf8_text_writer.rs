@@ -1,15 +1,9 @@
-use std::ops::{
-    Deref,
-    DerefMut,
-};
+use std::ops::{Deref, DerefMut};
 
-use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io::AsyncOutput;
 
-use crate::{
-    AsyncCharsetTextWriter,
-    CodingErrorPolicy,
-};
+use crate::AsyncCharsetTextWriter;
 
 /// Convenience asynchronous UTF-8 writer.
 #[derive(Debug)]
@@ -24,22 +18,18 @@ where
     /// Creates a strict UTF-8 writer with the default capacity.
     #[must_use]
     pub fn new(output: O) -> Self {
-        Self::with_policy(output, CodingErrorPolicy::Strict)
+        Self::with_policy(output, CharsetEncodePolicy::report())
     }
 
     /// Creates a UTF-8 writer with an explicit error policy.
     #[must_use]
-    pub fn with_policy(output: O, policy: CodingErrorPolicy) -> Self {
+    pub fn with_policy(output: O, policy: CharsetEncodePolicy) -> Self {
         Self(AsyncCharsetTextWriter::new(output, Utf8Codec, policy))
     }
 
     /// Creates a UTF-8 writer with an explicit byte capacity.
     #[must_use]
-    pub fn with_capacity(
-        output: O,
-        policy: CodingErrorPolicy,
-        capacity: usize,
-    ) -> Self {
+    pub fn with_capacity(output: O, policy: CharsetEncodePolicy, capacity: usize) -> Self {
         Self(AsyncCharsetTextWriter::new_with_buffer_capacity(
             output, Utf8Codec, policy, capacity,
         ))

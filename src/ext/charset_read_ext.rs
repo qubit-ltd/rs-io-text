@@ -8,17 +8,10 @@
 // qubit-style: allow source-test-pair
 use std::io;
 
-use qubit_codec_text::CharsetCodec;
-use qubit_io::{
-    Input,
-    InputRef,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy};
+use qubit_io::{Input, InputRef};
 
-use crate::{
-    CharsetTextReader,
-    CodingErrorPolicy,
-    TextRead,
-};
+use crate::{CharsetTextReader, TextRead};
 
 /// Extension methods for reading charset-encoded text from byte streams.
 pub trait CharsetReadExt: Input<Item = u8> + Sized {
@@ -35,7 +28,7 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     fn charset_text_reader<C>(
         self,
         codec: C,
-        policy: CodingErrorPolicy,
+        policy: CharsetDecodePolicy,
     ) -> CharsetTextReader<Self, C>
     where
         C: CharsetCodec<Unit = u8>,
@@ -57,15 +50,13 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     fn buffered_charset_text_reader<C>(
         self,
         codec: C,
-        policy: CodingErrorPolicy,
+        policy: CharsetDecodePolicy,
         capacity: usize,
     ) -> CharsetTextReader<Self, C>
     where
         C: CharsetCodec<Unit = u8>,
     {
-        CharsetTextReader::new_with_buffer_capacity(
-            self, codec, policy, capacity,
-        )
+        CharsetTextReader::new_with_buffer_capacity(self, codec, policy, capacity)
     }
 
     /// Reads all remaining bytes as charset-encoded text.
@@ -86,13 +77,12 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     fn read_to_string_with_charset<C>(
         &mut self,
         codec: C,
-        policy: CodingErrorPolicy,
+        policy: CharsetDecodePolicy,
     ) -> io::Result<String>
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut reader =
-            CharsetTextReader::new(InputRef::new(self), codec, policy);
+        let mut reader = CharsetTextReader::new(InputRef::new(self), codec, policy);
         let mut output = String::new();
         reader.read_to_string(&mut output)?;
         Ok(output)
@@ -119,14 +109,13 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     fn read_to_string_with_charset_limited<C>(
         &mut self,
         codec: C,
-        policy: CodingErrorPolicy,
+        policy: CharsetDecodePolicy,
         max_append_len: usize,
     ) -> io::Result<String>
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut reader =
-            CharsetTextReader::new(InputRef::new(self), codec, policy);
+        let mut reader = CharsetTextReader::new(InputRef::new(self), codec, policy);
         let mut output = String::new();
         reader.read_to_string_limited(&mut output, max_append_len)?;
         Ok(output)

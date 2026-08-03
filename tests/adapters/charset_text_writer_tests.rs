@@ -7,34 +7,15 @@
 // =============================================================================
 
 use std::{
-    io::{
-        self,
-        ErrorKind,
-        Write,
-    },
+    io::{self, ErrorKind, Write},
     num::NonZeroUsize,
 };
 
 use qubit_codec::Codec;
-use qubit_codec_text::{
-    AsciiCodec,
-    CharsetCodec,
-    Utf8Codec,
-};
-use qubit_codec_text::{
-    Charset,
-    CharsetDecodeError,
-    CharsetEncodeError,
-    CharsetEncodeResult,
-};
+use qubit_codec_text::{AsciiCodec, CharsetCodec, CharsetEncodePolicy, Utf8Codec};
+use qubit_codec_text::{Charset, CharsetDecodeError, CharsetEncodeError, CharsetEncodeResult};
 use qubit_io::Output;
-use qubit_io_text::{
-    CharsetTextWriter,
-    CharsetWriteExt,
-    CodingErrorPolicy,
-    LineEnding,
-    TextWrite,
-};
+use qubit_io_text::{CharsetTextWriter, CharsetWriteExt, LineEnding, TextWrite};
 
 struct FailingWriter;
 
@@ -107,10 +88,7 @@ impl Codec for NeedOutputCodec {
         &mut self,
         _input: &[u8],
         _index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         unreachable!("writer tests do not decode with NeedOutputCodec")
     }
 
@@ -142,12 +120,9 @@ impl Codec for NeedOutputCodec {
 fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
-        let mut writer = CharsetTextWriter::new(
-            &mut output,
-            Utf8Codec,
-            CodingErrorPolicy::Strict,
-        )
-        .with_line_ending(LineEnding::CrLf);
+        let mut writer =
+            CharsetTextWriter::new(&mut output, Utf8Codec, CharsetEncodePolicy::report())
+                .with_line_ending(LineEnding::CrLf);
 
         writer.write_char('A')?;
         writer.write_chars(&['B', 'C'])?;
@@ -162,8 +137,7 @@ fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
 #[test]
 fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
     let output = OutputOnlyWriter::default();
-    let mut writer =
-        CharsetTextWriter::new(output, Utf8Codec, CodingErrorPolicy::Strict);
+    let mut writer = CharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
 
     writer.write_str("output中文")?;
     writer.finish()?;
@@ -177,11 +151,7 @@ fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
 #[test]
 fn test_write_rejects_unencodable_text_in_strict_mode() {
     let mut output = Vec::new();
-    let mut writer = CharsetTextWriter::new(
-        &mut output,
-        AsciiCodec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut writer = CharsetTextWriter::new(&mut output, AsciiCodec, CharsetEncodePolicy::report());
 
     let error = writer
         .write_str("🙂")
@@ -192,11 +162,7 @@ fn test_write_rejects_unencodable_text_in_strict_mode() {
 #[test]
 fn test_write_chars_rejects_unencodable_text_in_strict_mode() {
     let mut output = Vec::new();
-    let mut writer = CharsetTextWriter::new(
-        &mut output,
-        AsciiCodec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut writer = CharsetTextWriter::new(&mut output, AsciiCodec, CharsetEncodePolicy::report());
 
     let error = writer
         .write_chars(&['🙂'])
@@ -205,15 +171,11 @@ fn test_write_chars_rejects_unencodable_text_in_strict_mode() {
 }
 
 #[test]
-fn test_write_replaces_unencodable_text_in_replace_mode() -> std::io::Result<()>
-{
+fn test_write_replaces_unencodable_text_in_replace_mode() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
-        let mut writer = CharsetTextWriter::new(
-            &mut output,
-            AsciiCodec,
-            CodingErrorPolicy::Replace,
-        );
+        let mut writer =
+            CharsetTextWriter::new(&mut output, AsciiCodec, CharsetEncodePolicy::replace('?'));
 
         writer.write_str("🙂")?;
         writer.flush()?;
@@ -226,8 +188,7 @@ fn test_write_replaces_unencodable_text_in_replace_mode() -> std::io::Result<()>
 #[test]
 fn test_accessors_and_into_output() -> std::io::Result<()> {
     let output = b"prefix:inner:".to_vec();
-    let mut writer =
-        CharsetTextWriter::new(output, AsciiCodec, CodingErrorPolicy::Strict);
+    let mut writer = CharsetTextWriter::new(output, AsciiCodec, CharsetEncodePolicy::report());
 
     assert_eq!(b"prefix:inner:", writer.output().as_slice());
     assert_eq!(LineEnding::Lf, writer.line_ending());
@@ -243,11 +204,7 @@ fn test_accessors_and_into_output() -> std::io::Result<()> {
 
 #[test]
 fn test_finish_then_into_parts_returns_output() -> std::io::Result<()> {
-    let mut writer = CharsetTextWriter::new(
-        Vec::new(),
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut writer = CharsetTextWriter::new(Vec::new(), Utf8Codec, CharsetEncodePolicy::report());
     writer.write_str("recoverable")?;
 
     writer.finish()?;
@@ -260,11 +217,8 @@ fn test_finish_then_into_parts_returns_output() -> std::io::Result<()> {
 
 #[test]
 fn test_finish_error_leaves_charset_writer_available_for_retry() {
-    let mut writer = CharsetTextWriter::new(
-        FailingWriter,
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    );
+    let mut writer =
+        CharsetTextWriter::new(FailingWriter, Utf8Codec, CharsetEncodePolicy::report());
 
     let error = writer
         .finish()
@@ -279,7 +233,7 @@ fn test_write_methods_defer_underlying_errors_until_flush() {
     let mut writer = CharsetTextWriter::new_with_buffer_capacity(
         FailingWriter,
         AsciiCodec,
-        CodingErrorPolicy::Strict,
+        CharsetEncodePolicy::report(),
         1,
     );
 
@@ -299,12 +253,11 @@ fn test_write_methods_defer_underlying_errors_until_flush() {
 }
 
 #[test]
-fn test_write_raises_buffer_to_single_character_max_output()
--> std::io::Result<()> {
+fn test_write_raises_buffer_to_single_character_max_output() -> std::io::Result<()> {
     let mut writer = CharsetTextWriter::new_with_buffer_capacity(
         Vec::new(),
         NeedOutputCodec,
-        CodingErrorPolicy::Strict,
+        CharsetEncodePolicy::report(),
         1,
     );
 
@@ -324,7 +277,7 @@ fn test_with_capacity_buffers_until_flush() -> std::io::Result<()> {
         let mut writer = CharsetTextWriter::new_with_buffer_capacity(
             &mut output,
             Utf8Codec,
-            CodingErrorPolicy::Strict,
+            CharsetEncodePolicy::report(),
             64,
         );
 
@@ -340,8 +293,7 @@ fn test_with_capacity_buffers_until_flush() -> std::io::Result<()> {
 #[test]
 fn test_charset_write_ext_creates_stream_writer() -> std::io::Result<()> {
     let output = Vec::new();
-    let mut writer =
-        output.charset_text_writer(AsciiCodec, CodingErrorPolicy::Replace);
+    let mut writer = output.charset_text_writer(AsciiCodec, CharsetEncodePolicy::replace('?'));
 
     writer.write_line("A🙂")?;
     writer.finish()?;
@@ -353,11 +305,9 @@ fn test_charset_write_ext_creates_stream_writer() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_charset_write_ext_accepts_qubit_output_without_std_write()
--> std::io::Result<()> {
+fn test_charset_write_ext_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
     let output = OutputOnlyWriter::default();
-    let mut writer =
-        output.charset_text_writer(Utf8Codec, CodingErrorPolicy::Strict);
+    let mut writer = output.charset_text_writer(Utf8Codec, CharsetEncodePolicy::report());
 
     writer.write_str("ext输出")?;
     writer.finish()?;
@@ -369,14 +319,10 @@ fn test_charset_write_ext_accepts_qubit_output_without_std_write()
 }
 
 #[test]
-fn test_charset_write_ext_creates_buffered_stream_writer() -> std::io::Result<()>
-{
+fn test_charset_write_ext_creates_buffered_stream_writer() -> std::io::Result<()> {
     let output = Vec::new();
-    let mut writer = output.buffered_charset_text_writer(
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-        1,
-    );
+    let mut writer =
+        output.buffered_charset_text_writer(Utf8Codec, CharsetEncodePolicy::report(), 1);
 
     writer.write_str("é")?;
     writer.finish()?;
@@ -388,15 +334,10 @@ fn test_charset_write_ext_creates_buffered_stream_writer() -> std::io::Result<()
 }
 
 #[test]
-fn test_charset_write_ext_writes_one_shot_to_qubit_output()
--> std::io::Result<()> {
+fn test_charset_write_ext_writes_one_shot_to_qubit_output() -> std::io::Result<()> {
     let mut output = OutputOnlyWriter::default();
 
-    output.write_str_with_charset(
-        "one-shot输出",
-        Utf8Codec,
-        CodingErrorPolicy::Strict,
-    )?;
+    output.write_str_with_charset("one-shot输出", Utf8Codec, CharsetEncodePolicy::report())?;
 
     assert_eq!("one-shot输出".as_bytes(), output.into_bytes().as_slice());
     Ok(())
@@ -406,11 +347,7 @@ fn test_charset_write_ext_writes_one_shot_to_qubit_output()
 fn test_charset_write_ext_writes_one_shot_text() -> std::io::Result<()> {
     let mut output = Vec::new();
 
-    output.write_str_with_charset(
-        "A🙂",
-        AsciiCodec,
-        CodingErrorPolicy::Replace,
-    )?;
+    output.write_str_with_charset("A🙂", AsciiCodec, CharsetEncodePolicy::replace('?'))?;
 
     assert_eq!(b"A?", output.as_slice());
     Ok(())

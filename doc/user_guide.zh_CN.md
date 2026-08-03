@@ -46,11 +46,14 @@ qubit-io = "0.14"
 ```rust
 use std::io::Cursor;
 
-use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::{
+    CharsetDecodePolicy,
+    CharsetEncodePolicy,
+    Utf8Codec,
+};
 use qubit_io_text::{
     CharsetTextReader,
     CharsetTextWriter,
-    CodingErrorPolicy,
     LineEnding,
     TextRead,
     TextWrite,
@@ -60,7 +63,7 @@ let mut bytes = Vec::new();
 let mut writer = CharsetTextWriter::new(
     &mut bytes,
     Utf8Codec,
-    CodingErrorPolicy::Strict,
+    CharsetEncodePolicy::report(),
 )
 .with_line_ending(LineEnding::CrLf);
 writer.write_line("subject: status")?;
@@ -70,7 +73,7 @@ writer.finish()?;
 let mut reader = CharsetTextReader::new(
     Cursor::new(bytes),
     Utf8Codec,
-    CodingErrorPolicy::Strict,
+    CharsetDecodePolicy::report(),
 );
 let mut text = String::new();
 let chars = reader.read_to_string(&mut text)?;
@@ -85,9 +88,9 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 
 ## 策略、换行与 UTF-8
 
-`CodingErrorPolicy::Strict` 会报告畸形输入和无法编码的输出；
-`CodingErrorPolicy::Replace` 使用 codec 的替换值。策略在 adapter 构造时选定，因此
-不能在有状态 charset 流的中途改变。
+畸形输入使用 `CharsetDecodePolicy`，无法编码的输出使用
+`CharsetEncodePolicy`。两者均可独立报告、忽略或使用自定义替换字符，并在 adapter
+构造时选定。
 
 `LineEnding::Lf`、`LineEnding::CrLf` 和 `LineEnding::Cr` 决定 `write_line` 追加的
 内容。流确定为 UTF-8 时，可使用 `Utf8TextReader` 和 `Utf8TextWriter`，它们在相同的
@@ -101,10 +104,9 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 
 ```rust
 use qubit_io::AsyncOutput;
-use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io_text::{
     AsyncCharsetTextWriter,
-    CodingErrorPolicy,
     LineEnding,
 };
 
@@ -115,7 +117,7 @@ where
     let mut writer = AsyncCharsetTextWriter::new(
         output,
         Utf8Codec,
-        CodingErrorPolicy::Strict,
+        CharsetEncodePolicy::report(),
     )
     .with_line_ending(LineEnding::CrLf);
     writer.write_line_fully_async("subject: status").await?;
