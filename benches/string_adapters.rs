@@ -10,33 +10,16 @@
 #[path = "support/tracking_allocator.rs"]
 mod tracking_allocator;
 
-use std::{
-    hint::black_box,
-    io::Cursor,
-    time::Duration,
-};
+use std::{hint::black_box, io::Cursor, time::Duration};
 
-use criterion::{
-    BenchmarkId,
-    Criterion,
-    Throughput,
-    criterion_group,
-    criterion_main,
-};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use qubit_codec::ByteOrder;
 use qubit_codec_text::{
-    CharsetCodec,
-    Utf8Codec,
-    Utf16ByteCodec,
+    CharsetCodec, CharsetDecodePolicy, CharsetEncodePolicy, Utf8Codec, Utf16ByteCodec,
     Utf32ByteCodec,
 };
 use qubit_io_text::{
-    CharsetStringDecoder,
-    CharsetStringEncoder,
-    CharsetTextReader,
-    CharsetTextWriter,
-    CodingErrorPolicy,
-    TextRead,
+    CharsetStringDecoder, CharsetStringEncoder, CharsetTextReader, CharsetTextWriter, TextRead,
     TextWrite,
 };
 
@@ -72,12 +55,8 @@ where
         .expect("valid fixture should encode")
 }
 
-fn report_allocation<C>(
-    encoding: &str,
-    codec: C,
-    fixture_name: &str,
-    input: &str,
-) where
+fn report_allocation<C>(encoding: &str, codec: C, fixture_name: &str, input: &str)
+where
     C: CharsetCodec + Clone,
     C::Unit: Default,
 {
@@ -176,10 +155,7 @@ fn bench_owned_decode<C>(
     group.finish();
 }
 
-fn bench_streaming_charset(
-    criterion: &mut Criterion,
-    fixtures: &[(String, String)],
-) {
+fn bench_streaming_charset(criterion: &mut Criterion, fixtures: &[(String, String)]) {
     let mut group = criterion.benchmark_group("streaming_charset_utf8");
     group.sample_size(SAMPLE_SIZE);
     group.warm_up_time(Duration::from_secs(2));
@@ -194,11 +170,8 @@ fn bench_streaming_charset(
                 bencher.iter_batched(
                     || Cursor::new(input.as_bytes().to_vec()),
                     |input| {
-                        let mut reader = CharsetTextReader::new(
-                            input,
-                            Utf8Codec,
-                            CodingErrorPolicy::Strict,
-                        );
+                        let mut reader =
+                            CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
                         let mut output = String::new();
                         reader
                             .read_to_string(&mut output)
@@ -219,11 +192,9 @@ fn bench_streaming_charset(
                         let mut writer = CharsetTextWriter::new(
                             output,
                             Utf8Codec,
-                            CodingErrorPolicy::Strict,
+                            CharsetEncodePolicy::report(),
                         );
-                        writer
-                            .write_str(input)
-                            .expect("UTF-8 stream should encode");
+                        writer.write_str(input).expect("UTF-8 stream should encode");
                         writer.finish().expect("UTF-8 stream should finish");
                         let (output, pending) = writer.into_parts();
                         let _ = black_box((output.into_inner(), pending));

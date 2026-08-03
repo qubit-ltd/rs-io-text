@@ -5,33 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{
-    error::Error as StdError,
-    io,
-};
+use std::{error::Error as StdError, io};
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeInput,
-    TranscodeDecoder,
-    TranscodeStatus,
-    nz,
-};
-use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::{
-    Buffer,
-    Input,
-    UncheckedSlice,
-};
+use qubit_codec::{CapacityError, TranscodeDecodeInput, TranscodeDecoder, TranscodeStatus, nz};
+use qubit_io::{Buffer, Input, UncheckedSlice};
 
 use crate::{
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
+    TextLineRead, TextRead,
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
-        decode_error_to_io as shared_decode_error_to_io,
-        text_append_limit_error,
+        decode_error_to_io as shared_decode_error_to_io, text_append_limit_error,
     },
 };
 
@@ -55,13 +38,12 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// use std::io::Cursor;
 ///
 /// use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
-/// use qubit_io_text::{BufferedReader, CodingErrorPolicy, TextRead};
+/// use qubit_io_text::{BufferedReader, TextRead};
 ///
 /// let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
 /// let mut reader = BufferedReader::new(
 ///     Cursor::new("hello".as_bytes().to_vec()),
 ///     decoder,
-///     CodingErrorPolicy::Strict,
 /// );
 /// let mut text = String::new();
 /// reader.read_to_string(&mut text)?;
@@ -75,7 +57,6 @@ where
 {
     input: TranscodeDecodeInput<R>,
     decoder: D,
-    incomplete_eof_policy: CodingErrorPolicy,
     chars: Vec<char>,
     char_position: usize,
     char_limit: usize,
@@ -93,26 +74,14 @@ where
     ///
     /// - `inner`: Byte reader to decode lazily.
     /// - `decoder`: Streaming byte-to-character transcoder.
-    /// - `incomplete_eof_policy`: Handling policy for an incomplete encoded
-    ///   tail at EOF. It does not control malformed-input errors reported by
-    ///   `decoder`.
     ///
     /// # Returns
     ///
     /// Returns a buffered text reader. Construction does not read from
     /// `inner`.
     #[must_use]
-    pub fn new(
-        inner: R,
-        decoder: D,
-        incomplete_eof_policy: CodingErrorPolicy,
-    ) -> Self {
-        Self::with_capacity(
-            inner,
-            decoder,
-            incomplete_eof_policy,
-            DEFAULT_BUFFER_CAPACITY,
-        )
+    pub fn new(inner: R, decoder: D) -> Self {
+        Self::with_capacity(inner, decoder, DEFAULT_BUFFER_CAPACITY)
     }
 
     /// Creates a buffered text reader with a requested byte buffer capacity.
@@ -121,9 +90,6 @@ where
     ///
     /// - `inner`: Byte reader to decode lazily.
     /// - `decoder`: Streaming byte-to-character transcoder.
-    /// - `incomplete_eof_policy`: Handling policy for an incomplete encoded
-    ///   tail at EOF. It does not control malformed-input errors reported by
-    ///   `decoder`.
     /// - `capacity`: Requested byte buffer capacity.
     ///
     /// # Returns
@@ -131,17 +97,11 @@ where
     /// Returns a buffered text reader. The byte buffer is raised to at least
     /// four bytes so built-in Unicode byte codecs can retain incomplete tails.
     #[must_use]
-    pub fn with_capacity(
-        inner: R,
-        decoder: D,
-        incomplete_eof_policy: CodingErrorPolicy,
-        capacity: usize,
-    ) -> Self {
+    pub fn with_capacity(inner: R, decoder: D, capacity: usize) -> Self {
         let capacity = capacity.max(MIN_TEXT_BUFFER_CAPACITY);
         Self {
             input: TranscodeDecodeInput::with_capacity(inner, capacity),
             decoder,
-            incomplete_eof_policy,
             chars: vec!['\0'; capacity],
             char_position: 0,
             char_limit: 0,
@@ -176,8 +136,7 @@ where
     #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> (R, Buffer<u8>, D, Vec<char>) {
         let (inner, unread) = self.input.into_parts();
-        let pending_chars =
-            self.chars[self.char_position..self.char_limit].to_vec();
+        let pending_chars = self.chars[self.char_position..self.char_limit].to_vec();
         (inner, unread, self.decoder, pending_chars)
     }
 
@@ -196,12 +155,6 @@ where
     fn clear_chars(&mut self) {
         self.char_position = 0;
         self.char_limit = 0;
-    }
-
-    /// Consumes all currently buffered encoded input.
-    fn consume_all_input(&mut self) {
-        let unread = self.input.unread_len();
-        self.input.consume(unread);
     }
 }
 
@@ -244,34 +197,6 @@ where
         Ok(())
     }
 
-    /// Handles an incomplete encoded tail after EOF.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when replacement mode emitted one character.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`io::ErrorKind::InvalidData`] in strict mode.
-    fn handle_incomplete_eof(&mut self) -> io::Result<bool> {
-        match self.incomplete_eof_policy {
-            CodingErrorPolicy::Strict => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "incomplete charset input at EOF",
-            )),
-            CodingErrorPolicy::Replace => {
-                self.consume_all_input();
-                unsafe {
-                    *UncheckedSlice::get_mut(self.chars.as_mut_slice(), 0) =
-                        CharsetDecodePolicy::DEFAULT_REPLACEMENT;
-                }
-                self.char_position = 0;
-                self.char_limit = 1;
-                Ok(true)
-            }
-        }
-    }
-
     /// Finishes decoder-owned output after EOF.
     ///
     /// # Returns
@@ -306,6 +231,43 @@ where
         Ok(written > 0)
     }
 
+    /// Decodes the retained EOF tail according to the decoder's policy.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when EOF decoding or finalization made a character
+    /// available, or `false` after clean finalization.
+    ///
+    /// # Errors
+    ///
+    /// Returns I/O, decoder, or finalization errors.
+    fn decode_eof(&mut self) -> io::Result<bool> {
+        let capacity = self.chars.len();
+        let progress = self.input.transcode_eof_step(
+            &mut self.decoder,
+            &mut decode_error_to_io,
+            self.chars.as_mut_slice(),
+            0,
+            capacity,
+        )?;
+        self.char_position = 0;
+        self.char_limit = progress.written();
+        if self.has_buffered_chars() {
+            return Ok(true);
+        }
+        match progress.status() {
+            TranscodeStatus::NeedOutput { required, .. } => {
+                self.chars.resize(required.get(), '\0');
+                self.decode_eof()
+            }
+            TranscodeStatus::Complete => self.finish_decoder(),
+            TranscodeStatus::NeedInput { .. } => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "decoder requested more input after EOF",
+            )),
+        }
+    }
+
     /// Decodes enough input to make at least one character available.
     ///
     /// # Returns
@@ -316,6 +278,9 @@ where
     ///
     /// Returns I/O and decoding errors from the wrapped reader or decoder.
     fn fill_chars(&mut self) -> io::Result<bool> {
+        if self.finished {
+            return Ok(false);
+        }
         self.ensure_started()?;
         if self.has_buffered_chars() {
             return Ok(true);
@@ -330,7 +295,7 @@ where
             capacity,
         )?;
         let Some(progress) = progress else {
-            return self.finish_decoder();
+            return self.decode_eof();
         };
         let written = progress.written();
         self.char_position = 0;
@@ -345,20 +310,15 @@ where
                 return self.fill_chars();
             }
             TranscodeStatus::Complete => {
-                if self.input.unread_len() == 0 {
-                    return self.finish_decoder();
-                }
+                return self.fill_chars();
             }
             TranscodeStatus::NeedInput { required, .. } => {
                 if self.input.fill_until(required.get())? {
                     return self.fill_chars();
                 }
-                if self.input.unread_len() == 0 {
-                    return self.finish_decoder();
-                }
             }
         }
-        self.handle_incomplete_eof()
+        self.decode_eof()
     }
 
     /// Appends decoded text while enforcing a UTF-8 byte limit.
@@ -415,18 +375,12 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe {
-            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
-        };
+        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max && self.fill_chars()? {
             let available = self.char_limit - self.char_position;
@@ -439,10 +393,7 @@ where
         Ok(count)
     }
 
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         while self.fill_chars()? {
             let chars = &self.chars[self.char_position..self.char_limit];

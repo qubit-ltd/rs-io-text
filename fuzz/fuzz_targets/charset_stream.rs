@@ -11,14 +11,8 @@
 use std::io::Cursor;
 
 use libfuzzer_sys::fuzz_target;
-use qubit_codec_text::Utf8Codec;
-use qubit_io_text::{
-    CharsetTextReader,
-    CharsetTextWriter,
-    CodingErrorPolicy,
-    TextRead,
-    TextWrite,
-};
+use qubit_codec_text::{CharsetDecodePolicy, CharsetEncodePolicy, Utf8Codec};
+use qubit_io_text::{CharsetTextReader, CharsetTextWriter, TextRead, TextWrite};
 
 /// Bounds allocations when the target is invoked outside CI.
 const MAX_FUZZ_INPUT_LEN: usize = 4096;
@@ -37,7 +31,7 @@ fn fuzz_strict_utf8(data: &[u8]) {
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(data.to_vec()),
             Utf8Codec,
-            CodingErrorPolicy::Strict,
+            CharsetDecodePolicy::report(),
             capacity,
         );
         let mut output = String::new();
@@ -60,7 +54,7 @@ fn fuzz_replacing_utf8(data: &[u8]) {
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(data.to_vec()),
             Utf8Codec,
-            CodingErrorPolicy::Replace,
+            CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
             capacity,
         );
         let mut output = String::new();
@@ -82,7 +76,7 @@ fn fuzz_utf8_round_trip(data: &[u8]) {
         let mut writer = CharsetTextWriter::new_with_buffer_capacity(
             Cursor::new(Vec::new()),
             Utf8Codec,
-            CodingErrorPolicy::Strict,
+            CharsetEncodePolicy::report(),
             capacity,
         );
         writer
@@ -95,7 +89,7 @@ fn fuzz_utf8_round_trip(data: &[u8]) {
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(output.into_inner()),
             Utf8Codec,
-            CodingErrorPolicy::Strict,
+            CharsetDecodePolicy::report(),
             capacity,
         );
         let mut decoded = String::new();

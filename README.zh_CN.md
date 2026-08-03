@@ -18,7 +18,7 @@
   adapter；
 - 基于 `AsyncInput<Item = u8>` / `AsyncOutput<Item = u8>`、运行时无关的
   `AsyncCharsetTextReader` 与 `AsyncCharsetTextWriter`；
-- 显式的 `CodingErrorPolicy` 与 `LineEnding` 配置。
+- 来自 `qubit-codec-text` 的 charset policy 与 `LineEnding` 配置。
 
 Charset 算法保留在 `qubit-codec-text`；本 crate 只负责在流上驱动算法，不选择
 异步运行时。
@@ -68,10 +68,9 @@ qubit-io = "0.14"
 
 ```rust
 use qubit_io::AsyncOutput;
-use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io_text::{
     AsyncCharsetTextWriter,
-    CodingErrorPolicy,
 };
 
 async fn write_message<O>(output: O) -> std::io::Result<O>
@@ -81,7 +80,7 @@ where
     let mut writer = AsyncCharsetTextWriter::new(
         output,
         Utf8Codec,
-        CodingErrorPolicy::Strict,
+        CharsetEncodePolicy::report(),
     );
     writer.write_line_fully_async("hello").await?;
     writer.finish_async().await?;
@@ -105,7 +104,7 @@ where
 | UTF-8 字节流 | 基于 `Input`/`Output` 的 `Utf8TextReader`、`Utf8TextWriter` |
 | 同步 charset | `CharsetTextReader`、`CharsetTextWriter`、`CharsetReadExt`、`CharsetWriteExt` |
 | 异步 charset | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` |
-| 策略 | `CodingErrorPolicy`、`LineEnding` |
+| 策略 | `CharsetDecodePolicy`、`CharsetEncodePolicy`、`LineEnding` |
 
 异步 charset reader 会在挂起或取消时保留未完成字符的编码字节。异步 writer 的
 `write_chars_async` 和 `write_str_async` 每次只提交一个可报告的前缀；按返回数量推进

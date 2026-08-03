@@ -196,7 +196,8 @@ where
     /// # Errors
     ///
     /// Returns [`CharsetDecodeError`] when decoding fails, output sizing
-    /// overflows, or the complete input ends with an incomplete sequence.
+    /// overflows, or the configured decode policy rejects malformed or
+    /// incomplete input.
     pub fn decode_to_string(
         &mut self,
         input: &[C::Unit],

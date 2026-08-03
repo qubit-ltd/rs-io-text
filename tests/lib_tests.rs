@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_io_text::{
-    CodingErrorPolicy,
-    LineEnding,
-};
+use qubit_io_text::LineEnding;
 
 #[test]
 fn test_public_value_defaults_are_stable() {
@@ -17,5 +14,4 @@ fn test_public_value_defaults_are_stable() {
     assert_eq!("\n", LineEnding::Lf.as_str());
     assert_eq!("\r\n", LineEnding::CrLf.as_str());
     assert_eq!("\r", LineEnding::Cr.as_str());
-    assert_eq!(CodingErrorPolicy::Strict, CodingErrorPolicy::default());
 }

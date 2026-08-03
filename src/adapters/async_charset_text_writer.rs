@@ -9,21 +9,12 @@
 
 use std::io;
 
-use qubit_codec::{
-    AsyncTranscodeEncodeOutput,
-    Transcoder,
-};
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncoder,
-};
+use qubit_codec::{AsyncTranscodeEncodeOutput, Transcoder};
+use qubit_codec_text::{CharsetCodec, CharsetEncodePolicy, CharsetEncoder};
 use qubit_io::AsyncOutput;
 
 use crate::{
-    CodingErrorPolicy,
-    LineEnding,
-    adapters::charset_text_writer::create_encoder,
-    io_error::encode_error_to_io,
+    LineEnding, adapters::charset_text_writer::create_encoder, io_error::encode_error_to_io,
 };
 
 /// Default encoded-byte capacity used by asynchronous charset writers.
@@ -43,9 +34,9 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Examples
 ///
 /// ```no_run
-/// use qubit_codec_text::Utf8Codec;
+/// use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 /// use qubit_io::AsyncOutput;
-/// use qubit_io_text::{AsyncCharsetTextWriter, CodingErrorPolicy};
+/// use qubit_io_text::AsyncCharsetTextWriter;
 ///
 /// async fn write_all<O>(output: O) -> std::io::Result<O>
 /// where
@@ -54,7 +45,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 ///     let mut writer = AsyncCharsetTextWriter::new(
 ///         output,
 ///         Utf8Codec,
-///         CodingErrorPolicy::Strict,
+///         CharsetEncodePolicy::report(),
 ///     );
 ///     writer.write_str_fully_async("hello").await?;
 ///     writer.finish_async().await?;
@@ -98,13 +89,8 @@ where
     /// In replacement mode, panics when the codec cannot encode a supported
     /// replacement character.
     #[must_use]
-    pub fn new(output: O, codec: C, policy: CodingErrorPolicy) -> Self {
-        Self::new_with_buffer_capacity(
-            output,
-            codec,
-            policy,
-            DEFAULT_BUFFER_CAPACITY,
-        )
+    pub fn new(output: O, codec: C, policy: CharsetEncodePolicy) -> Self {
+        Self::new_with_buffer_capacity(output, codec, policy, DEFAULT_BUFFER_CAPACITY)
     }
 
     /// Creates an asynchronous charset writer with a requested buffer size.
@@ -128,7 +114,7 @@ where
     pub fn new_with_buffer_capacity(
         output: O,
         codec: C,
-        policy: CodingErrorPolicy,
+        policy: CharsetEncodePolicy,
         buffer_capacity: usize,
     ) -> Self {
         let encoder = create_encoder(codec, policy);
@@ -239,21 +225,12 @@ where
     }
 
     /// Encodes one character-slice progress step.
-    async fn encode_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> io::Result<usize> {
+    async fn encode_chars_async(&mut self, chars: &[char]) -> io::Result<usize> {
         self.ensure_started_async().await?;
         let mut map_error = encode_error_to_io;
         let progress = self
             .output
-            .transcode_async(
-                &mut self.encoder,
-                &mut map_error,
-                chars,
-                0,
-                chars.len(),
-            )
+            .transcode_async(&mut self.encoder, &mut map_error, chars, 0, chars.len())
             .await?;
         Ok(progress.read())
     }
@@ -294,10 +271,7 @@ where
     ///
     /// This operation returns after one encoder step. Advance the caller's
     /// source cursor by the returned count before calling it again.
-    pub async fn write_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> io::Result<usize> {
+    pub async fn write_chars_async(&mut self, chars: &[char]) -> io::Result<usize> {
         self.ensure_open()?;
         if chars.is_empty() {
             return Ok(0);
@@ -312,10 +286,7 @@ where
     /// This convenience loop is not cancellation-safe. After cancellation,
     /// its source position cannot be recovered reliably; use the single-step
     /// API for cancellation-sensitive code.
-    pub async fn write_chars_fully_async(
-        &mut self,
-        chars: &[char],
-    ) -> io::Result<()> {
+    pub async fn write_chars_fully_async(&mut self, chars: &[char]) -> io::Result<()> {
         let mut index = 0;
         while index < chars.len() {
             index += self.write_chars_async(&chars[index..]).await?;
@@ -366,10 +337,7 @@ where
     /// This convenience loop is not cancellation-safe. After cancellation,
     /// its source position cannot be recovered reliably; use the single-step
     /// API for cancellation-sensitive code.
-    pub async fn write_str_fully_async(
-        &mut self,
-        text: &str,
-    ) -> io::Result<()> {
+    pub async fn write_str_fully_async(&mut self, text: &str) -> io::Result<()> {
         let mut offset = 0;
         while offset < text.len() {
             offset += self.write_str_async(&text[offset..]).await?;
@@ -391,10 +359,7 @@ where
     ///
     /// This convenience operation is not cancellation-safe. Use the single
     /// step APIs for cancellation-sensitive code.
-    pub async fn write_line_fully_async(
-        &mut self,
-        line: &str,
-    ) -> io::Result<()> {
+    pub async fn write_line_fully_async(&mut self, line: &str) -> io::Result<()> {
         self.write_str_fully_async(line).await?;
         self.write_str_fully_async(self.line_ending.as_str()).await
     }
