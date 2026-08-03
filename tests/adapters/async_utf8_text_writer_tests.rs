@@ -8,18 +8,12 @@ use std::{
     future::Future,
     io,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
+    task::{Context, Poll, Waker},
 };
 
+use qubit_codec_text::CharsetEncodePolicy;
 use qubit_io::AsyncOutput;
-use qubit_io_text::{
-    AsyncUtf8TextWriter,
-    CodingErrorPolicy,
-};
+use qubit_io_text::AsyncUtf8TextWriter;
 
 /// Collects written bytes without suspending.
 #[derive(Default)]
@@ -40,10 +34,7 @@ impl AsyncOutput for ReadyOutput {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -62,11 +53,10 @@ where
 }
 
 #[test]
-fn test_async_utf8_text_writer_encodes_text_and_exposes_inner_writer()
--> io::Result<()> {
+fn test_async_utf8_text_writer_encodes_text_and_exposes_inner_writer() -> io::Result<()> {
     let mut writer = AsyncUtf8TextWriter::with_capacity(
         ReadyOutput::default(),
-        CodingErrorPolicy::Strict,
+        CharsetEncodePolicy::report(),
         1,
     );
 

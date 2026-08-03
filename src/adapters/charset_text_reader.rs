@@ -7,21 +7,10 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecoder,
-};
-use qubit_io::{
-    Buffer,
-    Input,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
+use qubit_io::{Buffer, Input};
 
-use crate::{
-    BufferedReader,
-    CodingErrorPolicy,
-    TextLineRead,
-    TextRead,
-};
+use crate::{BufferedReader, TextLineRead, TextRead};
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
@@ -34,13 +23,13 @@ use crate::{
 /// ```
 /// use std::io::Cursor;
 ///
-/// use qubit_codec_text::Utf8Codec;
-/// use qubit_io_text::{CharsetTextReader, CodingErrorPolicy, TextRead};
+/// use qubit_codec_text::{CharsetDecodePolicy, Utf8Codec};
+/// use qubit_io_text::{CharsetTextReader, TextRead};
 ///
 /// let mut reader = CharsetTextReader::new(
 ///     Cursor::new("中文".as_bytes().to_vec()),
 ///     Utf8Codec,
-///     CodingErrorPolicy::Strict,
+///     CharsetDecodePolicy::report(),
 /// );
 /// let mut text = String::new();
 /// reader.read_to_string(&mut text)?;
@@ -67,7 +56,7 @@ where
     ///
     /// - `input`: Byte reader to decode lazily.
     /// - `codec`: Byte-oriented charset codec used by the input.
-    /// - `policy`: Malformed input handling policy.
+    /// - `policy`: Malformed and incomplete-EOF input handling policy.
     ///
     /// # Returns
     ///
@@ -75,11 +64,10 @@ where
     /// `input`; I/O and decode errors are reported by read methods.
     #[must_use]
     #[inline]
-    pub fn new(input: I, codec: C, policy: CodingErrorPolicy) -> Self {
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+    pub fn new(input: I, codec: C, policy: CharsetDecodePolicy) -> Self {
+        let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::new(input, decoder, policy),
+            reader: BufferedReader::new(input, decoder),
         }
     }
 
@@ -89,7 +77,7 @@ where
     ///
     /// - `input`: Byte reader to decode lazily.
     /// - `codec`: Byte-oriented charset codec used by the input.
-    /// - `policy`: Malformed input handling policy.
+    /// - `policy`: Malformed and incomplete-EOF input handling policy.
     /// - `buffer_capacity`: Requested internal byte buffer capacity.
     ///
     /// # Returns
@@ -101,18 +89,12 @@ where
     pub fn new_with_buffer_capacity(
         input: I,
         codec: C,
-        policy: CodingErrorPolicy,
+        policy: CharsetDecodePolicy,
         buffer_capacity: usize,
     ) -> Self {
-        let decoder =
-            CharsetDecoder::with_policy(codec, policy.decode_policy());
+        let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::with_capacity(
-                input,
-                decoder,
-                policy,
-                buffer_capacity,
-            ),
+            reader: BufferedReader::with_capacity(input, decoder, buffer_capacity),
         }
     }
 
@@ -185,19 +167,12 @@ where
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }
