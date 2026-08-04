@@ -17,6 +17,8 @@ use qubit_io::{
 };
 use qubit_io_text::{
     InputTextReader,
+    LineEnding,
+    LineEndingSet,
     StringCharInput,
     TextLineRead,
     TextRead,
@@ -36,6 +38,97 @@ impl Input for FailingCharInput {
     ) -> std::io::Result<usize> {
         Err(Error::other("read failed"))
     }
+}
+
+#[derive(Debug)]
+struct ChunkedCharInput {
+    chars: Vec<char>,
+    position: usize,
+    max_chunk: usize,
+}
+
+impl ChunkedCharInput {
+    fn new(text: &str, max_chunk: usize) -> Self {
+        Self {
+            chars: text.chars().collect(),
+            position: 0,
+            max_chunk,
+        }
+    }
+}
+
+impl Input for ChunkedCharInput {
+    type Item = char;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+        count: usize,
+    ) -> std::io::Result<usize> {
+        let available = self.chars.len().saturating_sub(self.position);
+        let read = available.min(count).min(self.max_chunk);
+        output[index..index + read]
+            .copy_from_slice(&self.chars[self.position..self.position + read]);
+        self.position += read;
+        Ok(read)
+    }
+}
+
+#[test]
+fn test_read_line_accepts_crlf_and_cr_by_default() -> std::io::Result<()> {
+    let input = StringCharInput::new("first\r\nsecond\rthird".to_owned());
+    let mut reader = InputTextReader::new(input);
+    let mut line = String::new();
+
+    assert_eq!(LineEndingSet::ALL, reader.line_endings());
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r\n", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("second\r", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("third", line);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_can_restrict_accepted_endings() -> std::io::Result<()> {
+    let input = StringCharInput::new("first\rsecond\nthird".to_owned());
+    let mut reader = InputTextReader::new(input)
+        .with_line_endings(LineEndingSet::only(LineEnding::Lf));
+    let mut line = String::new();
+
+    assert_eq!(LineEndingSet::LF, reader.line_endings());
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\rsecond\n", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("third", line);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_handles_chunked_crlf_and_cr_paths() -> std::io::Result<()> {
+    let mut reader =
+        InputTextReader::new(ChunkedCharInput::new("first\r\nnext", 1));
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r\n", line);
+
+    let mut reader =
+        InputTextReader::new(ChunkedCharInput::new("first\rnext", 1));
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r", line);
+
+    let mut reader = InputTextReader::new(ChunkedCharInput::new("tail\r", 1))
+        .with_line_endings(LineEndingSet::CRLF);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("tail\r", line);
+    Ok(())
 }
 
 fn assert_other_error<T>(result: std::io::Result<T>)

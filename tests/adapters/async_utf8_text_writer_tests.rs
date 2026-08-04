@@ -78,3 +78,13 @@ fn test_async_utf8_text_writer_encodes_text_and_exposes_inner_writer()
     assert_eq!("A中".as_bytes(), output.0.as_slice());
     Ok(())
 }
+
+#[test]
+fn test_async_utf8_text_writer_configuration_and_deref_accessors() {
+    let mut writer = AsyncUtf8TextWriter::new(ReadyOutput::default());
+    assert!(writer.output().0.is_empty());
+    writer.output_mut().0.push(b'!');
+    assert_eq!(vec![b'!'], writer.output().0);
+    let writer = writer.into_inner();
+    assert_eq!(vec![b'!'], writer.output().0);
+}

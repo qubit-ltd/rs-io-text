@@ -10,8 +10,10 @@ use crate::TextRead;
 
 /// Reads text by line while preserving line terminators.
 ///
-/// A line is terminated by `\n`. If the input uses `\r\n`, both characters are
-/// preserved in the output because `\n` is still the terminating scalar value.
+/// Built-in text readers accept LF, CRLF, and CR by default, and preserve the
+/// complete terminator in the output. Readers expose a line-ending set when a
+/// narrower or broader policy is required. Custom implementations may retain
+/// their own line-boundary policy.
 pub trait TextLineRead: TextRead {
     /// Reads one line into `output`.
     ///

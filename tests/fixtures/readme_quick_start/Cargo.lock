@@ -24,6 +24,8 @@ dependencies = [
 [[package]]
 name = "qubit-codec-text"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "744f87664db8357035b585f95424e800930e3027abaa4750fea1cfef8eb00841"
 dependencies = [
  "qubit-codec",
  "qubit-io",

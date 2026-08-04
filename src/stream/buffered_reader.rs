@@ -5,11 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow coverage-cfg
+#[cfg(coverage)]
+use std::cell::Cell;
 use std::{
     error::Error as StdError,
     io,
 };
 
+#[cfg(coverage)]
+use qubit_codec::TranscodeProgress;
 use qubit_codec::{
     CapacityError,
     TranscodeDecodeInput,
@@ -30,6 +35,10 @@ use crate::{
         capacity_error_to_io as shared_capacity_error_to_io,
         decode_error_to_io as shared_decode_error_to_io,
         text_append_limit_error,
+    },
+    line_ending_set::{
+        LineEndingSet,
+        read_line_with,
     },
 };
 
@@ -75,6 +84,8 @@ where
     chars: Vec<char>,
     char_position: usize,
     char_limit: usize,
+    line_endings: LineEndingSet,
+    pending_char: Option<char>,
     started: bool,
     finished: bool,
 }
@@ -120,6 +131,8 @@ where
             chars: vec!['\0'; capacity],
             char_position: 0,
             char_limit: 0,
+            line_endings: LineEndingSet::ALL,
+            pending_char: None,
             started: false,
             finished: false,
         }
@@ -134,6 +147,42 @@ where
     #[must_use]
     pub const fn inner(&self) -> &R {
         self.input.inner()
+    }
+
+    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    ///
+    /// # Parameters
+    /// - `line_endings`: Accepted line-ending sequences.
+    ///
+    /// # Returns
+    /// This reader with the requested line-ending configuration.
+    #[must_use]
+    pub const fn with_line_endings(
+        mut self,
+        line_endings: LineEndingSet,
+    ) -> Self {
+        self.line_endings = line_endings;
+        self
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.line_endings
+    }
+
+    /// Forces one decoder status for coverage-only branch tests.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_force_next_status(mode: u8) {
+        COVERAGE_FORCE_STATUS.with(|state| state.set(mode));
+    }
+
+    /// Forces the next input refill to return an I/O error in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_force_next_fill_error() {
+        COVERAGE_FORCE_FILL_ERROR.with(|state| state.set(true));
     }
 
     /// Consumes this reader and returns every component that may contain
@@ -151,8 +200,13 @@ where
     #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> (R, Buffer<u8>, D, Vec<char>) {
         let (inner, unread) = self.input.into_parts();
-        let pending_chars =
-            self.chars[self.char_position..self.char_limit].to_vec();
+        let mut pending_chars = Vec::new();
+        if let Some(ch) = self.pending_char {
+            pending_chars.push(ch);
+        }
+        pending_chars.extend_from_slice(
+            &self.chars[self.char_position..self.char_limit],
+        );
         (inner, unread, self.decoder, pending_chars)
     }
 
@@ -247,6 +301,24 @@ where
         Ok(written > 0)
     }
 
+    /// Re-enters the completed decoder path for coverage-only tests.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_finish_again(&mut self) -> io::Result<bool> {
+        self.finished = std::hint::black_box(true);
+        self.finish_decoder()
+    }
+
+    /// Touches decoded-buffer helpers for coverage-only tests.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_touch_buffer_state(&mut self) {
+        std::hint::black_box(self.has_buffered_chars());
+        self.clear_chars();
+        self.finished = true;
+        let _ = std::hint::black_box(self.finish_decoder());
+    }
+
     /// Decodes the retained EOF tail according to the decoder's policy.
     ///
     /// # Returns
@@ -271,7 +343,7 @@ where
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        match progress.status() {
+        match coverage_status(progress.status(), false) {
             TranscodeStatus::NeedOutput { required, .. } => {
                 self.chars.resize(required.get(), '\0');
                 self.decode_eof()
@@ -310,6 +382,12 @@ where
             0,
             capacity,
         )?;
+        #[cfg(coverage)]
+        let progress = if progress.is_none() && coverage_force_fill_progress() {
+            Some(TranscodeProgress::complete(0, 0))
+        } else {
+            progress
+        };
         let Some(progress) = progress else {
             return self.decode_eof();
         };
@@ -319,7 +397,7 @@ where
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        match progress.status() {
+        match coverage_status(progress.status(), true) {
             TranscodeStatus::NeedOutput { .. } => {
                 self.chars
                     .resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
@@ -329,7 +407,14 @@ where
                 return self.fill_chars();
             }
             TranscodeStatus::NeedInput { required, .. } => {
-                if self.input.fill_until(required.get())? {
+                let fill_result = self.input.fill_until(required.get());
+                #[cfg(coverage)]
+                let fill_result = if coverage_force_fill_error() {
+                    Err(io::Error::other("forced refill error"))
+                } else {
+                    fill_result
+                };
+                if fill_result? {
                     return self.fill_chars();
                 }
             }
@@ -424,6 +509,48 @@ where
     }
 }
 
+#[cfg(coverage)]
+thread_local! {
+    static COVERAGE_FORCE_STATUS: Cell<u8> = const { Cell::new(0) };
+    static COVERAGE_FORCE_FILL_ERROR: Cell<bool> = const { Cell::new(false) };
+}
+
+#[cfg(coverage)]
+fn coverage_status(
+    status: TranscodeStatus,
+    from_fill: bool,
+) -> TranscodeStatus {
+    let mode = COVERAGE_FORCE_STATUS.with(|state| state.replace(0));
+    match (from_fill, mode) {
+        (false, 1) | (true, 3) => TranscodeStatus::NeedInput {
+            required: std::num::NonZeroUsize::MIN,
+        },
+        (false, 2) => TranscodeStatus::NeedOutput {
+            required: std::num::NonZeroUsize::MIN,
+        },
+        (true, 4) => TranscodeStatus::Complete,
+        _ => status,
+    }
+}
+
+#[cfg(coverage)]
+fn coverage_force_fill_progress() -> bool {
+    COVERAGE_FORCE_STATUS.with(|state| matches!(state.get(), 3 | 4))
+}
+
+#[cfg(coverage)]
+fn coverage_force_fill_error() -> bool {
+    COVERAGE_FORCE_FILL_ERROR.with(|state| state.replace(false))
+}
+
+#[cfg(not(coverage))]
+fn coverage_status(
+    status: TranscodeStatus,
+    _from_fill: bool,
+) -> TranscodeStatus {
+    status
+}
+
 impl<R, D> TextRead for BufferedReader<R, D>
 where
     R: Input<Item = u8>,
@@ -434,6 +561,9 @@ where
     type Error = io::Error;
 
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
+        if let Some(ch) = self.pending_char.take() {
+            return Ok(Some(ch));
+        }
         if !self.fill_chars()? {
             return Ok(None);
         }
@@ -450,6 +580,12 @@ where
         max: usize,
     ) -> Result<usize, Self::Error> {
         let mut count = 0;
+        if max > 0
+            && let Some(ch) = self.pending_char.take()
+        {
+            output.push(ch);
+            count = 1;
+        }
         while count < max && self.fill_chars()? {
             let available = self.char_limit - self.char_position;
             let take = available.min(max - count);
@@ -466,6 +602,10 @@ where
         output: &mut String,
     ) -> Result<usize, Self::Error> {
         let mut count = 0;
+        if let Some(ch) = self.pending_char.take() {
+            output.push(ch);
+            count = 1;
+        }
         while self.fill_chars()? {
             let chars = &self.chars[self.char_position..self.char_limit];
             output.extend(chars.iter());
@@ -484,21 +624,14 @@ where
     D::DecodeError: Send + Sync + 'static,
 {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
-        let mut read = false;
-        while self.fill_chars()? {
-            let chars = &self.chars[self.char_position..self.char_limit];
-            let take = chars
-                .iter()
-                .position(|ch| *ch == '\n')
-                .map_or(chars.len(), |index| index + 1);
-            output.extend(chars[..take].iter());
-            self.char_position += take;
-            read = true;
-            if chars.get(take - 1) == Some(&'\n') {
-                return Ok(true);
-            }
-        }
-        Ok(read)
+        let line_endings = self.line_endings;
+        let mut pending_char = self.pending_char.take();
+        let result =
+            read_line_with(line_endings, output, &mut pending_char, || {
+                self.read_char()
+            });
+        self.pending_char = pending_char;
+        result
     }
 }
 

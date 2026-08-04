@@ -25,6 +25,7 @@ pub use crate::{
     CharsetWriteExt,
     InputTextReader,
     LineEnding,
+    LineEndingSet,
     OutputTextWriter,
     StrCharInput,
     StrTextReader,
