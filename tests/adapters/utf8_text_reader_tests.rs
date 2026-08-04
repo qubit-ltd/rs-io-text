@@ -114,6 +114,21 @@ fn test_read_char_and_line_from_utf8_reader() -> std::io::Result<()> {
 }
 
 #[test]
+fn test_utf8_reader_read_line_limited_preserves_existing_output()
+-> std::io::Result<()> {
+    let mut reader =
+        Utf8TextReader::new(Cursor::new("a中\nnext".as_bytes().to_vec()));
+    let mut output = String::from("prefix-");
+
+    let error = reader
+        .read_line_limited(&mut output, 4)
+        .expect_err("oversized line should fail");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("prefix-", output);
+    Ok(())
+}
+
+#[test]
 fn test_new_accessors_expose_wrapped_input() {
     let input = Cursor::new("abc".as_bytes().to_vec());
     let reader = Utf8TextReader::with_capacity(input, 1);

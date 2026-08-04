@@ -6,15 +6,30 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{Cursor, ErrorKind};
+use std::io::{
+    Cursor,
+    ErrorKind,
+};
 use std::num::NonZeroUsize;
 
 use qubit_codec::{
-    CapacityError, TranscodeDecodeError, TranscodeDecoder, TranscodeDomainError, TranscodeProgress,
+    CapacityError,
+    TranscodeDecodeError,
+    TranscodeDecoder,
+    TranscodeDomainError,
+    TranscodeProgress,
     Transcoder,
 };
-use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
-use qubit_io_text::{BufferedReader, TextLineRead, TextRead};
+use qubit_codec_text::{
+    CharsetDecodePolicy,
+    CharsetDecoder,
+    Utf8Codec,
+};
+use qubit_io_text::{
+    BufferedReader,
+    TextLineRead,
+    TextRead,
+};
 
 #[derive(Debug, Default)]
 struct ExpandingDecoder;
@@ -23,14 +38,24 @@ impl Transcoder for ExpandingDecoder {
     type Input = u8;
     type Output = char;
     type Error = TranscodeDecodeError<std::io::Error>;
-    fn max_transcode_output_len(&self, _: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(5)
     }
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(0)
     }
-    fn reset(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            index,
+        )?;
         Ok(0)
     }
     fn transcode(
@@ -40,14 +65,19 @@ impl Transcoder for ExpandingDecoder {
         output: &mut [char],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         if input.len() == index {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         let available = output.len() - output_index;
         if available < 5 {
             return Ok(TranscodeProgress::new(
-                qubit_codec::TranscodeStatus::need_output(NonZeroUsize::new(5).unwrap()),
+                qubit_codec::TranscodeStatus::need_output(
+                    NonZeroUsize::new(5).unwrap(),
+                ),
                 0,
                 0,
             ));
@@ -57,8 +87,15 @@ impl Transcoder for ExpandingDecoder {
         }
         Ok(TranscodeProgress::complete(1, 5))
     }
-    fn finish(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
+    fn finish(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            index,
+        )?;
         Ok(0)
     }
 }
@@ -74,7 +111,10 @@ impl Transcoder for FinishCharDecoder {
     type Output = char;
     type Error = TranscodeDecodeError<std::io::Error>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -82,8 +122,15 @@ impl Transcoder for FinishCharDecoder {
         Ok(8)
     }
 
-    fn reset(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -97,8 +144,15 @@ impl Transcoder for FinishCharDecoder {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
-    fn finish(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+    fn finish(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         output[output_index] = '!';
         Ok(1)
     }
@@ -123,7 +177,10 @@ impl Transcoder for LifecycleDecoder {
         Ok(5)
     }
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -131,7 +188,11 @@ impl Transcoder for LifecycleDecoder {
         Ok(1)
     }
 
-    fn reset(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         assert!(!self.started, "decoder reset must run exactly once");
         output[output_index] = '^';
         output[output_index + 1] = '~';
@@ -157,7 +218,11 @@ impl Transcoder for LifecycleDecoder {
         Ok(TranscodeProgress::complete(input.len(), input.len()))
     }
 
-    fn finish(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         assert!(self.started, "decoder must reset before finish");
         assert!(!self.finished, "decoder finish must run exactly once");
         output[output_index] = '!';
@@ -178,7 +243,10 @@ impl Transcoder for OverflowFinishDecoder {
     type Output = char;
     type Error = TranscodeDecodeError<std::io::Error>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -186,8 +254,15 @@ impl Transcoder for OverflowFinishDecoder {
         Err(CapacityError::OutputLengthOverflow)
     }
 
-    fn reset(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -201,7 +276,11 @@ impl Transcoder for OverflowFinishDecoder {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
-    fn finish(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("capacity planning fails before finish")
     }
 }
@@ -218,11 +297,18 @@ impl Transcoder for ErrorFinishDecoder {
     type Output = char;
     type Error = TranscodeDecodeError<std::io::Error>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
@@ -236,7 +322,11 @@ impl Transcoder for ErrorFinishDecoder {
         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
     }
 
-    fn finish(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Err(TranscodeDecodeError::Domain(TranscodeDomainError::Finish {
             source: std::io::Error::other("finish failed"),
         }))
@@ -255,11 +345,18 @@ impl Transcoder for ErrorResetDecoder {
     type Output = char;
     type Error = TranscodeDecodeError<std::io::Error>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Err(TranscodeDecodeError::Domain(TranscodeDomainError::Reset {
             source: std::io::Error::other("reset failed"),
         }))
@@ -275,7 +372,11 @@ impl Transcoder for ErrorResetDecoder {
         unreachable!("reset failure prevents transcoding")
     }
 
-    fn finish(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("reset failure prevents finishing")
     }
 }
@@ -296,11 +397,18 @@ impl Transcoder for OverflowResetDecoder {
         Err(CapacityError::OutputLengthOverflow)
     }
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("capacity planning fails before reset")
     }
 
@@ -314,7 +422,11 @@ impl Transcoder for OverflowResetDecoder {
         unreachable!("capacity planning fails before transcoding")
     }
 
-    fn finish(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [char],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         unreachable!("capacity planning fails before finishing")
     }
 }
@@ -324,10 +436,13 @@ impl TranscodeDecoder for OverflowResetDecoder {
 }
 
 #[test]
-fn test_buffered_reader_decodes_utf8_across_single_byte_refills() -> std::io::Result<()> {
+fn test_buffered_reader_decodes_utf8_across_single_byte_refills()
+-> std::io::Result<()> {
     let bytes = "Aé🙂".as_bytes().to_vec();
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(bytes), decoder, 1);
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::with_capacity(Cursor::new(bytes), decoder, 1);
 
     let mut output = String::new();
     let count = reader.read_to_string(&mut output)?;
@@ -338,8 +453,13 @@ fn test_buffered_reader_decodes_utf8_across_single_byte_refills() -> std::io::Re
 }
 
 #[test]
-fn test_buffered_reader_preserves_need_output_for_expanding_decoder() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(Cursor::new(vec![1]), ExpandingDecoder, 1);
+fn test_buffered_reader_preserves_need_output_for_expanding_decoder()
+-> std::io::Result<()> {
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(vec![1]),
+        ExpandingDecoder,
+        1,
+    );
     let mut output = String::new();
     assert_eq!(5, reader.read_to_string(&mut output)?);
     assert_eq!("xxxxx", output);
@@ -348,8 +468,10 @@ fn test_buffered_reader_preserves_need_output_for_expanding_decoder() -> std::io
 
 #[test]
 fn test_buffered_reader_accessors() -> std::io::Result<()> {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new("abc\n".as_bytes().to_vec()), decoder);
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::new(Cursor::new("abc\n".as_bytes().to_vec()), decoder);
 
     assert_eq!(0, reader.inner().position());
     let mut line = String::new();
@@ -364,9 +486,12 @@ fn test_buffered_reader_accessors() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_buffered_reader_into_parts_preserves_unreturned_characters() -> std::io::Result<()> {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"abc".to_vec()), decoder, 4);
+fn test_buffered_reader_into_parts_preserves_unreturned_characters()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::with_capacity(Cursor::new(b"abc".to_vec()), decoder, 4);
 
     assert_eq!(Some('a'), reader.read_char()?);
 
@@ -378,9 +503,12 @@ fn test_buffered_reader_into_parts_preserves_unreturned_characters() -> std::io:
 }
 
 #[test]
-fn test_buffered_reader_read_chars_with_zero_limit_does_not_read() -> std::io::Result<()> {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new("abc".as_bytes().to_vec()), decoder);
+fn test_buffered_reader_read_chars_with_zero_limit_does_not_read()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::new(Cursor::new("abc".as_bytes().to_vec()), decoder);
     let mut chars = Vec::new();
 
     assert_eq!(0, reader.read_chars(&mut chars, 0)?);
@@ -390,8 +518,51 @@ fn test_buffered_reader_read_chars_with_zero_limit_does_not_read() -> std::io::R
 }
 
 #[test]
+fn test_buffered_reader_read_line_limited_restores_output_on_overflow()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::new(
+        Cursor::new("a中\nnext".as_bytes().to_vec()),
+        decoder,
+    );
+    let mut output = String::from("prefix-");
+
+    let error = reader
+        .read_line_limited(&mut output, 4)
+        .expect_err("line exceeding the UTF-8 byte limit should fail");
+    assert_eq!(std::io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("prefix-", output);
+
+    output.clear();
+    assert!(reader.read_line_limited(&mut output, 1)?);
+    assert_eq!("\n", output);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_read_line_limited_accepts_exact_utf8_limit()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::new(
+        Cursor::new("hello 世界\nnext".as_bytes().to_vec()),
+        decoder,
+    );
+    let mut output = String::new();
+
+    assert!(reader.read_line_limited(&mut output, "hello 世界\n".len())?);
+    assert_eq!("hello 世界\n", output);
+    Ok(())
+}
+
+#[test]
 fn test_buffered_reader_emits_decoder_finish_output() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(Cursor::new(Vec::new()), FinishCharDecoder, 1);
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(Vec::new()),
+        FinishCharDecoder,
+        1,
+    );
 
     assert_eq!(Some('!'), reader.read_char()?);
     assert_eq!(None, reader.read_char()?);
@@ -400,9 +571,13 @@ fn test_buffered_reader_emits_decoder_finish_output() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_buffered_reader_runs_complete_lifecycle_on_first_read() -> std::io::Result<()> {
-    let mut reader =
-        BufferedReader::with_capacity(Cursor::new(b"A".to_vec()), LifecycleDecoder::default(), 1);
+fn test_buffered_reader_runs_complete_lifecycle_on_first_read()
+-> std::io::Result<()> {
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"A".to_vec()),
+        LifecycleDecoder::default(),
+        1,
+    );
 
     let mut output = String::new();
     reader.read_to_string(&mut output)?;
@@ -412,9 +587,13 @@ fn test_buffered_reader_runs_complete_lifecycle_on_first_read() -> std::io::Resu
 }
 
 #[test]
-fn test_buffered_reader_runs_complete_lifecycle_for_empty_stream() -> std::io::Result<()> {
-    let mut reader =
-        BufferedReader::with_capacity(Cursor::new(Vec::new()), LifecycleDecoder::default(), 1);
+fn test_buffered_reader_runs_complete_lifecycle_for_empty_stream()
+-> std::io::Result<()> {
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(Vec::new()),
+        LifecycleDecoder::default(),
+        1,
+    );
 
     let mut output = String::new();
     reader.read_to_string(&mut output)?;
@@ -425,7 +604,8 @@ fn test_buffered_reader_runs_complete_lifecycle_for_empty_stream() -> std::io::R
 
 #[test]
 fn test_buffered_reader_reports_finish_capacity_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), OverflowFinishDecoder);
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::new()), OverflowFinishDecoder);
 
     let error = reader
         .read_char()
@@ -436,7 +616,8 @@ fn test_buffered_reader_reports_finish_capacity_errors() {
 
 #[test]
 fn test_buffered_reader_propagates_finish_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), ErrorFinishDecoder);
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::new()), ErrorFinishDecoder);
 
     let error = reader
         .read_char()
@@ -447,7 +628,8 @@ fn test_buffered_reader_propagates_finish_errors() {
 
 #[test]
 fn test_buffered_reader_propagates_reset_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
 
     let error = reader
         .read_char()
@@ -455,7 +637,8 @@ fn test_buffered_reader_propagates_reset_errors() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
 
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
     let mut output = Vec::new();
     let error = reader
         .read_chars(&mut output, 1)
@@ -465,7 +648,8 @@ fn test_buffered_reader_propagates_reset_errors() {
 
 #[test]
 fn test_buffered_reader_reports_reset_capacity_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), OverflowResetDecoder);
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::new()), OverflowResetDecoder);
 
     let error = reader
         .read_char()
@@ -476,8 +660,15 @@ fn test_buffered_reader_reports_reset_capacity_errors() {
 
 #[test]
 fn test_buffered_reader_replaces_incomplete_eof_tail() -> std::io::Result<()> {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::replace('\u{FFFD}'));
-    let mut reader = BufferedReader::with_capacity(Cursor::new(vec![0xE2, 0x82]), decoder, 1);
+    let decoder = CharsetDecoder::with_policy(
+        Utf8Codec,
+        CharsetDecodePolicy::replace('\u{FFFD}'),
+    );
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(vec![0xE2, 0x82]),
+        decoder,
+        1,
+    );
 
     let mut output = String::new();
     let count = reader.read_to_string(&mut output)?;
@@ -489,8 +680,13 @@ fn test_buffered_reader_replaces_incomplete_eof_tail() -> std::io::Result<()> {
 
 #[test]
 fn test_buffered_reader_reports_strict_incomplete_eof_tail() {
-    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(vec![0xE2, 0x82]), decoder, 1);
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(vec![0xE2, 0x82]),
+        decoder,
+        1,
+    );
 
     let error = reader
         .read_char()

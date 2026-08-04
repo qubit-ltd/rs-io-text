@@ -7,10 +7,21 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
-use qubit_io::{Buffer, Input};
+use qubit_codec_text::{
+    CharsetCodec,
+    CharsetDecodePolicy,
+    CharsetDecoder,
+};
+use qubit_io::{
+    Buffer,
+    Input,
+};
 
-use crate::{BufferedReader, TextLineRead, TextRead};
+use crate::{
+    BufferedReader,
+    TextLineRead,
+    TextRead,
+};
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
@@ -94,7 +105,11 @@ where
     ) -> Self {
         let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::with_capacity(input, decoder, buffer_capacity),
+            reader: BufferedReader::with_capacity(
+                input,
+                decoder,
+                buffer_capacity,
+            ),
         }
     }
 
@@ -152,6 +167,34 @@ where
     ) -> io::Result<usize> {
         self.reader.read_to_string_limited(output, max_append_len)
     }
+
+    /// Appends one decoded line while enforcing a UTF-8 byte limit.
+    ///
+    /// The limit applies only to text appended by this call. On overflow the
+    /// destination is restored, while already consumed decoded characters
+    /// remain consumed.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append to.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when a line or final unterminated line was read, or
+    /// `false` at EOF with no text appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors, or [`io::ErrorKind::InvalidData`]
+    /// when the decoded line exceeds `max_append_len`.
+    pub fn read_line_limited(
+        &mut self,
+        output: &mut String,
+        max_append_len: usize,
+    ) -> io::Result<bool> {
+        self.reader.read_line_limited(output, max_append_len)
+    }
 }
 
 impl<I, C> TextRead for CharsetTextReader<I, C>
@@ -167,12 +210,19 @@ where
     }
 
     #[inline]
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }
