@@ -39,6 +39,7 @@ use qubit_io_text::{
     CharsetTextWriter,
     TextRead,
     TextWrite,
+    Utf8TextWriter,
 };
 
 use crate::tracking_allocator::measure_peak;
@@ -222,6 +223,25 @@ fn bench_streaming_charset(
                             Utf8Codec,
                             CharsetEncodePolicy::report(),
                         );
+                        writer
+                            .write_str(input)
+                            .expect("UTF-8 stream should encode");
+                        writer.finish().expect("UTF-8 stream should finish");
+                        let (output, pending) = writer.into_parts();
+                        let _ = black_box((output.into_inner(), pending));
+                    },
+                    criterion::BatchSize::SmallInput,
+                );
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("write_fast_utf8", fixture_name),
+            input,
+            |bencher, input| {
+                bencher.iter_batched(
+                    || Cursor::new(Vec::with_capacity(input.len())),
+                    |output| {
+                        let mut writer = Utf8TextWriter::new(output);
                         writer
                             .write_str(input)
                             .expect("UTF-8 stream should encode");

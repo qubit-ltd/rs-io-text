@@ -214,6 +214,37 @@ where
         Ok(())
     }
 
+    /// Appends already encoded UTF-8 bytes to the buffered output.
+    ///
+    /// This is crate-private because bypassing the encoder is only valid for a
+    /// stateless UTF-8 encoder whose input is already a valid Rust string.
+    pub(crate) fn write_encoded_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> io::Result<()> {
+        self.ensure_open()?;
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        self.ensure_started()?;
+        let mut offset = 0;
+        while offset < bytes.len() {
+            let requested = (bytes.len() - offset).min(DEFAULT_BUFFER_CAPACITY);
+            self.output.ensure_spare_capacity(requested)?;
+            let (units, output_index, available) =
+                self.output.spare_raw_parts_mut();
+            let count = requested.min(available);
+            units[output_index..output_index + count]
+                .copy_from_slice(&bytes[offset..offset + count]);
+            // SAFETY: `count` units were initialized in the spare window above.
+            unsafe {
+                self.output.advance(count);
+            }
+            offset += count;
+        }
+        Ok(())
+    }
+
     /// Starts the encoder lifecycle before the first non-empty write.
     ///
     /// # Errors

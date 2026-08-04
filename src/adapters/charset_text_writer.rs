@@ -11,6 +11,7 @@ use qubit_codec_text::{
     CharsetCodec,
     CharsetEncodePolicy,
     CharsetEncoder,
+    Utf8Codec,
 };
 use qubit_io::{
     Buffer,
@@ -177,6 +178,16 @@ where
     #[inline(always)]
     pub fn into_parts(self) -> (O, Buffer<u8>) {
         self.writer.into_parts()
+    }
+}
+
+impl<O> CharsetTextWriter<O, Utf8Codec>
+where
+    O: Output<Item = u8>,
+{
+    /// Writes a valid UTF-8 string without re-encoding each scalar value.
+    pub(crate) fn write_utf8_bytes(&mut self, text: &str) -> io::Result<()> {
+        self.writer.write_encoded_bytes(text.as_bytes())
     }
 }
 

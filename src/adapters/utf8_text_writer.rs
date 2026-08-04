@@ -176,7 +176,7 @@ where
 
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
-        self.writer.write_str(text)
+        self.writer.write_utf8_bytes(text)
     }
 
     #[inline]
