@@ -8,10 +8,19 @@
 // qubit-style: allow source-test-pair
 use std::io;
 
-use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy};
-use qubit_io::{Input, InputRef};
+use qubit_codec_text::{
+    CharsetCodec,
+    CharsetDecodePolicy,
+};
+use qubit_io::{
+    Input,
+    InputRef,
+};
 
-use crate::{CharsetTextReader, TextRead};
+use crate::{
+    CharsetTextReader,
+    TextRead,
+};
 
 /// Extension methods for reading charset-encoded text from byte streams.
 pub trait CharsetReadExt: Input<Item = u8> + Sized {
@@ -56,7 +65,9 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        CharsetTextReader::new_with_buffer_capacity(self, codec, policy, capacity)
+        CharsetTextReader::new_with_buffer_capacity(
+            self, codec, policy, capacity,
+        )
     }
 
     /// Reads all remaining bytes as charset-encoded text.
@@ -82,7 +93,8 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut reader = CharsetTextReader::new(InputRef::new(self), codec, policy);
+        let mut reader =
+            CharsetTextReader::new(InputRef::new(self), codec, policy);
         let mut output = String::new();
         reader.read_to_string(&mut output)?;
         Ok(output)
@@ -115,7 +127,8 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut reader = CharsetTextReader::new(InputRef::new(self), codec, policy);
+        let mut reader =
+            CharsetTextReader::new(InputRef::new(self), codec, policy);
         let mut output = String::new();
         reader.read_to_string_limited(&mut output, max_append_len)?;
         Ok(output)

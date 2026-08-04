@@ -2,13 +2,19 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
 use std::{
     future::Future,
     io,
     pin::Pin,
-    task::{Context, Poll, Waker},
+    task::{
+        Context,
+        Poll,
+        Waker,
+    },
 };
 
 use qubit_codec_text::CharsetEncodePolicy;
@@ -34,7 +40,10 @@ impl AsyncOutput for ReadyOutput {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -53,7 +62,8 @@ where
 }
 
 #[test]
-fn test_async_utf8_text_writer_encodes_text_and_exposes_inner_writer() -> io::Result<()> {
+fn test_async_utf8_text_writer_encodes_text_and_exposes_inner_writer()
+-> io::Result<()> {
     let mut writer = AsyncUtf8TextWriter::with_capacity(
         ReadyOutput::default(),
         CharsetEncodePolicy::report(),

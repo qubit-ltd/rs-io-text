@@ -7,10 +7,21 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
-use qubit_io::{Buffer, Input};
+use qubit_codec_text::{
+    CharsetDecodePolicy,
+    CharsetDecoder,
+    Utf8Codec,
+};
+use qubit_io::{
+    Buffer,
+    Input,
+};
 
-use crate::{CharsetTextReader, TextLineRead, TextRead};
+use crate::{
+    CharsetTextReader,
+    TextLineRead,
+    TextRead,
+};
 
 /// Streaming UTF-8 text reader over a Qubit byte input.
 ///
@@ -56,7 +67,11 @@ where
     #[must_use]
     pub fn new(input: I) -> Self {
         Self {
-            reader: CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report()),
+            reader: CharsetTextReader::new(
+                input,
+                Utf8Codec,
+                CharsetDecodePolicy::report(),
+            ),
         }
     }
 
@@ -110,7 +125,9 @@ where
     /// characters not yet returned by this reader, in that order.
     #[must_use = "all returned reader state must be handled"]
     #[inline]
-    pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<Utf8Codec>, Vec<char>) {
+    pub fn into_parts(
+        self,
+    ) -> (I, Buffer<u8>, CharsetDecoder<Utf8Codec>, Vec<char>) {
         self.reader.into_parts()
     }
 
@@ -138,6 +155,34 @@ where
     ) -> io::Result<usize> {
         self.reader.read_to_string_limited(output, max_append_len)
     }
+
+    /// Appends one decoded UTF-8 line while enforcing a byte limit.
+    ///
+    /// The limit applies only to text appended by this call. On overflow the
+    /// destination is restored, while already consumed decoded characters
+    /// remain consumed.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append to.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when a line or final unterminated line was read, or
+    /// `false` at EOF with no text appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or UTF-8 errors, or [`io::ErrorKind::InvalidData`]
+    /// when the decoded line exceeds `max_append_len`.
+    pub fn read_line_limited(
+        &mut self,
+        output: &mut String,
+        max_append_len: usize,
+    ) -> io::Result<bool> {
+        self.reader.read_line_limited(output, max_append_len)
+    }
 }
 
 impl<I> TextRead for Utf8TextReader<I>
@@ -152,12 +197,19 @@ where
     }
 
     #[inline]
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }
