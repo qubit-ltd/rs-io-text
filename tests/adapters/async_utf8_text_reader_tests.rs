@@ -2,13 +2,19 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
 use std::{
     future::Future,
     io,
     pin::Pin,
-    task::{Context, Poll, Waker},
+    task::{
+        Context,
+        Poll,
+        Waker,
+    },
 };
 
 use qubit_codec_text::CharsetDecodePolicy;
@@ -44,7 +50,8 @@ impl AsyncInput for ReadyInput {
         let count = count.min(self.bytes.len() - self.position);
         let input_end = self.position + count;
         let output_end = output_index + count;
-        output[output_index..output_end].copy_from_slice(&self.bytes[self.position..input_end]);
+        output[output_index..output_end]
+            .copy_from_slice(&self.bytes[self.position..input_end]);
         self.position = input_end;
         Poll::Ready(Ok(count))
     }
@@ -64,7 +71,8 @@ where
 }
 
 #[test]
-fn test_async_utf8_text_reader_decodes_text_and_exposes_inner_reader() -> io::Result<()> {
+fn test_async_utf8_text_reader_decodes_text_and_exposes_inner_reader()
+-> io::Result<()> {
     let mut reader = AsyncUtf8TextReader::with_capacity(
         ReadyInput::new("A中"),
         CharsetDecodePolicy::report(),
