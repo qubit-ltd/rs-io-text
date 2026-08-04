@@ -11,8 +11,17 @@
 use std::io::Cursor;
 
 use libfuzzer_sys::fuzz_target;
-use qubit_codec_text::{CharsetDecodePolicy, CharsetEncodePolicy, Utf8Codec};
-use qubit_io_text::{CharsetTextReader, CharsetTextWriter, TextRead, TextWrite};
+use qubit_codec_text::{
+    CharsetDecodePolicy,
+    CharsetEncodePolicy,
+    Utf8Codec,
+};
+use qubit_io_text::{
+    CharsetTextReader,
+    CharsetTextWriter,
+    TextRead,
+    TextWrite,
+};
 
 /// Bounds allocations when the target is invoked outside CI.
 const MAX_FUZZ_INPUT_LEN: usize = 4096;
@@ -54,7 +63,9 @@ fn fuzz_replacing_utf8(data: &[u8]) {
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(data.to_vec()),
             Utf8Codec,
-            CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
+            CharsetDecodePolicy::replace(
+                CharsetDecodePolicy::DEFAULT_REPLACEMENT,
+            ),
             capacity,
         );
         let mut output = String::new();
