@@ -434,6 +434,60 @@ mod coverage_tests {
     }
 
     #[test]
+    fn test_charset_string_decoder_covers_capacity_and_progress_errors() {
+        reset_coverage_hooks();
+        let mut decoder = CharsetStringDecoder::new(Utf8Codec);
+
+        CharsetStringDecoder::<Utf8Codec>::coverage_force_reset_capacity_error(
+        );
+        let error = decoder
+            .decode_to_string(b"A")
+            .expect_err("reset capacity errors should be reported");
+        assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
+
+        reset_coverage_hooks();
+        let mut decoder = CharsetStringDecoder::new(Utf8Codec);
+        CharsetStringDecoder::<Utf8Codec>::coverage_force_finish_capacity_error(
+        );
+        let error = decoder
+            .decode_to_string(b"A")
+            .expect_err("finish capacity errors should be reported");
+        assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
+
+        reset_coverage_hooks();
+        let mut decoder = CharsetStringDecoder::new(Utf8Codec);
+        CharsetStringDecoder::<Utf8Codec>::coverage_force_output_count_overflow(
+        );
+        let error = decoder
+            .decode_to_string(b"A")
+            .expect_err("output count overflow should be reported");
+        assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
+
+        reset_coverage_hooks();
+        let mut decoder = CharsetStringDecoder::new(Utf8Codec);
+        CharsetStringDecoder::<Utf8Codec>::coverage_force_next_status(1);
+        let error = decoder
+            .decode_to_string(b"")
+            .expect_err("forced incomplete status should be reported");
+        assert_eq!(
+            CharsetDecodeErrorKind::IncompleteSequence {
+                required: 1,
+                available: 0,
+            },
+            error.kind(),
+        );
+
+        reset_coverage_hooks();
+        let mut decoder = CharsetStringDecoder::new(Utf8Codec);
+        CharsetStringDecoder::<Utf8Codec>::coverage_force_next_status(2);
+        let text = decoder
+            .decode_to_string(b"")
+            .expect("forced output status should grow and retry");
+        assert!(text.is_empty());
+        reset_coverage_hooks();
+    }
+
+    #[test]
     fn test_charset_string_decoder_reports_char_reserve_failure() {
         reset_coverage_hooks();
         let mut decoder = CharsetStringDecoder::new(Utf8Codec);

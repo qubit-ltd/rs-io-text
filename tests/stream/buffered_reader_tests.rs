@@ -9,6 +9,7 @@
 use std::io::{
     Cursor,
     ErrorKind,
+    Read,
 };
 use std::num::NonZeroUsize;
 
@@ -27,6 +28,7 @@ use qubit_codec_text::{
 };
 use qubit_io_text::{
     BufferedReader,
+    LineEndingSet,
     TextLineRead,
     TextRead,
 };
@@ -99,7 +101,320 @@ impl Transcoder for ExpandingDecoder {
         Ok(0)
     }
 }
+
+#[test]
+fn test_buffered_reader_accepts_crlf_across_decode_windows()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new("first\r\nsecond\rthird".as_bytes().to_vec()),
+        decoder,
+        1,
+    );
+    let mut line = String::new();
+
+    assert_eq!(LineEndingSet::ALL, reader.line_endings());
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r\n", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("second\r", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("third", line);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_pending_character_is_returned_by_other_read_methods()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"first\rsecond".to_vec()),
+        decoder,
+        1,
+    );
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!(Some('s'), reader.read_char()?);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"first\rsecond".to_vec()),
+        decoder,
+        1,
+    );
+    assert!(reader.read_line(&mut line)?);
+    let mut chars = Vec::new();
+    assert_eq!(1, reader.read_chars(&mut chars, 1)?);
+    assert_eq!(vec!['s'], chars);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"first\rsecond".to_vec()),
+        decoder,
+        1,
+    );
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    let mut output = String::new();
+    assert_eq!(6, reader.read_to_string(&mut output)?);
+    assert_eq!("second", output);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_line_ending_configuration_and_parts()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"first\rsecond".to_vec()),
+        decoder,
+        1,
+    )
+    .with_line_endings(LineEndingSet::CR);
+    assert_eq!(LineEndingSet::CR, reader.line_endings());
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    let (_input, _unread, _decoder, pending) = reader.into_parts();
+    assert_eq!(&['s', 'e'], &pending[..2]);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let reader = BufferedReader::with_capacity(
+        Cursor::new(b"first\rsecond".to_vec()),
+        decoder,
+        1,
+    );
+    let mut reader = reader;
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    let (_input, _unread, _decoder, pending) = reader.into_parts();
+    assert_eq!('s', pending[0]);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_read_line_limited_returns_unterminated_tail()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"tail".to_vec()),
+        decoder,
+        1,
+    );
+    let mut line = String::new();
+    assert!(reader.read_line_limited(&mut line, 16)?);
+    assert_eq!("tail", line);
+    assert!(!reader.read_line_limited(&mut line, 16)?);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut empty = BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    let mut output = String::new();
+    assert!(!empty.read_line_limited(&mut output, 16)?);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_read_to_string_limited_enforces_utf8_limit()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new("A中".as_bytes().to_vec()),
+        decoder,
+        1,
+    );
+    let mut output = String::from("prefix:");
+    assert_eq!(2, reader.read_to_string_limited(&mut output, 4)?);
+    assert_eq!("prefix:A中", output);
+    assert_eq!(0, reader.read_to_string_limited(&mut output, 4)?);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut empty = BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    assert_eq!(0, empty.read_to_string_limited(&mut output, 4)?);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new("A中".as_bytes().to_vec()),
+        decoder,
+        1,
+    );
+    let mut output = String::from("prefix:");
+    let error = reader
+        .read_to_string_limited(&mut output, 1)
+        .expect_err("the multibyte character should exceed the limit");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("prefix:", output);
+    Ok(())
+}
+
+#[cfg(coverage)]
+#[test]
+fn test_buffered_reader_covers_decoder_status_recovery_branches()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    BufferedReader::<Cursor<Vec<u8>>, CharsetDecoder<Utf8Codec>>::coverage_force_next_status(1);
+    let error = reader
+        .read_char()
+        .expect_err("forced EOF input request should be rejected");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    BufferedReader::<Cursor<Vec<u8>>, CharsetDecoder<Utf8Codec>>::coverage_force_next_status(2);
+    assert_eq!(None, reader.read_char()?);
+
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
+    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(3);
+    assert_eq!(None, reader.read_char()?);
+
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
+    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(4);
+    assert_eq!(None, reader.read_char()?);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    assert!(!reader.coverage_finish_again()?);
+
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::<u8>::new()), ErrorResetDecoder);
+    reader.coverage_touch_buffer_state();
+
+    let mut reader = BufferedReader::new(
+        Cursor::new(Vec::<u8>::new()),
+        OverflowResetDecoder,
+    );
+    reader.coverage_touch_buffer_state();
+
+    let mut reader =
+        BufferedReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
+    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(3);
+    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_fill_error();
+    let error = reader
+        .read_char()
+        .expect_err("forced refill errors should propagate");
+    assert_eq!(ErrorKind::Other, error.kind());
+
+    Ok(())
+}
 impl TranscodeDecoder for ExpandingDecoder {
+    type DecodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
+struct NeedInputDecoder;
+
+#[derive(Debug)]
+struct FirstChunkThenError {
+    first: bool,
+}
+
+impl Read for FirstChunkThenError {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        if self.first {
+            self.first = false;
+            output[..4].copy_from_slice(&[1, 2, 3, 4]);
+            Ok(4)
+        } else {
+            Err(std::io::Error::other("refill failed"))
+        }
+    }
+}
+
+#[derive(Debug)]
+struct AlwaysFailInput;
+
+impl Read for AlwaysFailInput {
+    fn read(&mut self, _output: &mut [u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("read failed"))
+    }
+}
+
+impl Transcoder for NeedInputDecoder {
+    type Input = u8;
+    type Output = char;
+    type Error = TranscodeDecodeError<std::io::Error>;
+
+    fn max_transcode_output_len(
+        &self,
+        _: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    fn reset(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            index,
+        )?;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
+        if input.len() - index < 5 {
+            return Ok(TranscodeProgress::new(
+                qubit_codec::TranscodeStatus::need_input(
+                    NonZeroUsize::new(5).unwrap(),
+                ),
+                0,
+                0,
+            ));
+        }
+        output[output_index] = 'n';
+        Ok(TranscodeProgress::complete(5, 1))
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            index,
+        )?;
+        Ok(0)
+    }
+}
+
+impl TranscodeDecoder for NeedInputDecoder {
     type DecodeError = std::io::Error;
 }
 
@@ -463,6 +778,62 @@ fn test_buffered_reader_preserves_need_output_for_expanding_decoder()
     let mut output = String::new();
     assert_eq!(5, reader.read_to_string(&mut output)?);
     assert_eq!("xxxxx", output);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_refills_when_decoder_needs_more_input()
+-> std::io::Result<()> {
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(vec![1, 2, 3, 4, 5]),
+        NeedInputDecoder,
+        1,
+    );
+    assert_eq!(Some('n'), reader.read_char()?);
+    assert_eq!(None, reader.read_char()?);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_propagates_limited_input_errors() -> std::io::Result<()>
+{
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::new(AlwaysFailInput, decoder);
+    let mut output = String::new();
+    assert!(
+        reader
+            .read_to_string_limited(&mut output, 8)
+            .expect_err("limited string reads should report input errors")
+            .kind()
+            == ErrorKind::Other
+    );
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::new(AlwaysFailInput, decoder);
+    assert_eq!(
+        ErrorKind::Other,
+        reader
+            .read_line_limited(&mut output, 8)
+            .expect_err("limited line reads should report input errors")
+            .kind(),
+    );
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_propagates_refill_errors_after_need_input()
+-> std::io::Result<()> {
+    let mut reader = BufferedReader::with_capacity(
+        FirstChunkThenError { first: true },
+        NeedInputDecoder,
+        4,
+    );
+    let error = reader
+        .read_char()
+        .expect_err("a refill error after NeedInput should propagate");
+    assert_eq!(ErrorKind::Other, error.kind());
     Ok(())
 }
 
