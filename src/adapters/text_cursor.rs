@@ -69,30 +69,3 @@ pub(crate) fn read_to_string_at(
     *position = text.len();
     count
 }
-
-/// Reads one line from a string slice.
-///
-/// # Parameters
-/// - `text`: Source text.
-/// - `position`: Current byte position, advanced past the returned line.
-/// - `output`: Destination string. The line is appended.
-///
-/// # Returns
-/// `true` when a line was appended, or `false` at EOF.
-pub(crate) fn read_line_at(
-    text: &str,
-    position: &mut usize,
-    output: &mut String,
-) -> bool {
-    if *position >= text.len() {
-        return false;
-    }
-    let remaining = &text[*position..];
-    let end = match remaining.find('\n') {
-        Some(index) => *position + index + '\n'.len_utf8(),
-        None => text.len(),
-    };
-    output.push_str(&text[*position..end]);
-    *position = end;
-    true
-}

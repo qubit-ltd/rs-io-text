@@ -8,8 +8,11 @@
 // qubit-style: allow coverage-cfg
 #[cfg(coverage)]
 use std::cell::Cell;
+#[cfg(coverage)]
+use std::num::NonZeroUsize;
 
 use qubit_codec::{
+    CapacityError,
     TranscodeDecodeError,
     TranscodeStatus,
     Transcoder,
@@ -160,6 +163,38 @@ where
     pub fn coverage_reset_reserve_hooks() {
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(usize::MAX));
         COVERAGE_CHAR_CAPACITY_SHRINK_BY.with(|state| state.set(0));
+        COVERAGE_FORCE_STATUS.with(|state| state.set(0));
+        COVERAGE_FORCE_OUTPUT_COUNT_OVERFLOW.with(|state| state.set(false));
+        COVERAGE_FORCE_RESET_CAPACITY_ERROR.with(|state| state.set(false));
+        COVERAGE_FORCE_FINISH_CAPACITY_ERROR.with(|state| state.set(false));
+    }
+
+    /// Forces the next transcode status in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_force_next_status(mode: u8) {
+        COVERAGE_FORCE_STATUS.with(|state| state.set(mode));
+    }
+
+    /// Forces the output character count overflow branch in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_force_output_count_overflow() {
+        COVERAGE_FORCE_OUTPUT_COUNT_OVERFLOW.with(|state| state.set(true));
+    }
+
+    /// Forces reset capacity planning to fail in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_force_reset_capacity_error() {
+        COVERAGE_FORCE_RESET_CAPACITY_ERROR.with(|state| state.set(true));
+    }
+
+    /// Forces finish capacity planning to fail in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_force_finish_capacity_error() {
+        COVERAGE_FORCE_FINISH_CAPACITY_ERROR.with(|state| state.set(true));
     }
 
     /// Maps a transcode decode error in coverage builds.
@@ -266,7 +301,10 @@ where
         input_index: usize,
         output: &mut String,
     ) -> Result<(), CharsetDecodeError> {
-        let reset_capacity = match self.decoder.max_reset_output_len() {
+        let reset_capacity = match coverage_capacity_result(
+            self.decoder.max_reset_output_len(),
+            true,
+        ) {
             Ok(capacity) => capacity,
             Err(_) => return Err(output_length_overflow(self.charset)),
         };
@@ -297,14 +335,16 @@ where
                 }
             };
             append_chars(output, &chars[..progress.written()], self.charset)?;
+            let checked_output_char_count =
+                coverage_output_count(output_char_count);
             let Some(next_output_char_count) =
-                output_char_count.checked_add(progress.written())
+                checked_output_char_count.checked_add(progress.written())
             else {
                 return Err(output_length_overflow(self.charset));
             };
             output_char_count = next_output_char_count;
             input_cursor += progress.read();
-            match progress.status() {
+            match coverage_status(progress.status()) {
                 TranscodeStatus::Complete => break,
                 TranscodeStatus::NeedInput { required } => {
                     let available = input.len().saturating_sub(input_cursor);
@@ -331,7 +371,10 @@ where
             }
         }
 
-        let finish_capacity = match self.decoder.max_finish_output_len() {
+        let finish_capacity = match coverage_capacity_result(
+            self.decoder.max_finish_output_len(),
+            false,
+        ) {
             Ok(capacity) => capacity,
             Err(_) => return Err(output_length_overflow(self.charset)),
         };
@@ -457,6 +500,10 @@ fn map_finish_decode_error(
 thread_local! {
     static COVERAGE_RESERVE_FAIL_AFTER: Cell<usize> = const { Cell::new(usize::MAX) };
     static COVERAGE_CHAR_CAPACITY_SHRINK_BY: Cell<usize> = const { Cell::new(0) };
+    static COVERAGE_FORCE_STATUS: Cell<u8> = const { Cell::new(0) };
+    static COVERAGE_FORCE_OUTPUT_COUNT_OVERFLOW: Cell<bool> = const { Cell::new(false) };
+    static COVERAGE_FORCE_RESET_CAPACITY_ERROR: Cell<bool> = const { Cell::new(false) };
+    static COVERAGE_FORCE_FINISH_CAPACITY_ERROR: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Returns and clears the synthetic char capacity shrink request.
@@ -484,6 +531,63 @@ fn coverage_should_fail_reserve() -> bool {
         state.set(remaining - 1);
         false
     })
+}
+
+#[cfg(coverage)]
+fn coverage_status(status: TranscodeStatus) -> TranscodeStatus {
+    match COVERAGE_FORCE_STATUS.with(|state| state.replace(0)) {
+        1 => TranscodeStatus::NeedInput {
+            required: NonZeroUsize::MIN,
+        },
+        2 => TranscodeStatus::NeedOutput {
+            required: NonZeroUsize::MIN,
+        },
+        _ => status,
+    }
+}
+
+#[cfg(not(coverage))]
+fn coverage_status(status: TranscodeStatus) -> TranscodeStatus {
+    status
+}
+
+#[cfg(coverage)]
+fn coverage_output_count(count: usize) -> usize {
+    if COVERAGE_FORCE_OUTPUT_COUNT_OVERFLOW.with(|state| state.replace(false)) {
+        usize::MAX
+    } else {
+        count
+    }
+}
+
+#[cfg(not(coverage))]
+fn coverage_output_count(count: usize) -> usize {
+    count
+}
+
+#[cfg(coverage)]
+fn coverage_capacity_result(
+    result: Result<usize, CapacityError>,
+    reset: bool,
+) -> Result<usize, CapacityError> {
+    let force = if reset {
+        COVERAGE_FORCE_RESET_CAPACITY_ERROR.with(|state| state.replace(false))
+    } else {
+        COVERAGE_FORCE_FINISH_CAPACITY_ERROR.with(|state| state.replace(false))
+    };
+    if force {
+        Err(CapacityError::OutputLengthOverflow)
+    } else {
+        result
+    }
+}
+
+#[cfg(not(coverage))]
+fn coverage_capacity_result(
+    result: Result<usize, CapacityError>,
+    _reset: bool,
+) -> Result<usize, CapacityError> {
+    result
 }
 
 /// Creates an output-length overflow error for `charset`.

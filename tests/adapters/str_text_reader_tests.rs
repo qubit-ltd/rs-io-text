@@ -9,6 +9,8 @@
 use std::convert::Infallible;
 
 use qubit_io_text::{
+    LineEnding,
+    LineEndingSet,
     StrTextReader,
     TextLineRead,
     TextRead,
@@ -24,6 +26,91 @@ fn test_read_char_returns_unicode_scalars() -> Result<(), Infallible> {
     assert_eq!(Some('中'), reader.read_char()?);
     assert_eq!(Some('🙂'), reader.read_char()?);
     assert_eq!(None, reader.read_char()?);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_accepts_all_common_line_endings_by_default()
+-> Result<(), Infallible> {
+    let mut reader = StrTextReader::new("lf\ncrlf\r\ncr\rtail");
+    let mut line = String::new();
+
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("lf\n", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("crlf\r\n", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("cr\r", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("tail", line);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_honors_configured_line_endings() -> Result<(), Infallible> {
+    let mut reader = StrTextReader::new("first\rsecond\nthird")
+        .with_line_endings(LineEndingSet::only(LineEnding::Cr));
+    let mut line = String::new();
+
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("second\nthird", line);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_pending_character_is_returned_by_other_read_methods()
+-> Result<(), Infallible> {
+    let mut reader = StrTextReader::new("first\rsecond")
+        .with_line_endings(LineEndingSet::ALL);
+    assert_eq!(LineEndingSet::ALL, reader.line_endings());
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r", line);
+    assert_eq!(Some('s'), reader.read_char()?);
+
+    let mut chars = Vec::new();
+    let mut reader = StrTextReader::new("first\rsecond");
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!(1, reader.read_chars(&mut chars, 1)?);
+    assert_eq!(vec!['s'], chars);
+
+    let mut reader = StrTextReader::new("first\rsecond");
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    let mut output = String::new();
+    assert_eq!(
+        1 + "econd".chars().count(),
+        reader.read_to_string(&mut output)?
+    );
+    assert_eq!("second", output);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_crlf_only_handles_lone_cr_and_eof() -> Result<(), Infallible>
+{
+    let mut reader = StrTextReader::new("first\rsecond\r\nlast")
+        .with_line_endings(LineEndingSet::CRLF);
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\rsecond\r\n", line);
+
+    let mut reader =
+        StrTextReader::new("tail\r").with_line_endings(LineEndingSet::CRLF);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("tail\r", line);
+
+    let mut reader = StrTextReader::new("tail\r");
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("tail\r", line);
     Ok(())
 }
 

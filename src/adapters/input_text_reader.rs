@@ -16,8 +16,10 @@ use qubit_io::{
 };
 
 use crate::{
+    LineEnding,
     TextLineRead,
     TextRead,
+    line_ending_set::LineEndingSet,
 };
 
 /// Default character chunk capacity for text reads.
@@ -27,6 +29,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 pub struct InputTextReader<'a> {
     input: Box<dyn Input<Item = char> + 'a>,
     pending: VecDeque<char>,
+    line_endings: LineEndingSet,
 }
 
 impl<'a> InputTextReader<'a> {
@@ -47,6 +50,7 @@ impl<'a> InputTextReader<'a> {
         Self {
             input: BufferedInput::ensure_boxed(input),
             pending: VecDeque::new(),
+            line_endings: LineEndingSet::ALL,
         }
     }
 
@@ -69,6 +73,7 @@ impl<'a> InputTextReader<'a> {
         Self {
             input,
             pending: VecDeque::new(),
+            line_endings: LineEndingSet::ALL,
         }
     }
 
@@ -119,6 +124,25 @@ impl<'a> InputTextReader<'a> {
         self.input
     }
 
+    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    ///
+    /// # Parameters
+    /// - `line_endings`: Accepted line-ending sequences.
+    ///
+    /// # Returns
+    /// This reader with the requested line-ending configuration.
+    #[must_use]
+    pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
+        self.line_endings = line_endings;
+        self
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.line_endings
+    }
+
     fn drain_pending_chars(
         &mut self,
         output: &mut Vec<char>,
@@ -142,16 +166,6 @@ impl<'a> InputTextReader<'a> {
             count += 1;
         }
         count
-    }
-
-    fn drain_pending_line(&mut self, output: &mut String) -> bool {
-        while let Some(ch) = self.pending.pop_front() {
-            output.push(ch);
-            if ch == '\n' {
-                return true;
-            }
-        }
-        false
     }
 }
 
@@ -209,26 +223,64 @@ impl TextRead for InputTextReader<'_> {
 
 impl TextLineRead for InputTextReader<'_> {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
-        let initial_len = output.len();
-        if self.drain_pending_line(output) {
-            return Ok(true);
-        }
-        let mut read_any = output.len() > initial_len;
-
+        let line_endings = self.line_endings;
+        let mut pending = std::mem::take(&mut self.pending);
+        let mut read = false;
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         loop {
-            let read = self.input.read_fully(&mut chars)?;
-            if read == 0 {
-                return Ok(read_any);
+            if pending.is_empty() {
+                let count = self.input.read_fully(&mut chars)?;
+                if count == 0 {
+                    self.pending = pending;
+                    return Ok(read);
+                }
+                pending.extend(chars[..count].iter().copied());
             }
-            read_any = true;
-            if let Some(index) = chars[..read].iter().position(|ch| *ch == '\n')
-            {
-                output.extend(chars[..=index].iter().copied());
-                self.pending.extend(chars[index + 1..read].iter().copied());
+
+            let ch =
+                pending.pop_front().expect("pending character is available");
+            read = true;
+            if ch == '\n' && line_endings.contains(LineEnding::Lf) {
+                output.push(ch);
+                self.pending = pending;
                 return Ok(true);
             }
-            output.extend(chars[..read].iter().copied());
+            if ch == '\r' {
+                if line_endings.contains(LineEnding::CrLf) {
+                    if pending.is_empty() {
+                        let count = self.input.read_fully(&mut chars)?;
+                        pending.extend(chars[..count].iter().copied());
+                    }
+                    match pending.pop_front() {
+                        Some('\n') => {
+                            output.push('\r');
+                            output.push('\n');
+                            self.pending = pending;
+                            return Ok(true);
+                        }
+                        Some(next) => {
+                            output.push('\r');
+                            pending.push_front(next);
+                            if line_endings.contains(LineEnding::Cr) {
+                                self.pending = pending;
+                                return Ok(true);
+                            }
+                            continue;
+                        }
+                        None => {
+                            output.push('\r');
+                            self.pending = pending;
+                            return Ok(true);
+                        }
+                    }
+                }
+                if line_endings.contains(LineEnding::Cr) {
+                    output.push('\r');
+                    self.pending = pending;
+                    return Ok(true);
+                }
+            }
+            output.push(ch);
         }
     }
 }

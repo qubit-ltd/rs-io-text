@@ -21,6 +21,8 @@ use qubit_io::Input;
 use qubit_io_text::{
     CharsetReadExt,
     CharsetTextReader,
+    LineEnding,
+    LineEndingSet,
     TextLineRead,
     TextRead,
 };
@@ -83,6 +85,25 @@ fn test_new_decodes_utf8_text() -> std::io::Result<()> {
     line.clear();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("second", line);
+    Ok(())
+}
+
+#[test]
+fn test_charset_reader_configures_line_endings() -> std::io::Result<()> {
+    let mut reader = CharsetTextReader::new(
+        Cursor::new(b"first\rsecond\nthird".to_vec()),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    )
+    .with_line_endings(LineEndingSet::only(LineEnding::Cr));
+    assert_eq!(LineEndingSet::CR, reader.line_endings());
+
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("second\nthird", line);
     Ok(())
 }
 

@@ -41,6 +41,7 @@ use qubit_io_text::{
     AsyncCharsetTextReader,
     AsyncCharsetTextWriter,
     LineEnding,
+    LineEndingSet,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -363,6 +364,186 @@ fn async_charset_reader_decodes_across_pending_and_byte_boundaries()
     assert!(complete(reader.read_line_async(&mut line))?);
     assert_eq!("next", line);
     assert!(!complete(reader.read_line_async(&mut line))?);
+    Ok(())
+}
+
+#[test]
+fn async_charset_reader_accepts_common_line_endings_by_default()
+-> io::Result<()> {
+    let input = ChunkedAsyncInput::new(
+        "first\r\nsecond\rthird\nend".as_bytes().to_vec(),
+        1,
+        true,
+    );
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut line = String::new();
+
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("first\r\n", line);
+    line.clear();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("second\r", line);
+    line.clear();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("third\n", line);
+    line.clear();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("end", line);
+    Ok(())
+}
+
+#[test]
+fn async_charset_reader_preserves_pending_line_tail_for_all_read_methods()
+-> io::Result<()> {
+    let input = ChunkedAsyncInput::new(b"first\rsecond".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut line = String::new();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    let mut chars = Vec::new();
+    assert_eq!(1, complete(reader.read_chars_async(&mut chars, 1))?);
+    assert_eq!(vec!['s'], chars);
+
+    let input = ChunkedAsyncInput::new(b"first\rsecond".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    assert!(complete(reader.read_line_async(&mut line))?);
+    let mut output = String::new();
+    assert_eq!(6, complete(reader.read_to_string_async(&mut output))?);
+    assert_eq!("second", output);
+
+    let input = ChunkedAsyncInput::new(b"first\rsecond".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    assert!(complete(reader.read_line_async(&mut line))?);
+    let (_input, _unread, _decoder, pending) = reader.into_parts();
+    assert_eq!(&['s'], &pending[..1]);
+    Ok(())
+}
+
+#[test]
+fn async_charset_reader_configured_line_endings_cover_crlf_paths()
+-> io::Result<()> {
+    let input =
+        ChunkedAsyncInput::new(b"first\rsecond\r\nlast".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    )
+    .with_line_endings(LineEndingSet::CRLF);
+    let mut line = String::new();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("first\rsecond\r\n", line);
+
+    let input = ChunkedAsyncInput::new(b"tail\r".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    )
+    .with_line_endings(LineEndingSet::CRLF);
+    line.clear();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("tail\r", line);
+
+    let input = ChunkedAsyncInput::new(b"tail\rnext".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    )
+    .with_line_endings(LineEndingSet::CR);
+    line.clear();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("tail\r", line);
+
+    let input = ChunkedAsyncInput::new(vec![0xF0], 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        ScriptedCodec::new(ScriptedCodecMode::Lifecycle),
+        CharsetDecodePolicy::report(),
+    );
+    assert_eq!(Some('^'), complete(reader.read_char_async())?);
+    let error = complete(reader.read_char_async())
+        .expect_err("incomplete scripted EOF must be rejected");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    Ok(())
+}
+
+#[test]
+fn async_charset_reader_limited_cr_line_is_a_boundary() -> io::Result<()> {
+    let input = ChunkedAsyncInput::new(b"first\nnext".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut line = String::new();
+    assert!(complete(reader.read_line_limited_async(&mut line, 16))?);
+    assert_eq!("first\n", line);
+
+    let input = ChunkedAsyncInput::new(b"tail".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    line.clear();
+    assert!(complete(reader.read_line_limited_async(&mut line, 16))?);
+    assert_eq!("tail", line);
+
+    let input = ChunkedAsyncInput::new(b"tail".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut output = String::new();
+    assert_eq!(
+        4,
+        complete(reader.read_to_string_limited_async(&mut output, 16))?
+    );
+    assert_eq!("tail", output);
+    Ok(())
+}
+
+#[cfg(coverage)]
+#[test]
+fn async_charset_reader_covers_eof_status_recovery_branches() -> io::Result<()>
+{
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    AsyncCharsetTextReader::<ChunkedAsyncInput, Utf8Codec>::coverage_force_next_eof_status(1);
+    let error = complete(reader.read_char_async())
+        .expect_err("forced EOF input request should be rejected");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    AsyncCharsetTextReader::<ChunkedAsyncInput, Utf8Codec>::coverage_force_next_eof_status(2);
+    assert_eq!(None, complete(reader.read_char_async())?);
     Ok(())
 }
 

@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 // qubit-style: allow source-test-pair
+// qubit-style: allow coverage-cfg
 
+#[cfg(coverage)]
+use std::cell::Cell;
 use std::io;
 
 use qubit_codec::{
@@ -25,11 +28,13 @@ use qubit_io::{
     Buffer,
 };
 
+use crate::LineEnding;
 use crate::io_error::{
     capacity_error_to_io,
     decode_error_to_io,
     text_append_limit_error,
 };
+use crate::line_ending_set::LineEndingSet;
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -76,6 +81,8 @@ where
     chars: Vec<char>,
     char_position: usize,
     char_limit: usize,
+    line_endings: LineEndingSet,
+    pending_char: Option<char>,
     started: bool,
     finished: bool,
 }
@@ -134,6 +141,8 @@ where
             chars: vec!['\0'; capacity],
             char_position: 0,
             char_limit: 0,
+            line_endings: LineEndingSet::ALL,
+            pending_char: None,
             started: false,
             finished: false,
         }
@@ -148,6 +157,35 @@ where
     #[must_use]
     pub const fn input(&self) -> &I {
         self.input.inner()
+    }
+
+    /// Sets the line endings recognized by asynchronous line reads.
+    ///
+    /// # Parameters
+    /// - `line_endings`: Accepted line-ending sequences.
+    ///
+    /// # Returns
+    /// This reader with the requested line-ending configuration.
+    #[must_use]
+    pub const fn with_line_endings(
+        mut self,
+        line_endings: LineEndingSet,
+    ) -> Self {
+        self.line_endings = line_endings;
+        self
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.line_endings
+    }
+
+    /// Forces one EOF status for coverage-only branch tests.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_force_next_eof_status(mode: u8) {
+        COVERAGE_FORCE_EOF_STATUS.with(|state| state.set(mode));
     }
 
     /// Returns a mutable reference to the asynchronous byte input.
@@ -177,8 +215,13 @@ where
     #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<C>, Vec<char>) {
         let (input, unread) = self.input.into_parts();
-        let pending_chars =
-            self.chars[self.char_position..self.char_limit].to_vec();
+        let mut pending_chars = Vec::new();
+        if let Some(ch) = self.pending_char {
+            pending_chars.push(ch);
+        }
+        pending_chars.extend_from_slice(
+            &self.chars[self.char_position..self.char_limit],
+        );
         (input, unread, self.decoder, pending_chars)
     }
 
@@ -267,7 +310,7 @@ where
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        match progress.status() {
+        match coverage_eof_status(progress.status()) {
             TranscodeStatus::NeedOutput { required, .. } => {
                 self.chars.resize(required.get(), '\0');
                 self.decode_eof()
@@ -289,6 +332,9 @@ where
             return Ok(false);
         }
         self.ensure_started()?;
+        if self.pending_char.is_some() {
+            return Ok(true);
+        }
         if self.has_buffered_chars() {
             return Ok(true);
         }
@@ -338,6 +384,29 @@ where
     }
 }
 
+#[cfg(coverage)]
+thread_local! {
+    static COVERAGE_FORCE_EOF_STATUS: Cell<u8> = const { Cell::new(0) };
+}
+
+#[cfg(coverage)]
+fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
+    match COVERAGE_FORCE_EOF_STATUS.with(|state| state.replace(0)) {
+        1 => TranscodeStatus::NeedInput {
+            required: std::num::NonZeroUsize::MIN,
+        },
+        2 => TranscodeStatus::NeedOutput {
+            required: std::num::NonZeroUsize::MIN,
+        },
+        _ => status,
+    }
+}
+
+#[cfg(not(coverage))]
+fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
+    status
+}
+
 impl<I, C> AsyncCharsetTextReader<I, C>
 where
     I: AsyncInput<Item = u8> + Unpin,
@@ -359,6 +428,9 @@ where
     /// reader. Retrying on the same reader does not discard a partial encoded
     /// character.
     pub async fn read_char_async(&mut self) -> io::Result<Option<char>> {
+        if let Some(ch) = self.pending_char.take() {
+            return Ok(Some(ch));
+        }
         if !self.fill_chars_async().await? {
             return Ok(None);
         }
@@ -393,6 +465,12 @@ where
         max: usize,
     ) -> io::Result<usize> {
         let mut count = 0;
+        if max > 0
+            && let Some(ch) = self.pending_char.take()
+        {
+            output.push(ch);
+            count = 1;
+        }
         while count < max && self.fill_chars_async().await? {
             let available = self.char_limit - self.char_position;
             let take = available.min(max - count);
@@ -428,6 +506,10 @@ where
         output: &mut String,
     ) -> io::Result<usize> {
         let mut count = 0;
+        if let Some(ch) = self.pending_char.take() {
+            output.push(ch);
+            count = 1;
+        }
         while self.fill_chars_async().await? {
             let chars = &self.chars[self.char_position..self.char_limit];
             output.extend(chars.iter());
@@ -509,18 +591,41 @@ where
         output: &mut String,
     ) -> io::Result<bool> {
         let mut read = false;
-        while self.fill_chars_async().await? {
-            let chars = &self.chars[self.char_position..self.char_limit];
-            let take = chars
-                .iter()
-                .position(|ch| *ch == '\n')
-                .map_or(chars.len(), |index| index + 1);
-            output.extend(chars[..take].iter());
-            self.char_position += take;
+        while let Some(ch) = self.read_char_async().await? {
             read = true;
-            if chars.get(take - 1) == Some(&'\n') {
+            if ch == '\n' && self.line_endings.contains(LineEnding::Lf) {
+                output.push(ch);
                 return Ok(true);
             }
+            if ch == '\r' {
+                if self.line_endings.contains(LineEnding::CrLf) {
+                    match self.read_char_async().await? {
+                        Some('\n') => {
+                            output.push('\r');
+                            output.push('\n');
+                            return Ok(true);
+                        }
+                        Some(next) => {
+                            output.push('\r');
+                            if self.line_endings.contains(LineEnding::Cr) {
+                                self.pending_char = Some(next);
+                                return Ok(true);
+                            }
+                            self.pending_char = Some(next);
+                            continue;
+                        }
+                        None => {
+                            output.push('\r');
+                            return Ok(true);
+                        }
+                    }
+                }
+                if self.line_endings.contains(LineEnding::Cr) {
+                    output.push('\r');
+                    return Ok(true);
+                }
+            }
+            output.push(ch);
         }
         Ok(read)
     }

@@ -93,9 +93,10 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 构造时选定。
 
 `LineEnding::Lf`、`LineEnding::CrLf` 和 `LineEnding::Cr` 决定 `write_line` 追加的
-内容。流确定为 UTF-8 时，可使用 `Utf8TextReader` 和 `Utf8TextWriter`，它们在相同的
-字节流边界提供严格的便利包装。`TextLineRead::read_line` 只将 `\n` 识别为行终止符，
-会保留其前的 `\r`，不会按单独的 CR 终止行拆分。
+内容。内置文本读取器默认识别 LF、CRLF 和 CR，并在返回字符串中保留完整终止符。
+需要自定义策略时，可在读取器上调用 `with_line_endings` 配置 `LineEndingSet`；写入器
+则使用 `LineEnding` 配置输出终止符。流确定为 UTF-8 时，可使用 `Utf8TextReader` 和
+`Utf8TextWriter`，它们在相同的字节流边界提供严格的便利包装。
 
 ## 异步流程
 

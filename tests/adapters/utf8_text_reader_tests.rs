@@ -14,6 +14,8 @@ use std::io::{
 
 use qubit_io::Input;
 use qubit_io_text::{
+    LineEnding,
+    LineEndingSet,
     TextLineRead,
     TextRead,
     Utf8TextReader,
@@ -110,6 +112,19 @@ fn test_read_char_and_line_from_utf8_reader() -> std::io::Result<()> {
     assert!(reader.read_line(&mut line)?);
     assert_eq!("βeta", line);
     assert!(!reader.read_line(&mut line)?);
+    Ok(())
+}
+
+#[test]
+fn test_utf8_reader_configures_line_endings() -> std::io::Result<()> {
+    let mut reader =
+        Utf8TextReader::new(Cursor::new(b"first\rsecond\nthird".to_vec()))
+            .with_line_endings(LineEndingSet::only(LineEnding::Cr));
+    assert_eq!(LineEndingSet::CR, reader.line_endings());
+
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r", line);
     Ok(())
 }
 

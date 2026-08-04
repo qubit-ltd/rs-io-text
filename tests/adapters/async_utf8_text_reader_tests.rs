@@ -19,7 +19,11 @@ use std::{
 
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_io::AsyncInput;
-use qubit_io_text::AsyncUtf8TextReader;
+use qubit_io_text::{
+    AsyncUtf8TextReader,
+    LineEnding,
+    LineEndingSet,
+};
 
 /// Reads a fixed byte sequence without suspending.
 struct ReadyInput {
@@ -86,4 +90,17 @@ fn test_async_utf8_text_reader_decodes_text_and_exposes_inner_reader()
     let reader = reader.into_inner();
     assert_eq!(4, reader.input().position);
     Ok(())
+}
+
+#[test]
+fn test_async_utf8_text_reader_configuration_and_deref_accessors() {
+    let mut reader = AsyncUtf8TextReader::new(ReadyInput::new("payload"));
+    assert_eq!(LineEndingSet::ALL, reader.line_endings());
+    assert_eq!(0, reader.input().position);
+    reader.input_mut().position = 1;
+
+    let reader = reader.with_line_endings(LineEndingSet::only(LineEnding::Cr));
+    assert_eq!(LineEndingSet::CR, reader.line_endings());
+    let reader = reader.into_inner();
+    assert_eq!(1, reader.input().position);
 }
