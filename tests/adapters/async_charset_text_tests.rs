@@ -7,10 +7,12 @@
 // =============================================================================
 
 use std::{
+    cell::Cell,
     future::Future,
     io,
     num::NonZeroUsize,
     pin::Pin,
+    rc::Rc,
     task::{
         Context,
         Poll,
@@ -190,6 +192,7 @@ struct ChunkedAsyncInput {
     max_chunk: usize,
     pending: bool,
     error: Option<io::ErrorKind>,
+    progress: Option<Rc<Cell<usize>>>,
 }
 
 impl ChunkedAsyncInput {
@@ -200,11 +203,17 @@ impl ChunkedAsyncInput {
             max_chunk,
             pending,
             error: None,
+            progress: None,
         }
     }
 
     fn with_error(mut self, error: io::ErrorKind) -> Self {
         self.error = Some(error);
+        self
+    }
+
+    fn with_progress(mut self, progress: Rc<Cell<usize>>) -> Self {
+        self.progress = Some(progress);
         self
     }
 }
@@ -236,6 +245,9 @@ impl AsyncInput for ChunkedAsyncInput {
         output[index..index + read]
             .copy_from_slice(&self.bytes[self.position..self.position + read]);
         self.position += read;
+        if let Some(progress) = &self.progress {
+            progress.set(self.position);
+        }
         Poll::Ready(Ok(read))
     }
 }
@@ -565,6 +577,127 @@ fn async_charset_reader_retains_partial_character_when_future_is_cancelled()
 
     assert_eq!(Some('中'), complete(reader.read_char_async())?);
     assert_eq!(None, complete(reader.read_char_async())?);
+    Ok(())
+}
+
+#[test]
+fn async_charset_reader_line_cancellation_preserves_cr_lookahead()
+-> io::Result<()> {
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"first\r\nnext".to_vec(), 1, false)
+        .with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+        1,
+    );
+    let mut line = String::new();
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_line_async(&mut line));
+    loop {
+        if future.as_mut().poll(&mut context).is_pending()
+            && progress.get() == b"first\r".len()
+        {
+            break;
+        }
+    }
+    drop(future);
+    assert_eq!("first", line);
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("first\r\n", line);
+    Ok(())
+}
+
+#[test]
+fn async_charset_reader_limited_reads_preserve_pending_order_and_endings()
+-> io::Result<()> {
+    let input = ChunkedAsyncInput::new(b"first\rbc".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut line = String::new();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("first\r", line);
+    let mut output = String::new();
+    assert_eq!(
+        2,
+        complete(reader.read_to_string_limited_async(&mut output, 8))?
+    );
+    assert_eq!("bc", output);
+
+    let input =
+        ChunkedAsyncInput::new(b"first\rsecond\nthird".to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    )
+    .with_line_endings(LineEndingSet::CR);
+    line.clear();
+    assert!(complete(reader.read_line_limited_async(&mut line, 32))?);
+    assert_eq!("first\r", line);
+    line.clear();
+    assert!(complete(reader.read_line_limited_async(&mut line, 32))?);
+    assert_eq!("second\nthird", line);
+    Ok(())
+}
+
+#[cfg(coverage)]
+#[test]
+fn async_charset_reader_covers_limited_line_ending_branches() -> io::Result<()>
+{
+    let mut reader = AsyncCharsetTextReader::new(
+        ChunkedAsyncInput::new(b"a\r\nb".to_vec(), 1, false),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut line = String::new();
+    assert!(complete(reader.read_line_limited_async(&mut line, 8))?);
+    assert_eq!("a\r\n", line);
+
+    let mut reader = AsyncCharsetTextReader::new(
+        ChunkedAsyncInput::new(b"\r".to_vec(), 1, false),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let error = complete(reader.read_line_limited_async(&mut String::new(), 0))
+        .expect_err("CR should exceed a zero-byte limit");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(Some('\r'), complete(reader.read_char_async())?);
+
+    let mut reader = AsyncCharsetTextReader::new(
+        ChunkedAsyncInput::new(b"\r\n".to_vec(), 1, false),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let error = complete(reader.read_line_limited_async(&mut String::new(), 1))
+        .expect_err("the LF in CRLF should exceed the limit");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(Some('\n'), complete(reader.read_char_async())?);
+
+    for (input, endings, expected) in [
+        (b"a\rb".as_slice(), LineEndingSet::ALL, "a\r"),
+        (b"a\rb".as_slice(), LineEndingSet::CRLF, "a\rb"),
+        (
+            b"a\r\nb".as_slice(),
+            LineEndingSet::only(LineEnding::Lf).without(LineEnding::Lf),
+            "a\r\nb",
+        ),
+        (b"a\r".as_slice(), LineEndingSet::CRLF, "a\r"),
+    ] {
+        let mut reader = AsyncCharsetTextReader::new(
+            ChunkedAsyncInput::new(input.to_vec(), 1, false),
+            Utf8Codec,
+            CharsetDecodePolicy::report(),
+        )
+        .with_line_endings(endings);
+        let mut line = String::new();
+        assert!(complete(reader.read_line_limited_async(&mut line, 8))?);
+        assert_eq!(expected, line);
+    }
     Ok(())
 }
 

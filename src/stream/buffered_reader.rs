@@ -34,10 +34,10 @@ use crate::{
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
         decode_error_to_io as shared_decode_error_to_io,
-        text_append_limit_error,
     },
     line_ending_set::{
         LineEndingSet,
+        append_limited_char,
         read_line_with,
     },
 };
@@ -446,18 +446,14 @@ where
     ) -> io::Result<usize> {
         let initial_len = output.len();
         let mut count = 0;
-        while self.fill_chars()? {
-            while self.char_position < self.char_limit {
-                let ch = self.chars[self.char_position];
-                let appended_len = output.len() - initial_len;
-                if ch.len_utf8() > max_append_len.saturating_sub(appended_len) {
-                    output.truncate(initial_len);
-                    return Err(text_append_limit_error(max_append_len));
-                }
-                output.push(ch);
-                self.char_position += 1;
-                count += 1;
+        while let Some(ch) = self.read_char()? {
+            if let Err(error) =
+                append_limited_char(output, initial_len, max_append_len, ch)
+            {
+                self.pending_char = Some(ch);
+                return Err(error);
             }
+            count += 1;
         }
         Ok(count)
     }
@@ -489,18 +485,44 @@ where
     ) -> io::Result<bool> {
         let initial_len = output.len();
         let mut read = false;
-        while self.fill_chars()? {
-            while self.char_position < self.char_limit {
-                let ch = self.chars[self.char_position];
-                let appended_len = output.len() - initial_len;
-                if ch.len_utf8() > max_append_len.saturating_sub(appended_len) {
-                    output.truncate(initial_len);
-                    return Err(text_append_limit_error(max_append_len));
+        while let Some(ch) = self.read_char()? {
+            if let Err(error) =
+                append_limited_char(output, initial_len, max_append_len, ch)
+            {
+                self.pending_char = Some(ch);
+                return Err(error);
+            }
+            read = true;
+            if ch == '\n' && self.line_endings.contains(crate::LineEnding::Lf) {
+                return Ok(true);
+            }
+            if ch == '\r' {
+                if self.line_endings.contains(crate::LineEnding::CrLf) {
+                    match self.read_char()? {
+                        Some('\n') => {
+                            if let Err(error) = append_limited_char(
+                                output,
+                                initial_len,
+                                max_append_len,
+                                '\n',
+                            ) {
+                                self.pending_char = Some('\n');
+                                return Err(error);
+                            }
+                            return Ok(true);
+                        }
+                        Some(next) => {
+                            if self.line_endings.contains(crate::LineEnding::Cr)
+                            {
+                                self.pending_char = Some(next);
+                                return Ok(true);
+                            }
+                            self.pending_char = Some(next);
+                        }
+                        None => return Ok(true),
+                    }
                 }
-                output.push(ch);
-                self.char_position += 1;
-                read = true;
-                if ch == '\n' {
+                if self.line_endings.contains(crate::LineEnding::Cr) {
                     return Ok(true);
                 }
             }

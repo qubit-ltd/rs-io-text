@@ -258,6 +258,87 @@ fn test_buffered_reader_read_to_string_limited_enforces_utf8_limit()
     Ok(())
 }
 
+#[test]
+fn test_buffered_reader_limited_reads_preserve_pending_order_and_endings()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"first\rbc".to_vec()),
+        decoder,
+        1,
+    );
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("first\r", line);
+    let mut output = String::new();
+    assert_eq!(2, reader.read_to_string_limited(&mut output, 8)?);
+    assert_eq!("bc", output);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        Cursor::new(b"first\rsecond\nthird".to_vec()),
+        decoder,
+        1,
+    )
+    .with_line_endings(LineEndingSet::CR);
+    line.clear();
+    assert!(reader.read_line_limited(&mut line, 32)?);
+    assert_eq!("first\r", line);
+    line.clear();
+    assert!(reader.read_line_limited(&mut line, 32)?);
+    assert_eq!("second\nthird", line);
+    Ok(())
+}
+
+#[cfg(coverage)]
+#[test]
+fn test_buffered_reader_covers_limited_line_ending_branches()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::new(Cursor::new(b"a\r\nb".to_vec()), decoder);
+    let mut line = String::new();
+    assert!(reader.read_line_limited(&mut line, 8)?);
+    assert_eq!("a\r\n", line);
+
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader =
+        BufferedReader::new(Cursor::new(b"\r\n".to_vec()), decoder);
+    let error = reader
+        .read_line_limited(&mut String::new(), 1)
+        .expect_err("the LF in CRLF should exceed the limit");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(Some('\n'), reader.read_char()?);
+
+    for (input, endings, expected) in [
+        (b"a\rb".as_slice(), LineEndingSet::ALL, "a\r"),
+        (b"a\rb".as_slice(), LineEndingSet::CRLF, "a\rb"),
+        (
+            b"a\r\nb".as_slice(),
+            LineEndingSet::only(qubit_io_text::LineEnding::Lf)
+                .without(qubit_io_text::LineEnding::Lf),
+            "a\r\nb",
+        ),
+        (b"a\r".as_slice(), LineEndingSet::CRLF, "a\r"),
+    ] {
+        let decoder = CharsetDecoder::with_policy(
+            Utf8Codec,
+            CharsetDecodePolicy::report(),
+        );
+        let mut reader =
+            BufferedReader::new(Cursor::new(input.to_vec()), decoder)
+                .with_line_endings(endings);
+        let mut line = String::new();
+        assert!(reader.read_line_limited(&mut line, 8)?);
+        assert_eq!(expected, line);
+    }
+    Ok(())
+}
+
 #[cfg(coverage)]
 #[test]
 fn test_buffered_reader_covers_decoder_status_recovery_branches()

@@ -9,6 +9,8 @@
 
 use crate::LineEnding;
 
+use std::io;
+
 /// A set of line endings accepted by text readers.
 ///
 /// The default set accepts LF, CRLF, and CR. When both CRLF and CR are
@@ -127,4 +129,20 @@ where
         output.push(ch);
     }
     Ok(read)
+}
+
+/// Appends one character while enforcing a UTF-8 byte limit.
+pub(crate) fn append_limited_char(
+    output: &mut String,
+    initial_len: usize,
+    max_append_len: usize,
+    ch: char,
+) -> io::Result<()> {
+    let appended_len = output.len() - initial_len;
+    if ch.len_utf8() > max_append_len.saturating_sub(appended_len) {
+        output.truncate(initial_len);
+        return Err(crate::io_error::text_append_limit_error(max_append_len));
+    }
+    output.push(ch);
+    Ok(())
 }
