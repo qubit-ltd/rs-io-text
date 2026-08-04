@@ -7,10 +7,21 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{CharsetCodec, CharsetEncodePolicy, CharsetEncoder};
-use qubit_io::{Buffer, Output};
+use qubit_codec_text::{
+    CharsetCodec,
+    CharsetEncodePolicy,
+    CharsetEncoder,
+};
+use qubit_io::{
+    Buffer,
+    Output,
+};
 
-use crate::{BufferedWriter, LineEnding, TextWrite};
+use crate::{
+    BufferedWriter,
+    LineEnding,
+    TextWrite,
+};
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
@@ -104,7 +115,11 @@ where
     ) -> Self {
         let encoder = create_encoder(codec, policy);
         Self {
-            writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
+            writer: BufferedWriter::with_capacity(
+                output,
+                encoder,
+                buffer_capacity,
+            ),
         }
     }
 
@@ -218,7 +233,10 @@ where
 ///
 /// Panics only when replacement mode cannot build a replacement encoder for
 /// the supplied codec, matching [`CharsetEncoder::new`] semantics.
-pub(crate) fn create_encoder<C>(codec: C, policy: CharsetEncodePolicy) -> CharsetEncoder<C>
+pub(crate) fn create_encoder<C>(
+    codec: C,
+    policy: CharsetEncodePolicy,
+) -> CharsetEncoder<C>
 where
     C: CharsetCodec<Unit = u8>,
 {

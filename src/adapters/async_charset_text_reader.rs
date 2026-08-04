@@ -10,12 +10,26 @@
 use std::io;
 
 use qubit_codec::{
-    AsyncTranscodeDecodeInput, AsyncTranscodeDecodeStep, TranscodeStatus, Transcoder,
+    AsyncTranscodeDecodeInput,
+    AsyncTranscodeDecodeStep,
+    TranscodeStatus,
+    Transcoder,
 };
-use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
-use qubit_io::{AsyncInput, Buffer};
+use qubit_codec_text::{
+    CharsetCodec,
+    CharsetDecodePolicy,
+    CharsetDecoder,
+};
+use qubit_io::{
+    AsyncInput,
+    Buffer,
+};
 
-use crate::io_error::{capacity_error_to_io, decode_error_to_io, text_append_limit_error};
+use crate::io_error::{
+    capacity_error_to_io,
+    decode_error_to_io,
+    text_append_limit_error,
+};
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -84,7 +98,12 @@ where
     /// Returns a reader whose construction performs no input operation.
     #[must_use]
     pub fn new(input: I, codec: C, policy: CharsetDecodePolicy) -> Self {
-        Self::new_with_buffer_capacity(input, codec, policy, DEFAULT_BUFFER_CAPACITY)
+        Self::new_with_buffer_capacity(
+            input,
+            codec,
+            policy,
+            DEFAULT_BUFFER_CAPACITY,
+        )
     }
 
     /// Creates an asynchronous charset reader with a requested buffer size.
@@ -158,7 +177,8 @@ where
     #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<C>, Vec<char>) {
         let (input, unread) = self.input.into_parts();
-        let pending_chars = self.chars[self.char_position..self.char_limit].to_vec();
+        let pending_chars =
+            self.chars[self.char_position..self.char_limit].to_vec();
         (input, unread, self.decoder, pending_chars)
     }
 
@@ -298,7 +318,11 @@ where
                     match progress.status() {
                         TranscodeStatus::Complete => continue,
                         TranscodeStatus::NeedInput { required, .. } => {
-                            if !self.input.fill_until_async(required.get()).await? {
+                            if !self
+                                .input
+                                .fill_until_async(required.get())
+                                .await?
+                            {
                                 return self.decode_eof();
                             }
                         }
@@ -399,7 +423,10 @@ where
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded prefix. Resume on the same reader and
     /// do not append that prefix a second time.
-    pub async fn read_to_string_async(&mut self, output: &mut String) -> io::Result<usize> {
+    pub async fn read_to_string_async(
+        &mut self,
+        output: &mut String,
+    ) -> io::Result<usize> {
         let mut count = 0;
         while self.fill_chars_async().await? {
             let chars = &self.chars[self.char_position..self.char_limit];
@@ -477,7 +504,10 @@ where
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded line prefix. Resume on the same reader
     /// and do not append that prefix a second time.
-    pub async fn read_line_async(&mut self, output: &mut String) -> io::Result<bool> {
+    pub async fn read_line_async(
+        &mut self,
+        output: &mut String,
+    ) -> io::Result<bool> {
         let mut read = false;
         while self.fill_chars_async().await? {
             let chars = &self.chars[self.char_position..self.char_limit];
@@ -490,6 +520,58 @@ where
             read = true;
             if chars.get(take - 1) == Some(&'\n') {
                 return Ok(true);
+            }
+        }
+        Ok(read)
+    }
+
+    /// Asynchronously appends one decoded line while enforcing a UTF-8 byte
+    /// limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string. The line is appended to existing
+    ///   content.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when a line or final unterminated line was read, or
+    /// `false` at EOF with no text appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors, or [`io::ErrorKind::InvalidData`]
+    /// when the decoded line exceeds `max_append_len`. On overflow, `output`
+    /// is restored to its original length and the exceeding character remains
+    /// pending.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future retains reader state, but `output` can already
+    /// contain a successfully decoded prefix. Resume on the same reader and
+    /// do not append that prefix a second time.
+    pub async fn read_line_limited_async(
+        &mut self,
+        output: &mut String,
+        max_append_len: usize,
+    ) -> io::Result<bool> {
+        let initial_len = output.len();
+        let mut read = false;
+        while self.fill_chars_async().await? {
+            while self.char_position < self.char_limit {
+                let ch = self.chars[self.char_position];
+                let appended_len = output.len() - initial_len;
+                if ch.len_utf8() > max_append_len.saturating_sub(appended_len) {
+                    output.truncate(initial_len);
+                    return Err(text_append_limit_error(max_append_len));
+                }
+                output.push(ch);
+                self.char_position += 1;
+                read = true;
+                if ch == '\n' {
+                    return Ok(true);
+                }
             }
         }
         Ok(read)

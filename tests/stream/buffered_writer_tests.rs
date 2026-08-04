@@ -52,7 +52,10 @@ impl Transcoder for PartialEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -72,7 +75,10 @@ impl Transcoder for PartialEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 }
@@ -105,7 +111,10 @@ impl Transcoder for FinishByteEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -116,7 +125,10 @@ impl Transcoder for FinishByteEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         let mut read = 0;
         let mut written = 0;
         while input_index + read < input.len()
@@ -134,7 +146,10 @@ impl Transcoder for FinishByteEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         output[output_index] = b'!';
         Ok(1)
     }

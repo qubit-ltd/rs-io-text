@@ -5,16 +5,31 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::{error::Error as StdError, io};
+use std::{
+    error::Error as StdError,
+    io,
+};
 
-use qubit_codec::{CapacityError, TranscodeDecodeInput, TranscodeDecoder, TranscodeStatus, nz};
-use qubit_io::{Buffer, Input, UncheckedSlice};
+use qubit_codec::{
+    CapacityError,
+    TranscodeDecodeInput,
+    TranscodeDecoder,
+    TranscodeStatus,
+    nz,
+};
+use qubit_io::{
+    Buffer,
+    Input,
+    UncheckedSlice,
+};
 
 use crate::{
-    TextLineRead, TextRead,
+    TextLineRead,
+    TextRead,
     io_error::{
         capacity_error_to_io as shared_capacity_error_to_io,
-        decode_error_to_io as shared_decode_error_to_io, text_append_limit_error,
+        decode_error_to_io as shared_decode_error_to_io,
+        text_append_limit_error,
     },
 };
 
@@ -136,7 +151,8 @@ where
     #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> (R, Buffer<u8>, D, Vec<char>) {
         let (inner, unread) = self.input.into_parts();
-        let pending_chars = self.chars[self.char_position..self.char_limit].to_vec();
+        let pending_chars =
+            self.chars[self.char_position..self.char_limit].to_vec();
         (inner, unread, self.decoder, pending_chars)
     }
 
@@ -360,6 +376,52 @@ where
         }
         Ok(count)
     }
+
+    /// Appends one decoded line while enforcing a UTF-8 byte limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string. The line is appended to existing
+    ///   content.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when a line or final unterminated line was read, or
+    /// `false` at EOF with no text appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors. Returns
+    /// [`io::ErrorKind::InvalidData`] and restores `output` to its original
+    /// length when the line exceeds `max_append_len`. Characters accepted
+    /// before the limit remain consumed; the character that exceeds the
+    /// limit remains pending.
+    pub fn read_line_limited(
+        &mut self,
+        output: &mut String,
+        max_append_len: usize,
+    ) -> io::Result<bool> {
+        let initial_len = output.len();
+        let mut read = false;
+        while self.fill_chars()? {
+            while self.char_position < self.char_limit {
+                let ch = self.chars[self.char_position];
+                let appended_len = output.len() - initial_len;
+                if ch.len_utf8() > max_append_len.saturating_sub(appended_len) {
+                    output.truncate(initial_len);
+                    return Err(text_append_limit_error(max_append_len));
+                }
+                output.push(ch);
+                self.char_position += 1;
+                read = true;
+                if ch == '\n' {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(read)
+    }
 }
 
 impl<R, D> TextRead for BufferedReader<R, D>
@@ -375,12 +437,18 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
+        let ch = unsafe {
+            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
+        };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max && self.fill_chars()? {
             let available = self.char_limit - self.char_position;
@@ -393,7 +461,10 @@ where
         Ok(count)
     }
 
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         let mut count = 0;
         while self.fill_chars()? {
             let chars = &self.chars[self.char_position..self.char_limit];
