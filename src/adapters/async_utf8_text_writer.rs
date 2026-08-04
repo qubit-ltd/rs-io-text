@@ -16,7 +16,10 @@ use qubit_codec_text::{
 };
 use qubit_io::AsyncOutput;
 
-use crate::AsyncCharsetTextWriter;
+use crate::{
+    AsyncCharsetTextWriter,
+    LineEnding,
+};
 
 /// Asynchronous UTF-8 writer over a Qubit byte output.
 ///
@@ -92,6 +95,22 @@ where
         Self(AsyncCharsetTextWriter::new_with_buffer_capacity(
             output, Utf8Codec, policy, capacity,
         ))
+    }
+
+    /// Sets the line ending used by future asynchronous line writes.
+    ///
+    /// # Parameters
+    ///
+    /// - `line_ending`: Line ending to append to future lines.
+    ///
+    /// # Returns
+    ///
+    /// This writer with the requested line-ending configuration.
+    #[inline(always)]
+    #[must_use]
+    pub fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
+        self.0 = self.0.with_line_ending(line_ending);
+        self
     }
 
     /// Consumes this wrapper and returns the generic charset writer.

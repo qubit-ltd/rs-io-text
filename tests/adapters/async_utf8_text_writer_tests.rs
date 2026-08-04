@@ -19,7 +19,10 @@ use std::{
 
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_io::AsyncOutput;
-use qubit_io_text::AsyncUtf8TextWriter;
+use qubit_io_text::{
+    AsyncUtf8TextWriter,
+    LineEnding,
+};
 
 /// Collects written bytes without suspending.
 #[derive(Default)]
@@ -87,4 +90,11 @@ fn test_async_utf8_text_writer_configuration_and_deref_accessors() {
     assert_eq!(vec![b'!'], writer.output().0);
     let writer = writer.into_inner();
     assert_eq!(vec![b'!'], writer.output().0);
+}
+
+#[test]
+fn test_async_utf8_text_writer_configures_line_ending() {
+    let writer = AsyncUtf8TextWriter::new(ReadyOutput::default())
+        .with_line_ending(LineEnding::CrLf);
+    assert_eq!(LineEnding::CrLf, writer.configured_line_ending());
 }
