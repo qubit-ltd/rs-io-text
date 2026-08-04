@@ -41,6 +41,44 @@ impl Input for FailingCharInput {
 }
 
 #[derive(Debug)]
+struct CrThenErrorThenChar {
+    state: u8,
+}
+
+impl Input for CrThenErrorThenChar {
+    type Item = char;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [char],
+        index: usize,
+        _count: usize,
+    ) -> std::io::Result<usize> {
+        match self.state {
+            0 => {
+                output[index] = '\r';
+                self.state = 1;
+                Ok(1)
+            }
+            1 => {
+                self.state = 2;
+                Ok(0)
+            }
+            2 => {
+                self.state = 3;
+                Err(Error::other("transient read failure"))
+            }
+            3 => {
+                output[index] = 'X';
+                self.state = 4;
+                Ok(1)
+            }
+            _ => Ok(0),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct ChunkedCharInput {
     chars: Vec<char>,
     position: usize,
@@ -128,6 +166,24 @@ fn test_read_line_handles_chunked_crlf_and_cr_paths() -> std::io::Result<()> {
     line.clear();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("tail\r", line);
+    Ok(())
+}
+
+#[test]
+fn test_read_line_preserves_cr_when_crlf_lookahead_fails()
+-> std::io::Result<()> {
+    let mut reader = InputTextReader::new(CrThenErrorThenChar { state: 0 });
+    let mut line = String::new();
+
+    let error = reader.read_line(&mut line).expect_err("lookahead fails");
+    assert_eq!(ErrorKind::Other, error.kind());
+    assert!(line.is_empty());
+
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("\r", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("X", line);
     Ok(())
 }
 

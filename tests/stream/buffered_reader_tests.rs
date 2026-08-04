@@ -430,6 +430,33 @@ impl Read for AlwaysFailInput {
     }
 }
 
+#[derive(Debug)]
+struct CrThenErrorThenByte {
+    state: u8,
+}
+
+impl Read for CrThenErrorThenByte {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        match self.state {
+            0 => {
+                output[0] = b'\r';
+                self.state = 1;
+                Ok(1)
+            }
+            1 => {
+                self.state = 2;
+                Err(std::io::Error::other("transient refill failure"))
+            }
+            2 => {
+                output[0] = b'X';
+                self.state = 3;
+                Ok(1)
+            }
+            _ => Ok(0),
+        }
+    }
+}
+
 impl Transcoder for NeedInputDecoder {
     type Input = u8;
     type Output = char;
@@ -1145,4 +1172,28 @@ fn test_buffered_reader_reports_strict_incomplete_eof_tail() {
         .expect_err("strict incomplete EOF should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
+}
+
+#[test]
+fn test_buffered_reader_preserves_cr_when_crlf_lookahead_fails()
+-> std::io::Result<()> {
+    let decoder =
+        CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedReader::with_capacity(
+        CrThenErrorThenByte { state: 0 },
+        decoder,
+        1,
+    );
+    let mut line = String::new();
+
+    let error = reader.read_line(&mut line).expect_err("lookahead fails");
+    assert_eq!(ErrorKind::Other, error.kind());
+    assert!(line.is_empty());
+
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("\r", line);
+    line.clear();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("X", line);
+    Ok(())
 }

@@ -248,7 +248,14 @@ impl TextLineRead for InputTextReader<'_> {
             if ch == '\r' {
                 if line_endings.contains(LineEnding::CrLf) {
                     if pending.is_empty() {
-                        let count = self.input.read_fully(&mut chars)?;
+                        let count = match self.input.read_fully(&mut chars) {
+                            Ok(count) => count,
+                            Err(error) => {
+                                pending.push_front('\r');
+                                self.pending = pending;
+                                return Err(error);
+                            }
+                        };
                         pending.extend(chars[..count].iter().copied());
                     }
                     match pending.pop_front() {

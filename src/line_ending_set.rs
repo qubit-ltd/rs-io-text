@@ -95,13 +95,18 @@ where
         }
         if ch == '\r' {
             if line_endings.contains(LineEnding::CrLf) {
+                // Retain CR while the lookahead can fail so callers can retry
+                // without losing the character that started the boundary.
+                *pending = Some('\r');
                 match read_char()? {
                     Some('\n') => {
+                        *pending = None;
                         output.push('\r');
                         output.push('\n');
                         return Ok(true);
                     }
                     Some(next) => {
+                        *pending = None;
                         if line_endings.contains(LineEnding::Cr) {
                             output.push('\r');
                             *pending = Some(next);
@@ -112,10 +117,12 @@ where
                         continue;
                     }
                     None if line_endings.contains(LineEnding::Cr) => {
+                        *pending = None;
                         output.push('\r');
                         return Ok(true);
                     }
                     None => {
+                        *pending = None;
                         output.push('\r');
                         return Ok(true);
                     }
