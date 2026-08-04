@@ -17,7 +17,6 @@ use std::{
     },
 };
 
-use qubit_codec_text::CharsetEncodePolicy;
 use qubit_io::AsyncOutput;
 use qubit_io_text::{
     AsyncUtf8TextWriter,
@@ -67,11 +66,8 @@ where
 #[test]
 fn test_async_utf8_text_writer_encodes_text_and_exposes_inner_writer()
 -> io::Result<()> {
-    let mut writer = AsyncUtf8TextWriter::with_capacity(
-        ReadyOutput::default(),
-        CharsetEncodePolicy::report(),
-        1,
-    );
+    let mut writer =
+        AsyncUtf8TextWriter::with_capacity(ReadyOutput::default(), 1);
 
     complete(writer.write_str_fully_async("A中"))?;
     complete(writer.finish_async())?;

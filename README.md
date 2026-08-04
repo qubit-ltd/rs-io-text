@@ -11,6 +11,8 @@
 making byte encodings explicit at the stream boundary. It provides:
 
 - `TextRead`, `TextLineRead`, and `TextWrite` for synchronous Unicode text;
+- `AsyncTextRead`, `AsyncTextLineRead`, and `AsyncTextWrite` for runtime-neutral
+  asynchronous text operations;
 - string and character-stream adapters such as `StrTextReader`,
   `StringCharInput`, `StringCharOutput`, `InputTextReader`, and
   `OutputTextWriter`;
@@ -107,6 +109,7 @@ owned output without performing further I/O.
 | Character streams | `StringCharInput`, `StringCharOutput`, `InputTextReader`, `OutputTextWriter` |
 | UTF-8 byte streams | `Utf8TextReader`, `Utf8TextWriter` over `Input`/`Output` |
 | Synchronous charsets | `CharsetTextReader`, `CharsetTextWriter`, `CharsetReadExt`, `CharsetWriteExt` |
+| Asynchronous text | `AsyncTextRead`, `AsyncTextLineRead`, `AsyncTextWrite` |
 | Asynchronous charsets | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` |
 | Policy | `CharsetDecodePolicy`, `CharsetEncodePolicy`, `LineEnding`, `LineEndingSet` |
 

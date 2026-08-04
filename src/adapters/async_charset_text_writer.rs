@@ -21,6 +21,7 @@ use qubit_codec_text::{
 use qubit_io::AsyncOutput;
 
 use crate::{
+    AsyncTextWrite,
     LineEnding,
     adapters::charset_text_writer::create_encoder,
     io_error::encode_error_to_io,
@@ -218,6 +219,51 @@ where
             ));
         }
         Ok(())
+    }
+}
+
+impl<O, C> AsyncTextWrite for AsyncCharsetTextWriter<O, C>
+where
+    O: AsyncOutput<Item = u8> + Unpin,
+    C: CharsetCodec<Unit = u8>,
+{
+    type Error = io::Error;
+
+    fn line_ending(&self) -> LineEnding {
+        self.configured_line_ending()
+    }
+
+    async fn write_char_async(&mut self, ch: char) -> Result<(), Self::Error> {
+        AsyncCharsetTextWriter::write_char_async(self, ch).await
+    }
+
+    async fn write_chars_async(
+        &mut self,
+        chars: &[char],
+    ) -> Result<usize, Self::Error> {
+        AsyncCharsetTextWriter::write_chars_async(self, chars).await
+    }
+
+    async fn write_str_async(
+        &mut self,
+        text: &str,
+    ) -> Result<usize, Self::Error> {
+        AsyncCharsetTextWriter::write_str_async(self, text).await
+    }
+
+    async fn write_line_fully_async(
+        &mut self,
+        line: &str,
+    ) -> Result<(), Self::Error> {
+        AsyncCharsetTextWriter::write_line_fully_async(self, line).await
+    }
+
+    async fn flush_async(&mut self) -> Result<(), Self::Error> {
+        AsyncCharsetTextWriter::flush_async(self).await
+    }
+
+    async fn finish_async(&mut self) -> Result<(), Self::Error> {
+        AsyncCharsetTextWriter::finish_async(self).await
     }
 }
 

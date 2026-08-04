@@ -56,6 +56,9 @@ pub use stream::{
     BufferedWriter,
 };
 pub use traits::{
+    AsyncTextLineRead,
+    AsyncTextRead,
+    AsyncTextWrite,
     TextLineRead,
     TextRead,
     TextWrite,

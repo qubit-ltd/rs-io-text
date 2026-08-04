@@ -9,7 +9,9 @@
 
 ## 概念模型
 
-同步 `TextRead`、`TextLineRead` 与 `TextWrite` 直接处理 Rust 的 `char` 和 `str`。
+同步 `TextRead`、`TextLineRead` 与 `TextWrite` 直接处理 Rust 的 `char` 和 `str`；
+异步 `AsyncTextRead`、`AsyncTextLineRead` 与 `AsyncTextWrite` 提供对应的运行时无关
+操作。
 Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或可配置 charset。
 
 | 需求 | 主要 API | 输入或输出 |
@@ -100,8 +102,7 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 
 ## 异步流程
 
-异步 API 仅位于 charset adapter；并非每一个同步文本 trait 都有异步对应版本。构造过程
-不执行 I/O。
+异步 charset adapter 实现了异步文本 trait。构造过程不执行 I/O。
 
 ```rust
 use qubit_io::AsyncOutput;
@@ -147,6 +148,9 @@ where
   `read_to_string_with_charset_limited`。上限按该调用追加的 UTF-8 字节计算；
   超限会返回 `InvalidData` 并将目标字符串恢复到调用前长度。reader 仍可能消费或预读
   底层输入，且该上限不限制原始输入字节。
+
+  对 `read_line_limited` 和 `read_line_limited_async`，超长行会先消费到配置的行结束符，
+  然后才返回错误，因此下一次读取从下一条逻辑记录开始。
 
 ## 排障与最佳实践
 

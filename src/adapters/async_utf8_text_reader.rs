@@ -17,7 +17,11 @@ use qubit_codec_text::{
 use qubit_io::AsyncInput;
 
 use crate::AsyncCharsetTextReader;
-use crate::LineEndingSet;
+use crate::{
+    AsyncTextLineRead,
+    AsyncTextRead,
+    LineEndingSet,
+};
 
 /// Asynchronous UTF-8 reader over a Qubit byte input.
 ///
@@ -144,5 +148,43 @@ where
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<I> AsyncTextRead for AsyncUtf8TextReader<I>
+where
+    I: AsyncInput<Item = u8> + Unpin,
+{
+    type Error = std::io::Error;
+
+    async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
+        self.0.read_char_async().await
+    }
+
+    async fn read_chars_async(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
+        self.0.read_chars_async(output, max).await
+    }
+
+    async fn read_to_string_async(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
+        self.0.read_to_string_async(output).await
+    }
+}
+
+impl<I> AsyncTextLineRead for AsyncUtf8TextReader<I>
+where
+    I: AsyncInput<Item = u8> + Unpin,
+{
+    async fn read_line_async(
+        &mut self,
+        output: &mut String,
+    ) -> Result<bool, Self::Error> {
+        self.0.read_line_async(output).await
     }
 }

@@ -13,6 +13,9 @@
 pub use crate::{
     AsyncCharsetTextReader,
     AsyncCharsetTextWriter,
+    AsyncTextLineRead,
+    AsyncTextRead,
+    AsyncTextWrite,
     AsyncUtf8TextReader,
     AsyncUtf8TextWriter,
     BufferedReader,

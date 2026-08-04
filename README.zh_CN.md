@@ -11,6 +11,8 @@
 它提供：
 
 - 面向同步 Unicode 文本的 `TextRead`、`TextLineRead` 和 `TextWrite`；
+- 面向运行时无关异步文本操作的 `AsyncTextRead`、`AsyncTextLineRead` 和
+  `AsyncTextWrite`；
 - `StrTextReader`、`StringCharInput`、`StringCharOutput`、
   `InputTextReader`、`OutputTextWriter` 等字符串与字符流 adapter；
 - 基于 Qubit 字节输入与输出的严格 UTF-8 便利 adapter；
@@ -104,6 +106,7 @@ where
 | 字符流 | `StringCharInput`、`StringCharOutput`、`InputTextReader`、`OutputTextWriter` |
 | UTF-8 字节流 | 基于 `Input`/`Output` 的 `Utf8TextReader`、`Utf8TextWriter` |
 | 同步 charset | `CharsetTextReader`、`CharsetTextWriter`、`CharsetReadExt`、`CharsetWriteExt` |
+| 异步文本 | `AsyncTextRead`、`AsyncTextLineRead`、`AsyncTextWrite` |
 | 异步 charset | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` |
 | 策略 | `CharsetDecodePolicy`、`CharsetEncodePolicy`、`LineEnding`、`LineEndingSet` |
 

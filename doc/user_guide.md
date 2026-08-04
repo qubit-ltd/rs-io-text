@@ -158,6 +158,10 @@ single-step APIs for cancellation-sensitive protocols.
   length. The reader can still consume or read ahead in the underlying input,
   and the limit does not impose a raw input-byte bound.
 
+  For `read_line_limited` and `read_line_limited_async`, an oversized line is
+  consumed through its configured line ending before the error is returned, so
+  the next line read starts at the next logical record.
+
 ## Troubleshooting and Best Practices
 
 | Symptom | Check first |
