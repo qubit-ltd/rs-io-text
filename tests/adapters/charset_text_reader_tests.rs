@@ -124,8 +124,8 @@ fn test_charset_reader_read_line_limited_forwards_utf8_limit()
     assert_eq!("prefix-", output);
 
     output.clear();
-    assert!(reader.read_line_limited(&mut output, 1)?);
-    assert_eq!("\n", output);
+    assert!(reader.read_line_limited(&mut output, 16)?);
+    assert_eq!("next", output);
     Ok(())
 }
 

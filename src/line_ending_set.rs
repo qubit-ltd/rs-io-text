@@ -138,6 +138,62 @@ where
     Ok(read)
 }
 
+/// Consumes one line using configurable line-ending recognition.
+///
+/// The character already held in `pending` is consumed before the callback is
+/// consulted. This is used after a bounded line read has failed so the next
+/// read starts at the following logical line rather than at a suffix of the
+/// oversized line.
+pub(crate) fn discard_line_with<E, ReadChar>(
+    line_endings: LineEndingSet,
+    pending: &mut Option<char>,
+    mut read_char: ReadChar,
+) -> Result<(), E>
+where
+    ReadChar: FnMut() -> Result<Option<char>, E>,
+{
+    loop {
+        let Some(ch) = (if let Some(ch) = pending.take() {
+            Some(ch)
+        } else {
+            read_char()?
+        }) else {
+            return Ok(());
+        };
+
+        if ch == '\n' && line_endings.contains(LineEnding::Lf) {
+            return Ok(());
+        }
+        if ch == '\r' {
+            if line_endings.contains(LineEnding::CrLf) {
+                *pending = Some('\r');
+                match read_char()? {
+                    Some('\n') => {
+                        *pending = None;
+                        return Ok(());
+                    }
+                    Some(next) => {
+                        *pending = None;
+                        if line_endings.contains(LineEnding::Cr) {
+                            *pending = Some(next);
+                            return Ok(());
+                        }
+                        *pending = Some(next);
+                        continue;
+                    }
+                    None => {
+                        *pending = None;
+                        return Ok(());
+                    }
+                }
+            }
+            if line_endings.contains(LineEnding::Cr) {
+                return Ok(());
+            }
+        }
+    }
+}
+
 /// Appends one character while enforcing a UTF-8 byte limit.
 pub(crate) fn append_limited_char(
     output: &mut String,

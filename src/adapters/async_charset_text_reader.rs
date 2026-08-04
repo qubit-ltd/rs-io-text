@@ -28,7 +28,6 @@ use qubit_io::{
     Buffer,
 };
 
-use crate::LineEnding;
 use crate::io_error::{
     capacity_error_to_io,
     decode_error_to_io,
@@ -36,6 +35,11 @@ use crate::io_error::{
 use crate::line_ending_set::{
     LineEndingSet,
     append_limited_char,
+};
+use crate::{
+    AsyncTextLineRead,
+    AsyncTextRead,
+    LineEnding,
 };
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
@@ -383,6 +387,46 @@ where
     }
 }
 
+impl<I, C> AsyncTextRead for AsyncCharsetTextReader<I, C>
+where
+    I: AsyncInput<Item = u8> + Unpin,
+    C: CharsetCodec<Unit = u8>,
+{
+    type Error = io::Error;
+
+    async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
+        AsyncCharsetTextReader::read_char_async(self).await
+    }
+
+    async fn read_chars_async(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
+        AsyncCharsetTextReader::read_chars_async(self, output, max).await
+    }
+
+    async fn read_to_string_async(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
+        AsyncCharsetTextReader::read_to_string_async(self, output).await
+    }
+}
+
+impl<I, C> AsyncTextLineRead for AsyncCharsetTextReader<I, C>
+where
+    I: AsyncInput<Item = u8> + Unpin,
+    C: CharsetCodec<Unit = u8>,
+{
+    async fn read_line_async(
+        &mut self,
+        output: &mut String,
+    ) -> Result<bool, Self::Error> {
+        AsyncCharsetTextReader::read_line_async(self, output).await
+    }
+}
+
 #[cfg(coverage)]
 thread_local! {
     static COVERAGE_FORCE_EOF_STATUS: Cell<u8> = const { Cell::new(0) };
@@ -606,9 +650,13 @@ where
                 {
                     output.truncate(initial_len);
                     self.pending_char = Some(ch);
-                    return Err(crate::io_error::text_append_limit_error(
+                    let error = crate::io_error::text_append_limit_error(
                         max_append_len,
-                    ));
+                    );
+                    return self
+                        .discard_line_after_limit_async()
+                        .await
+                        .and(Err(error));
                 }
 
                 // Keep CR pending while the CRLF lookahead may suspend. If
@@ -628,7 +676,10 @@ where
                             '\n',
                         ) {
                             self.pending_char = Some('\n');
-                            return Err(error);
+                            return self
+                                .discard_line_after_limit_async()
+                                .await
+                                .and(Err(error));
                         }
                         return Ok(true);
                     }
@@ -651,7 +702,10 @@ where
                 self.append_line_char(output, initial_len, max_append_len, ch)
             {
                 self.pending_char = Some(ch);
-                return Err(error);
+                return self
+                    .discard_line_after_limit_async()
+                    .await
+                    .and(Err(error));
             }
             if ch == '\n' && self.line_endings.contains(LineEnding::Lf) {
                 return Ok(true);
@@ -681,8 +735,8 @@ where
     ///
     /// Returns input or decoding errors, or [`io::ErrorKind::InvalidData`]
     /// when the decoded line exceeds `max_append_len`. On overflow, `output`
-    /// is restored to its original length and the exceeding character remains
-    /// pending.
+    /// is restored to its original length and the remainder of the oversized
+    /// line is consumed through its configured line ending.
     ///
     /// # Cancellation safety
     ///
@@ -708,6 +762,39 @@ where
         let ch = self.chars[self.char_position];
         self.char_position += 1;
         Ok(Some(ch))
+    }
+
+    /// Discards the remainder of the current line after a bounded read fails.
+    async fn discard_line_after_limit_async(&mut self) -> io::Result<()> {
+        loop {
+            let Some(ch) = self.read_char_async().await? else {
+                return Ok(());
+            };
+            if ch == '\n' && self.line_endings.contains(LineEnding::Lf) {
+                return Ok(());
+            }
+            if ch == '\r' {
+                if self.line_endings.contains(LineEnding::CrLf) {
+                    self.pending_char = Some('\r');
+                    let next = self.read_char_from_buffer_async().await?;
+                    self.pending_char = None;
+                    match next {
+                        Some('\n') => return Ok(()),
+                        Some(next) => {
+                            self.pending_char = Some(next);
+                            if self.line_endings.contains(LineEnding::Cr) {
+                                return Ok(());
+                            }
+                            continue;
+                        }
+                        None => return Ok(()),
+                    }
+                }
+                if self.line_endings.contains(LineEnding::Cr) {
+                    return Ok(());
+                }
+            }
+        }
     }
 
     fn append_line_char(

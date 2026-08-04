@@ -38,6 +38,7 @@ use crate::{
     line_ending_set::{
         LineEndingSet,
         append_limited_char,
+        discard_line_with,
         read_line_with,
     },
 };
@@ -301,6 +302,16 @@ where
         Ok(written > 0)
     }
 
+    /// Discards the remainder of the current line after a bounded read fails.
+    fn discard_line_after_limit(&mut self) -> io::Result<()> {
+        let line_endings = self.line_endings;
+        let mut pending = self.pending_char.take();
+        let result =
+            discard_line_with(line_endings, &mut pending, || self.read_char());
+        self.pending_char = pending;
+        result
+    }
+
     /// Re-enters the completed decoder path for coverage-only tests.
     #[cfg(coverage)]
     #[doc(hidden)]
@@ -475,9 +486,9 @@ where
     ///
     /// Returns input or decoding errors. Returns
     /// [`io::ErrorKind::InvalidData`] and restores `output` to its original
-    /// length when the line exceeds `max_append_len`. Characters accepted
-    /// before the limit remain consumed; the character that exceeds the
-    /// limit remains pending.
+    /// length when the line exceeds `max_append_len`. The remainder of the
+    /// oversized line is consumed through its configured line ending before
+    /// the error is returned.
     pub fn read_line_limited(
         &mut self,
         output: &mut String,
@@ -490,7 +501,7 @@ where
                 append_limited_char(output, initial_len, max_append_len, ch)
             {
                 self.pending_char = Some(ch);
-                return Err(error);
+                return self.discard_line_after_limit().and(Err(error));
             }
             read = true;
             if ch == '\n' && self.line_endings.contains(crate::LineEnding::Lf) {
@@ -507,7 +518,9 @@ where
                                 '\n',
                             ) {
                                 self.pending_char = Some('\n');
-                                return Err(error);
+                                return self
+                                    .discard_line_after_limit()
+                                    .and(Err(error));
                             }
                             return Ok(true);
                         }

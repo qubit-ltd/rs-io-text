@@ -42,9 +42,36 @@ use qubit_io::{
 use qubit_io_text::{
     AsyncCharsetTextReader,
     AsyncCharsetTextWriter,
+    AsyncTextLineRead,
+    AsyncTextRead,
+    AsyncTextWrite,
     LineEnding,
     LineEndingSet,
 };
+
+fn assert_async_reader<T>()
+where
+    T: AsyncTextRead + AsyncTextLineRead,
+{
+}
+
+fn assert_async_writer<T>()
+where
+    T: AsyncTextWrite,
+{
+}
+
+#[test]
+fn async_text_traits_cover_charset_and_utf8_adapters() {
+    assert_async_reader::<AsyncCharsetTextReader<ChunkedAsyncInput, Utf8Codec>>(
+    );
+    assert_async_reader::<qubit_io_text::AsyncUtf8TextReader<ChunkedAsyncInput>>(
+    );
+    assert_async_writer::<AsyncCharsetTextWriter<ChunkedAsyncOutput, Utf8Codec>>(
+    );
+    assert_async_writer::<qubit_io_text::AsyncUtf8TextWriter<ChunkedAsyncOutput>>(
+    );
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ScriptedCodecMode {
@@ -666,7 +693,7 @@ fn async_charset_reader_covers_limited_line_ending_branches() -> io::Result<()>
     let error = complete(reader.read_line_limited_async(&mut String::new(), 0))
         .expect_err("CR should exceed a zero-byte limit");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
-    assert_eq!(Some('\r'), complete(reader.read_char_async())?);
+    assert_eq!(None, complete(reader.read_char_async())?);
 
     let mut reader = AsyncCharsetTextReader::new(
         ChunkedAsyncInput::new(b"\r\n".to_vec(), 1, false),
@@ -676,7 +703,7 @@ fn async_charset_reader_covers_limited_line_ending_branches() -> io::Result<()>
     let error = complete(reader.read_line_limited_async(&mut String::new(), 1))
         .expect_err("the LF in CRLF should exceed the limit");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
-    assert_eq!(Some('\n'), complete(reader.read_char_async())?);
+    assert_eq!(None, complete(reader.read_char_async())?);
 
     for (input, endings, expected) in [
         (b"a\rb".as_slice(), LineEndingSet::ALL, "a\r"),
@@ -804,8 +831,8 @@ fn async_charset_reader_read_line_limited_restores_output_on_overflow()
     assert_eq!("prefix-", output);
 
     output.clear();
-    assert!(complete(reader.read_line_limited_async(&mut output, 1))?);
-    assert_eq!("\n", output);
+    assert!(complete(reader.read_line_limited_async(&mut output, 16))?);
+    assert_eq!("next", output);
     Ok(())
 }
 

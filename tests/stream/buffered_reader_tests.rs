@@ -312,7 +312,7 @@ fn test_buffered_reader_covers_limited_line_ending_branches()
         .read_line_limited(&mut String::new(), 1)
         .expect_err("the LF in CRLF should exceed the limit");
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!(Some('\n'), reader.read_char()?);
+    assert_eq!(None, reader.read_char()?);
 
     for (input, endings, expected) in [
         (b"a\rb".as_slice(), LineEndingSet::ALL, "a\r"),
@@ -1014,8 +1014,8 @@ fn test_buffered_reader_read_line_limited_restores_output_on_overflow()
     assert_eq!("prefix-", output);
 
     output.clear();
-    assert!(reader.read_line_limited(&mut output, 1)?);
-    assert_eq!("\n", output);
+    assert!(reader.read_line_limited(&mut output, 16)?);
+    assert_eq!("next", output);
     Ok(())
 }
 

@@ -179,8 +179,8 @@ where
     /// Appends one decoded UTF-8 line while enforcing a byte limit.
     ///
     /// The limit applies only to text appended by this call. On overflow the
-    /// destination is restored, while already consumed decoded characters
-    /// remain consumed.
+    /// destination is restored and the remainder of the oversized line is
+    /// consumed through its configured line ending.
     ///
     /// # Parameters
     ///

@@ -170,8 +170,8 @@ fn test_read_line_handles_chunked_crlf_and_cr_paths() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_line_preserves_cr_when_crlf_lookahead_fails()
--> std::io::Result<()> {
+fn test_read_line_preserves_cr_when_crlf_lookahead_fails() -> std::io::Result<()>
+{
     let mut reader = InputTextReader::new(CrThenErrorThenChar { state: 0 });
     let mut line = String::new();
 
