@@ -383,7 +383,8 @@ where
                 }
             };
             output_cursor += progress.written();
-            if let TranscodeStatus::NeedOutput { required } = progress.status() {
+            if let TranscodeStatus::NeedOutput { required } = progress.status()
+            {
                 let available = output.len().saturating_sub(output_cursor);
                 return Err(CharsetEncodeError::new(
                     charset,
