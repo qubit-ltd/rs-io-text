@@ -19,7 +19,8 @@ making byte encodings explicit at the stream boundary. It provides:
   `qubit_io::Output<Item = u8>`;
 - runtime-neutral `AsyncCharsetTextReader` and `AsyncCharsetTextWriter` over
   `AsyncInput<Item = u8>` and `AsyncOutput<Item = u8>`;
-- charset policies from `qubit-codec-text` and `LineEnding` configuration.
+- charset policies from `qubit-codec-text`, `LineEnding` writer configuration,
+  and `LineEndingSet` reader configuration (LF, CRLF, and CR by default).
 
 Charset algorithms remain in `qubit-codec-text`; this crate drives them over
 streams without selecting an async runtime.
@@ -107,7 +108,7 @@ owned output without performing further I/O.
 | UTF-8 byte streams | `Utf8TextReader`, `Utf8TextWriter` over `Input`/`Output` |
 | Synchronous charsets | `CharsetTextReader`, `CharsetTextWriter`, `CharsetReadExt`, `CharsetWriteExt` |
 | Asynchronous charsets | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` |
-| Policy | `CharsetDecodePolicy`, `CharsetEncodePolicy`, `LineEnding` |
+| Policy | `CharsetDecodePolicy`, `CharsetEncodePolicy`, `LineEnding`, `LineEndingSet` |
 
 Async charset readers retain an incomplete encoded character across suspension
 and cancellation. `write_chars_async` and `write_str_async` commit one

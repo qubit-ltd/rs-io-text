@@ -17,6 +17,7 @@ use qubit_codec_text::{
 use qubit_io::AsyncInput;
 
 use crate::AsyncCharsetTextReader;
+use crate::LineEndingSet;
 
 /// Asynchronous UTF-8 reader over a Qubit byte input.
 ///
@@ -90,6 +91,25 @@ where
         Self(AsyncCharsetTextReader::new_with_buffer_capacity(
             input, Utf8Codec, policy, capacity,
         ))
+    }
+
+    /// Sets the line endings recognized by asynchronous line reads.
+    ///
+    /// # Parameters
+    /// - `line_endings`: Accepted line-ending sequences.
+    ///
+    /// # Returns
+    /// This reader with the requested line-ending configuration.
+    #[must_use]
+    pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
+        self.0 = self.0.with_line_endings(line_endings);
+        self
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.0.line_endings()
     }
 
     /// Consumes this wrapper and returns the generic charset reader.

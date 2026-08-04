@@ -19,6 +19,7 @@ use qubit_io::{
 
 use crate::{
     CharsetTextReader,
+    LineEndingSet,
     TextLineRead,
     TextRead,
 };
@@ -97,6 +98,25 @@ where
                 buffer_capacity,
             ),
         }
+    }
+
+    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    ///
+    /// # Parameters
+    /// - `line_endings`: Accepted line-ending sequences.
+    ///
+    /// # Returns
+    /// This reader with the requested line-ending configuration.
+    #[must_use]
+    pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
+        self.reader = self.reader.with_line_endings(line_endings);
+        self
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.reader.line_endings()
     }
 
     /// Returns a shared reference to the wrapped byte input.

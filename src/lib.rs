@@ -20,6 +20,7 @@ mod adapters;
 mod ext;
 mod io_error;
 mod line_ending;
+mod line_ending_set;
 pub mod prelude;
 mod stream;
 mod traits;
@@ -49,6 +50,7 @@ pub use ext::{
     CharsetWriteExt,
 };
 pub use line_ending::LineEnding;
+pub use line_ending_set::LineEndingSet;
 pub use stream::{
     BufferedReader,
     BufferedWriter,

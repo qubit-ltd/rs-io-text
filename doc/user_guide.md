@@ -99,10 +99,11 @@ unencodable output. Each policy can report, ignore, or replace with its own
 configured replacement value, and is chosen during adapter construction.
 
 `LineEnding::Lf`, `LineEnding::CrLf`, and `LineEnding::Cr` control what
-`write_line` appends. If the stream is known to be UTF-8, `Utf8TextReader` and
-`Utf8TextWriter` provide strict convenience wrappers over the same byte-stream
-boundary. `TextLineRead::read_line` recognizes only `\n` as a terminator and
-retains a preceding `\r`; it does not split standalone CR-terminated lines.
+`write_line` appends. Built-in text readers accept LF, CRLF, and CR by default
+and preserve the complete terminator. Use `LineEndingSet` with a reader's
+`with_line_endings` method to select a custom set. If the stream is known to be
+UTF-8, `Utf8TextReader` and `Utf8TextWriter` provide strict convenience
+wrappers over the same byte-stream boundary.
 
 ## Async Workflow
 
@@ -161,7 +162,7 @@ single-step APIs for cancellation-sensitive protocols.
 
 | Symptom | Check first |
 | --- | --- |
-| A line ending is unexpected | Configure `LineEnding` on the writer before calling `write_line`. |
+| A line ending is unexpected | Configure `LineEndingSet` on the reader, or `LineEnding` on the writer, before calling the line operation. |
 | Decoding rejects data | Confirm the codec and use `Strict` or `Replace` intentionally. |
 | Output seems incomplete | Finish the charset writer; flushing alone does not finish the codec. |
 | An async retry duplicates text | Treat the previous write as partially applied and use framing or idempotency. |
