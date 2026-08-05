@@ -38,7 +38,7 @@ reads the same bytes back as text.
 ```toml
 [dependencies]
 qubit-io-text = "0.3"
-qubit-codec-text = "0.3"
+qubit-codec-text = "0.4"
 qubit-io = "0.14"
 ```
 
