@@ -341,6 +341,33 @@ fn test_buffered_reader_covers_limited_line_ending_branches()
 
 #[cfg(coverage)]
 #[test]
+fn test_buffered_reader_covers_discard_line_branches() -> std::io::Result<()> {
+    for (input, endings) in [
+        (b"aX\n".as_slice(), LineEndingSet::ALL),
+        (b"aX\n".as_slice(), LineEndingSet::CRLF),
+        (b"aX\r\n".as_slice(), LineEndingSet::CRLF),
+        (b"aX\rY\n".as_slice(), LineEndingSet::CRLF),
+        (b"aX\rY".as_slice(), LineEndingSet::ALL),
+        (b"aX\r".as_slice(), LineEndingSet::CRLF),
+        (b"aX\r".as_slice(), LineEndingSet::CR),
+    ] {
+        let decoder = CharsetDecoder::with_policy(
+            Utf8Codec,
+            CharsetDecodePolicy::report(),
+        );
+        let mut reader =
+            BufferedReader::new(Cursor::new(input.to_vec()), decoder)
+                .with_line_endings(endings);
+        let error = reader
+            .read_line_limited(&mut String::new(), 1)
+            .expect_err("the second character should exceed the limit");
+        assert_eq!(ErrorKind::InvalidData, error.kind());
+    }
+    Ok(())
+}
+
+#[cfg(coverage)]
+#[test]
 fn test_buffered_reader_covers_decoder_status_recovery_branches()
 -> std::io::Result<()> {
     let decoder =
