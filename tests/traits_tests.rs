@@ -90,6 +90,57 @@ impl AsyncTextWrite for AsyncWriter {
     }
 }
 
+struct PartialAsyncWriter {
+    chars: String,
+    text: String,
+}
+
+impl AsyncTextWrite for PartialAsyncWriter {
+    type Error = WriteError;
+
+    async fn write_char_async(&mut self, ch: char) -> Result<(), Self::Error> {
+        self.chars.push(ch);
+        Ok(())
+    }
+
+    async fn write_chars_async(
+        &mut self,
+        chars: &[char],
+    ) -> Result<usize, Self::Error> {
+        let Some(ch) = chars.first() else {
+            return Ok(0);
+        };
+        self.chars.push(*ch);
+        Ok(1)
+    }
+
+    async fn write_str_async(
+        &mut self,
+        text: &str,
+    ) -> Result<usize, Self::Error> {
+        let Some(ch) = text.chars().next() else {
+            return Ok(0);
+        };
+        self.text.push(ch);
+        Ok(ch.len_utf8())
+    }
+
+    async fn write_line_fully_async(
+        &mut self,
+        _line: &str,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn flush_async(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn finish_async(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
 #[test]
 fn test_async_text_read_defaults_cover_bulk_and_string_reads() {
     let mut reader = AsyncReader("ab".chars().collect::<Vec<_>>().into_iter());
@@ -123,6 +174,22 @@ fn test_async_text_read_defaults_cover_limits_and_errors() {
 #[test]
 fn test_async_text_write_default_line_ending() {
     assert_eq!(LineEnding::Lf, AsyncWriter.line_ending());
+}
+
+#[test]
+fn test_async_text_write_defaults_complete_partial_writes() {
+    let mut writer = PartialAsyncWriter {
+        chars: String::new(),
+        text: String::new(),
+    };
+
+    assert_eq!(
+        Ok(()),
+        complete(writer.write_chars_fully_async(&['A', '中', '🙂'])),
+    );
+    assert_eq!(Ok(()), complete(writer.write_str_fully_async("A中🙂")));
+    assert_eq!("A中🙂", writer.chars);
+    assert_eq!("A中🙂", writer.text);
 }
 
 #[derive(Debug, Eq, PartialEq)]
