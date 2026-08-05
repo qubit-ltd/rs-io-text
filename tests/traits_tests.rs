@@ -7,11 +7,94 @@
 // =============================================================================
 
 use qubit_io_text::{
+    AsyncTextRead,
+    AsyncTextWrite,
     LineEnding,
     TextLineRead,
     TextRead,
     TextWrite,
 };
+
+use std::future::Future;
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
+
+fn complete<F: Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut context = Context::from_waker(Waker::noop());
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(output) => output,
+        Poll::Pending => panic!("test future must not suspend"),
+    }
+}
+
+struct AsyncReader(std::vec::IntoIter<char>);
+
+impl AsyncTextRead for AsyncReader {
+    type Error = ReadError;
+
+    async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
+        Ok(self.0.next())
+    }
+}
+
+struct AsyncWriter;
+
+impl AsyncTextWrite for AsyncWriter {
+    type Error = WriteError;
+
+    async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn write_chars_async(
+        &mut self,
+        chars: &[char],
+    ) -> Result<usize, Self::Error> {
+        Ok(chars.len())
+    }
+
+    async fn write_str_async(
+        &mut self,
+        text: &str,
+    ) -> Result<usize, Self::Error> {
+        Ok(text.len())
+    }
+
+    async fn write_line_fully_async(
+        &mut self,
+        _line: &str,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn flush_async(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn finish_async(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_async_text_read_defaults_cover_bulk_and_string_reads() {
+    let mut reader = AsyncReader("ab".chars().collect::<Vec<_>>().into_iter());
+    let mut chars = vec![':'];
+    assert_eq!(Ok(1), complete(reader.read_chars_async(&mut chars, 1)));
+    assert_eq!(&[':', 'a'], chars.as_slice());
+    let mut text = String::from("prefix:");
+    assert_eq!(Ok(1), complete(reader.read_to_string_async(&mut text)));
+    assert_eq!("prefix:b", text);
+}
+
+#[test]
+fn test_async_text_write_default_line_ending() {
+    assert_eq!(LineEnding::Lf, AsyncWriter.line_ending());
+}
 
 #[derive(Debug, Eq, PartialEq)]
 struct ReadError;

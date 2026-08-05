@@ -104,3 +104,23 @@ fn test_async_utf8_text_reader_configuration_and_deref_accessors() {
     let reader = reader.into_inner();
     assert_eq!(1, reader.input().position);
 }
+
+#[test]
+fn test_async_utf8_text_reader_forwards_all_async_read_methods()
+-> io::Result<()> {
+    let mut reader = AsyncUtf8TextReader::with_policy(
+        ReadyInput::new("a\nb"),
+        CharsetDecodePolicy::report(),
+    );
+    assert_eq!(Some('a'), complete(reader.read_char_async())?);
+
+    let mut chars = Vec::new();
+    assert_eq!(1, complete(reader.read_chars_async(&mut chars, 1))?);
+    assert_eq!(vec!['\n'], chars);
+
+    let mut line = String::new();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("b", line);
+    assert!(!complete(reader.read_line_async(&mut line))?);
+    Ok(())
+}

@@ -19,6 +19,7 @@ use std::{
 
 use qubit_io::AsyncOutput;
 use qubit_io_text::{
+    AsyncTextWrite,
     AsyncUtf8TextWriter,
     LineEnding,
 };
@@ -93,4 +94,20 @@ fn test_async_utf8_text_writer_configures_line_ending() {
     let writer = AsyncUtf8TextWriter::new(ReadyOutput::default())
         .with_line_ending(LineEnding::CrLf);
     assert_eq!(LineEnding::CrLf, writer.configured_line_ending());
+}
+
+#[test]
+fn test_async_utf8_text_writer_forwards_all_async_write_methods()
+-> io::Result<()> {
+    let mut writer = AsyncUtf8TextWriter::new(ReadyOutput::default())
+        .with_line_ending(LineEnding::CrLf);
+    assert_eq!(LineEnding::CrLf, writer.line_ending());
+    complete(writer.write_char_async('a'))?;
+    assert_eq!(2, complete(writer.write_chars_async(&['b', 'c']))?);
+    assert_eq!(1, complete(writer.write_str_async("d"))?);
+    complete(writer.write_line_fully_async("line"))?;
+    complete(writer.flush_async())?;
+    complete(writer.finish_async())?;
+    assert_eq!(b"abcdline\r\n", writer.output().0.as_slice());
+    Ok(())
 }
