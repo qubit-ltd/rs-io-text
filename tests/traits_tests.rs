@@ -141,6 +141,84 @@ impl AsyncTextWrite for PartialAsyncWriter {
     }
 }
 
+struct FailingAsyncWriter;
+
+impl AsyncTextWrite for FailingAsyncWriter {
+    type Error = WriteError;
+
+    async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
+        Err(WriteError)
+    }
+
+    async fn write_chars_async(
+        &mut self,
+        _chars: &[char],
+    ) -> Result<usize, Self::Error> {
+        Err(WriteError)
+    }
+
+    async fn write_str_async(
+        &mut self,
+        _text: &str,
+    ) -> Result<usize, Self::Error> {
+        Err(WriteError)
+    }
+
+    async fn write_line_fully_async(
+        &mut self,
+        _line: &str,
+    ) -> Result<(), Self::Error> {
+        Err(WriteError)
+    }
+
+    async fn flush_async(&mut self) -> Result<(), Self::Error> {
+        Err(WriteError)
+    }
+
+    async fn finish_async(&mut self) -> Result<(), Self::Error> {
+        Err(WriteError)
+    }
+}
+
+struct ZeroProgressAsyncWriter;
+
+impl AsyncTextWrite for ZeroProgressAsyncWriter {
+    type Error = WriteError;
+
+    async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn write_chars_async(
+        &mut self,
+        _chars: &[char],
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    async fn write_str_async(
+        &mut self,
+        _text: &str,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    async fn write_line_fully_async(
+        &mut self,
+        _line: &str,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn flush_async(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn finish_async(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
 #[test]
 fn test_async_text_read_defaults_cover_bulk_and_string_reads() {
     let mut reader = AsyncReader("ab".chars().collect::<Vec<_>>().into_iter());
@@ -190,6 +268,35 @@ fn test_async_text_write_defaults_complete_partial_writes() {
     assert_eq!(Ok(()), complete(writer.write_str_fully_async("A中🙂")));
     assert_eq!("A中🙂", writer.chars);
     assert_eq!("A中🙂", writer.text);
+}
+
+#[test]
+fn test_async_text_write_defaults_propagate_errors() {
+    let mut writer = FailingAsyncWriter;
+
+    assert_eq!(
+        Err(WriteError),
+        complete(writer.write_chars_fully_async(&['A'])),
+    );
+    assert_eq!(Err(WriteError), complete(writer.write_str_fully_async("A")),);
+}
+
+#[test]
+#[should_panic(
+    expected = "AsyncTextWrite::write_chars_async returned zero for nonempty input"
+)]
+fn test_async_text_write_default_character_write_rejects_zero_progress() {
+    let mut writer = ZeroProgressAsyncWriter;
+    let _ = complete(writer.write_chars_fully_async(&['A']));
+}
+
+#[test]
+#[should_panic(
+    expected = "AsyncTextWrite::write_str_async returned zero for nonempty input"
+)]
+fn test_async_text_write_default_string_write_rejects_zero_progress() {
+    let mut writer = ZeroProgressAsyncWriter;
+    let _ = complete(writer.write_str_fully_async("A"));
 }
 
 #[derive(Debug, Eq, PartialEq)]
