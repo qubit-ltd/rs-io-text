@@ -15,6 +15,7 @@
 //! byte-oriented [`qubit_codec_text`] charsets. [`AsyncCharsetTextReader`] and
 //! [`AsyncCharsetTextWriter`] drive the same charset state machines through
 //! runtime-neutral [`qubit_io::AsyncInput`] and [`qubit_io::AsyncOutput`].
+#![deny(missing_docs)]
 
 mod adapters;
 mod ext;
