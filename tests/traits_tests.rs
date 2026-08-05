@@ -41,6 +41,16 @@ impl AsyncTextRead for AsyncReader {
     }
 }
 
+struct FailingAsyncReader;
+
+impl AsyncTextRead for FailingAsyncReader {
+    type Error = ReadError;
+
+    async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
+        Err(ReadError)
+    }
+}
+
 struct AsyncWriter;
 
 impl AsyncTextWrite for AsyncWriter {
@@ -89,6 +99,25 @@ fn test_async_text_read_defaults_cover_bulk_and_string_reads() {
     let mut text = String::from("prefix:");
     assert_eq!(Ok(1), complete(reader.read_to_string_async(&mut text)));
     assert_eq!("prefix:b", text);
+}
+
+#[test]
+fn test_async_text_read_defaults_cover_limits_and_errors() {
+    let mut reader = AsyncReader("a".chars().collect::<Vec<_>>().into_iter());
+    let mut chars = Vec::new();
+    assert_eq!(Ok(0), complete(reader.read_chars_async(&mut chars, 0)));
+    assert_eq!(Ok(1), complete(reader.read_chars_async(&mut chars, 2)));
+    assert_eq!(&['a'], chars.as_slice());
+
+    let mut reader = FailingAsyncReader;
+    assert_eq!(
+        Err(ReadError),
+        complete(reader.read_chars_async(&mut Vec::new(), 1)),
+    );
+    assert_eq!(
+        Err(ReadError),
+        complete(reader.read_to_string_async(&mut String::new())),
+    );
 }
 
 #[test]
