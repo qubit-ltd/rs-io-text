@@ -8,7 +8,7 @@
 use std::io::Result;
 
 use qubit_io::Input;
-use qubit_utils::UncheckedSlice;
+use qubit_utils::{SliceRange, UncheckedSlice};
 
 /// Character input over an owned [`String`].
 ///
@@ -74,7 +74,7 @@ impl Input for StringCharInput {
         count: usize,
     ) -> Result<usize> {
         debug_assert!(
-            UncheckedSlice::range_fits(output.len(), index, count),
+            SliceRange::range_fits(output.len(), index, count),
             "unchecked read range exceeds output buffer"
         );
         let mut read = 0;
