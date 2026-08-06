@@ -39,7 +39,7 @@ reads the same bytes back as text.
 [dependencies]
 qubit-io-text = "0.3"
 qubit-codec-text = "0.4"
-qubit-io = "0.14"
+qubit-io = "0.15"
 ```
 
 This guide uses `Utf8Codec` and `AsyncOutput`, which are owned by

@@ -7,10 +7,8 @@
 // =============================================================================
 use std::io::Result;
 
-use qubit_io::{
-    Input,
-    UncheckedSlice,
-};
+use qubit_io::Input;
+use qubit_utils::UncheckedSlice;
 
 /// Character input over an owned [`String`].
 ///

@@ -64,7 +64,7 @@ Charset 和异步示例使用这些 crate 所拥有的类型，因此消费方�
 [dependencies]
 qubit-io-text = "0.3"
 qubit-codec-text = "0.4"
-qubit-io = "0.14"
+qubit-io = "0.15"
 ```
 
 ## 运行时无关的异步 API

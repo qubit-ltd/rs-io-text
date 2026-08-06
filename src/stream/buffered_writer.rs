@@ -13,12 +13,12 @@ use std::{
 use qubit_codec::{
     TranscodeEncodeOutput,
     TranscodeEncoder,
-    nz,
 };
 use qubit_io::{
     Buffer,
     Output,
 };
+use qubit_utils::nonzero;
 
 use crate::{
     LineEnding,
@@ -103,7 +103,7 @@ where
     /// output needed for one input character when that can be computed.
     #[must_use]
     pub fn with_capacity(inner: W, encoder: E, capacity: usize) -> Self {
-        let one = nz(1).get();
+        let one = nonzero(1).get();
         let min_output_capacity = encoder
             .max_transcode_output_len(one)
             .unwrap_or(one)

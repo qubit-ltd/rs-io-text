@@ -8,7 +8,7 @@
 use std::convert::Infallible;
 use std::io;
 
-use qubit_io::try_reserve_string;
+use qubit_utils::try_reserve_string;
 
 use crate::{
     LineEnding,

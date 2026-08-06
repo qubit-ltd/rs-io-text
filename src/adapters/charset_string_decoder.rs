@@ -26,7 +26,7 @@ use qubit_codec_text::{
     CharsetDecoder,
     MalformedAction,
 };
-use qubit_io::{
+use qubit_utils::{
     try_reserve_string,
     try_reserve_vec,
 };

@@ -7,8 +7,8 @@
 // =============================================================================
 use std::io::Result;
 
-use qubit_io::{
-    Output,
+use qubit_io::Output;
+use qubit_utils::{
     UncheckedSlice,
     try_reserve_string,
 };

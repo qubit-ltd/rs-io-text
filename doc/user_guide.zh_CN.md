@@ -37,7 +37,7 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 [dependencies]
 qubit-io-text = "0.3"
 qubit-codec-text = "0.4"
-qubit-io = "0.14"
+qubit-io = "0.15"
 ```
 
 本指南使用由 `qubit-codec-text` 和 `qubit-io` 提供的 `Utf8Codec` 与

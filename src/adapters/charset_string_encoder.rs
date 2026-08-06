@@ -23,7 +23,7 @@ use qubit_codec_text::{
     CharsetEncoder,
     UnmappableAction,
 };
-use qubit_io::try_reserve_vec;
+use qubit_utils::try_reserve_vec;
 
 const CHAR_CHUNK_CAPACITY: usize = 256;
 

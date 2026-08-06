@@ -20,12 +20,14 @@ use qubit_codec::{
     TranscodeDecodeInput,
     TranscodeDecoder,
     TranscodeStatus,
-    nz,
 };
 use qubit_io::{
     Buffer,
     Input,
+};
+use qubit_utils::{
     UncheckedSlice,
+    nonzero,
 };
 
 use crate::{
@@ -285,7 +287,7 @@ where
             .decoder
             .max_finish_output_len()
             .map_err(capacity_error_to_io)?
-            .max(nz(1).get());
+            .max(nonzero(1).get());
         if self.chars.len() < capacity {
             self.chars.resize(capacity, '\0');
         }
