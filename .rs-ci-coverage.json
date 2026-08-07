@@ -2,10 +2,7 @@
   "threshold_exempt_files": {
     "qubit-io-text": [
       "src/adapters/async_charset_text_reader.rs",
-      "src/adapters/async_charset_text_writer.rs",
-      "src/adapters/async_utf8_text_reader.rs",
-      "src/traits/async_text_read.rs",
-      "src/traits/async_text_write.rs"
+      "src/adapters/async_charset_text_writer.rs"
     ]
   }
 }
