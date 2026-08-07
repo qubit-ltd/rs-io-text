@@ -31,7 +31,7 @@ doctest = true
 
 [dependencies]
 qubit-utils = "0.2"
-qubit-io = { path = "../rs-io", version = "0.15" }
+qubit-io = "0.15"
 qubit-codec = { path = "../rs-codec", version = "0.12", features = ["io"] }
 qubit-codec-text = { path = "../rs-codec-text", version = "0.4" }
 
