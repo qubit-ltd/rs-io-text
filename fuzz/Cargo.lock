@@ -81,6 +81,8 @@ dependencies = [
 [[package]]
 name = "qubit-codec"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faeeba0dcd8a23a6fdace7e3ec0eb161feb11940e0217f3495223d5dc837e868"
 dependencies = [
  "qubit-io",
  "qubit-utils",
@@ -89,7 +91,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec-text"
-version = "0.4.0"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd34bd84b1455cf684f174f5e4fbb4b2bd6b4277e84a0bf746ed9a6d19e1e198"
 dependencies = [
  "qubit-codec",
  "qubit-utils",
@@ -99,6 +103,8 @@ dependencies = [
 [[package]]
 name = "qubit-io"
 version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0cfb886daab1580ac1c270e77515114de04c0a5ec0211512ca91e8930cbd3c7"
 dependencies = [
  "qubit-utils",
 ]
