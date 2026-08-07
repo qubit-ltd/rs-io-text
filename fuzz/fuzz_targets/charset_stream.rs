@@ -11,9 +11,12 @@
 use std::io::Cursor;
 
 use libfuzzer_sys::fuzz_target;
+use qubit_codec::ByteOrder;
 use qubit_codec_text::{
     CharsetDecodePolicy,
     CharsetEncodePolicy,
+    Utf16ByteCodec,
+    Utf32ByteCodec,
     Utf8Codec,
 };
 use qubit_io_text::{
@@ -31,6 +34,8 @@ fuzz_target!(|data: &[u8]| {
     fuzz_strict_utf8(data);
     fuzz_replacing_utf8(data);
     fuzz_utf8_round_trip(data);
+    fuzz_bounded_utf8_reads(data);
+    fuzz_multibyte_round_trips(data);
 });
 
 /// Verifies strict decoding agrees with the standard UTF-8 validator for all
@@ -107,6 +112,84 @@ fn fuzz_utf8_round_trip(data: &[u8]) {
         reader
             .read_to_string(&mut decoded)
             .expect("encoded valid UTF-8 must decode in strict mode");
+        assert_eq!(text, decoded);
+    }
+}
+
+/// Exercises append limits and line-oriented state transitions on arbitrary
+/// input without allowing the target to allocate unbounded output.
+fn fuzz_bounded_utf8_reads(data: &[u8]) {
+    for capacity in 1..=4 {
+        let mut reader = CharsetTextReader::new_with_buffer_capacity(
+            Cursor::new(data.to_vec()),
+            Utf8Codec,
+            CharsetDecodePolicy::replace(
+                CharsetDecodePolicy::DEFAULT_REPLACEMENT,
+            ),
+            capacity,
+        );
+        let mut output = String::new();
+        let result = reader.read_to_string_limited(&mut output, 128);
+        if result.is_ok() {
+            assert!(output.len() <= 128);
+        }
+    }
+}
+
+/// Verifies that the fixed-width codecs preserve valid Unicode text through
+/// small streaming buffers.
+fn fuzz_multibyte_round_trips(data: &[u8]) {
+    let Ok(text) = std::str::from_utf8(data) else {
+        return;
+    };
+
+    for capacity in 1..=4 {
+        for codec in [
+            Utf16ByteCodec::new(ByteOrder::LittleEndian),
+            Utf16ByteCodec::new(ByteOrder::BigEndian),
+        ] {
+            let mut writer = CharsetTextWriter::new_with_buffer_capacity(
+                Cursor::new(Vec::new()),
+                codec,
+                CharsetEncodePolicy::report(),
+                capacity,
+            );
+            writer.write_str(text).expect("UTF-16 encoding must succeed");
+            writer.finish().expect("UTF-16 writer must finish");
+            let (output, pending) = writer.into_parts();
+            assert!(pending.readable().is_empty());
+
+            let mut reader = CharsetTextReader::new_with_buffer_capacity(
+                Cursor::new(output.into_inner()),
+                codec,
+                CharsetDecodePolicy::report(),
+                capacity,
+            );
+            let mut decoded = String::new();
+            reader.read_to_string(&mut decoded).expect("UTF-16 decode");
+            assert_eq!(text, decoded);
+        }
+
+        let codec = Utf32ByteCodec::new(ByteOrder::LittleEndian);
+        let mut writer = CharsetTextWriter::new_with_buffer_capacity(
+            Cursor::new(Vec::new()),
+            codec,
+            CharsetEncodePolicy::report(),
+            capacity,
+        );
+        writer.write_str(text).expect("UTF-32 encoding must succeed");
+        writer.finish().expect("UTF-32 writer must finish");
+        let (output, pending) = writer.into_parts();
+        assert!(pending.readable().is_empty());
+
+        let mut reader = CharsetTextReader::new_with_buffer_capacity(
+            Cursor::new(output.into_inner()),
+            codec,
+            CharsetDecodePolicy::report(),
+            capacity,
+        );
+        let mut decoded = String::new();
+        reader.read_to_string(&mut decoded).expect("UTF-32 decode");
         assert_eq!(text, decoded);
     }
 }
