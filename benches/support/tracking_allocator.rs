@@ -7,16 +7,12 @@
 // =============================================================================
 //! Allocation tracking used by the owned string-adapter benchmark.
 
-use std::alloc::{
-    GlobalAlloc,
-    Layout,
-    System,
-};
-use std::sync::atomic::{
-    AtomicBool,
-    AtomicUsize,
-    Ordering,
-};
+use std::alloc::GlobalAlloc;
+use std::alloc::Layout;
+use std::alloc::System;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static CURRENT: AtomicUsize = AtomicUsize::new(0);

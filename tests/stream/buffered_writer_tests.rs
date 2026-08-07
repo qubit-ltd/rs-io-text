@@ -6,31 +6,24 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    Cursor,
-    ErrorKind,
-};
+use std::io::Cursor;
+use std::io::ErrorKind;
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeDomainError,
-    TranscodeEncodeError,
-    TranscodeEncoder,
-    TranscodeProgress,
-    Transcoder,
-};
-use qubit_codec_text::{
-    AsciiCodec,
-    CharsetEncodePolicy,
-    CharsetEncoder,
-    Utf8Codec,
-};
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeDomainError;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeEncoder;
+use qubit_codec::TranscodeFailure;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
+use qubit_codec_text::AsciiCodec;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::CharsetEncoder;
+use qubit_codec_text::Utf8Codec;
 use qubit_io::Output;
-use qubit_io_text::{
-    BufferedWriter,
-    LineEnding,
-    TextWrite,
-};
+use qubit_io_text::BufferedWriter;
+use qubit_io_text::LineEnding;
+use qubit_io_text::TextWrite;
 
 #[derive(Debug, Default)]
 struct PartialEncoder;
@@ -52,10 +45,7 @@ impl Transcoder for PartialEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -75,10 +65,7 @@ impl Transcoder for PartialEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -111,10 +98,7 @@ impl Transcoder for FinishByteEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -125,10 +109,7 @@ impl Transcoder for FinishByteEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         let mut read = 0;
         let mut written = 0;
         while input_index + read < input.len()
@@ -146,10 +127,7 @@ impl Transcoder for FinishByteEncoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         output[output_index] = b'!';
         Ok(1)
     }

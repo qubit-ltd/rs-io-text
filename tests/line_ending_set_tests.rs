@@ -6,16 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_io_text::{
-    LineEnding,
-    LineEndingSet,
-};
-
+use qubit_io_text::LineEnding;
+use qubit_io_text::LineEndingSet;
 #[cfg(coverage)]
-use qubit_io_text::{
-    StrTextReader,
-    TextLineRead,
-};
+use qubit_io_text::StrTextReader;
+#[cfg(coverage)]
+use qubit_io_text::TextLineRead;
 
 #[test]
 fn test_line_ending_set_defaults_to_all_common_endings() {

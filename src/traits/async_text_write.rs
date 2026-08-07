@@ -60,7 +60,10 @@ pub trait AsyncTextWrite {
     ///
     /// Returns an implementation-specific encoding or sink error. A source
     /// prefix can already be committed when an error is returned.
-    async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error>;
+    async fn write_chars_async(
+        &mut self,
+        chars: &[char],
+    ) -> Result<usize, Self::Error>;
 
     /// Writes one step of a UTF-8 string and returns the consumed byte count.
     ///
@@ -81,7 +84,10 @@ pub trait AsyncTextWrite {
     ///
     /// Returns an implementation-specific encoding or sink error. A source
     /// prefix can already be committed when an error is returned.
-    async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error>;
+    async fn write_str_async(
+        &mut self,
+        text: &str,
+    ) -> Result<usize, Self::Error>;
 
     /// Writes an entire character slice.
     ///
@@ -98,7 +104,10 @@ pub trait AsyncTextWrite {
     ///
     /// Panics when [`Self::write_chars_async`] violates its nonzero-progress
     /// or bounded-progress contract for a nonempty input.
-    async fn write_chars_fully_async(&mut self, chars: &[char]) -> Result<(), Self::Error> {
+    async fn write_chars_fully_async(
+        &mut self,
+        chars: &[char],
+    ) -> Result<(), Self::Error> {
         let mut index = 0;
         while index < chars.len() {
             let written = self.write_chars_async(&chars[index..]).await?;
@@ -132,7 +141,10 @@ pub trait AsyncTextWrite {
     /// Panics when [`Self::write_str_async`] violates its nonzero-progress
     ///, bounded-progress, or UTF-8 character-boundary contract for a nonempty
     /// input.
-    async fn write_str_fully_async(&mut self, text: &str) -> Result<(), Self::Error> {
+    async fn write_str_fully_async(
+        &mut self,
+        text: &str,
+    ) -> Result<(), Self::Error> {
         let mut offset = 0;
         while offset < text.len() {
             let written = self.write_str_async(&text[offset..]).await?;
@@ -164,7 +176,10 @@ pub trait AsyncTextWrite {
     ///
     /// Returns an implementation-specific encoding or sink error. The line
     /// content can already be committed when writing its terminator fails.
-    async fn write_line_fully_async(&mut self, line: &str) -> Result<(), Self::Error>;
+    async fn write_line_fully_async(
+        &mut self,
+        line: &str,
+    ) -> Result<(), Self::Error>;
 
     /// Flushes pending encoded output.
     ///

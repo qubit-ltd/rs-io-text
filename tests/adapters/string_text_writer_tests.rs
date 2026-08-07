@@ -8,11 +8,9 @@
 
 use std::convert::Infallible;
 
-use qubit_io_text::{
-    LineEnding,
-    StringTextWriter,
-    TextWrite,
-};
+use qubit_io_text::LineEnding;
+use qubit_io_text::StringTextWriter;
+use qubit_io_text::TextWrite;
 
 #[test]
 fn test_string_implements_text_write() -> Result<(), Infallible> {

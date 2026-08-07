@@ -5,19 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::ops::{
-    Deref,
-    DerefMut,
-};
+use std::ops::Deref;
+use std::ops::DerefMut;
 
+use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::AsyncOutput;
 
-use crate::{
-    AsyncCharsetTextWriter,
-    AsyncTextWrite,
-    LineEnding,
-};
+use crate::AsyncCharsetTextWriter;
+use crate::AsyncTextWrite;
+use crate::LineEnding;
 
 /// Asynchronous UTF-8 writer over a Qubit byte output.
 ///
@@ -53,7 +50,7 @@ where
         Self(AsyncCharsetTextWriter::new(
             output,
             Utf8Codec,
-            qubit_codec_text::CharsetEncodePolicy::report(),
+            CharsetEncodePolicy::report(),
         ))
     }
 
@@ -75,7 +72,7 @@ where
         Self(AsyncCharsetTextWriter::new_with_buffer_capacity(
             output,
             Utf8Codec,
-            qubit_codec_text::CharsetEncodePolicy::report(),
+            CharsetEncodePolicy::report(),
             capacity,
         ))
     }

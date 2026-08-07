@@ -10,37 +10,29 @@
 #[path = "support/tracking_allocator.rs"]
 mod tracking_allocator;
 
-use std::{
-    hint::black_box,
-    io::Cursor,
-    time::Duration,
-};
+use std::hint::black_box;
+use std::io::Cursor;
+use std::time::Duration;
 
-use criterion::{
-    BenchmarkId,
-    Criterion,
-    Throughput,
-    criterion_group,
-    criterion_main,
-};
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
 use qubit_codec::ByteOrder;
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecodePolicy,
-    CharsetEncodePolicy,
-    Utf8Codec,
-    Utf16ByteCodec,
-    Utf32ByteCodec,
-};
-use qubit_io_text::{
-    CharsetStringDecoder,
-    CharsetStringEncoder,
-    CharsetTextReader,
-    CharsetTextWriter,
-    TextRead,
-    TextWrite,
-    Utf8TextWriter,
-};
+use qubit_codec_text::CharsetCodec;
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::Utf16ByteCodec;
+use qubit_codec_text::Utf32ByteCodec;
+use qubit_io_text::CharsetStringDecoder;
+use qubit_io_text::CharsetStringEncoder;
+use qubit_io_text::CharsetTextReader;
+use qubit_io_text::CharsetTextWriter;
+use qubit_io_text::TextRead;
+use qubit_io_text::TextWrite;
+use qubit_io_text::Utf8TextWriter;
 
 use crate::tracking_allocator::measure_peak;
 

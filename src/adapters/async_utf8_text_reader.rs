@@ -5,13 +5,17 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
+use std::ops::DerefMut;
 
-use qubit_codec_text::{CharsetDecodePolicy, Utf8Codec};
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::Utf8Codec;
 use qubit_io::AsyncInput;
 
 use crate::AsyncCharsetTextReader;
-use crate::{AsyncTextLineRead, AsyncTextRead, LineEndingSet};
+use crate::AsyncTextLineRead;
+use crate::AsyncTextRead;
+use crate::LineEndingSet;
 
 /// Asynchronous UTF-8 reader over a Qubit byte input.
 ///
@@ -77,7 +81,11 @@ where
     /// Returns a reader configured with `policy` and the effective capacity.
     #[inline(always)]
     #[must_use]
-    pub fn with_capacity(input: I, policy: CharsetDecodePolicy, capacity: usize) -> Self {
+    pub fn with_capacity(
+        input: I,
+        policy: CharsetDecodePolicy,
+        capacity: usize,
+    ) -> Self {
         Self(AsyncCharsetTextReader::new_with_buffer_capacity(
             input, Utf8Codec, policy, capacity,
         ))
@@ -155,7 +163,10 @@ where
         self.0.read_chars_async(output, max).await
     }
 
-    async fn read_to_string_async(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    async fn read_to_string_async(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         self.0.read_to_string_async(output).await
     }
 }
@@ -164,7 +175,10 @@ impl<I> AsyncTextLineRead for AsyncUtf8TextReader<I>
 where
     I: AsyncInput<Item = u8> + Unpin,
 {
-    async fn read_line_async(&mut self, output: &mut String) -> Result<bool, Self::Error> {
+    async fn read_line_async(
+        &mut self,
+        output: &mut String,
+    ) -> Result<bool, Self::Error> {
         self.0.read_line_async(output).await
     }
 }

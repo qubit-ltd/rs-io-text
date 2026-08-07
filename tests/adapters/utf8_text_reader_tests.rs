@@ -5,21 +5,17 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    Cursor,
-    ErrorKind,
-    Read,
-};
+use std::io;
+use std::io::Cursor;
+use std::io::ErrorKind;
+use std::io::Read;
 
 use qubit_io::Input;
-use qubit_io_text::{
-    LineEnding,
-    LineEndingSet,
-    TextLineRead,
-    TextRead,
-    Utf8TextReader,
-};
+use qubit_io_text::LineEnding;
+use qubit_io_text::LineEndingSet;
+use qubit_io_text::TextLineRead;
+use qubit_io_text::TextRead;
+use qubit_io_text::Utf8TextReader;
 
 struct InputOnlyReader {
     bytes: Vec<u8>,

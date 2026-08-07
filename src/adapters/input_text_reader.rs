@@ -9,18 +9,14 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::io;
 
-use qubit_io::{
-    BoxInput,
-    BufferedInput,
-    Input,
-};
+use qubit_io::BoxInput;
+use qubit_io::BufferedInput;
+use qubit_io::Input;
 
-use crate::{
-    LineEnding,
-    TextLineRead,
-    TextRead,
-    line_ending_set::LineEndingSet,
-};
+use crate::LineEnding;
+use crate::TextLineRead;
+use crate::TextRead;
+use crate::line_ending_set::LineEndingSet;
 
 /// Default character chunk capacity for text reads.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;

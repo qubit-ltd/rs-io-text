@@ -8,10 +8,8 @@
 use std::io::Result;
 
 use qubit_io::Output;
-use qubit_utils::{
-    UncheckedSlice,
-    try_reserve_string,
-};
+use qubit_utils::UncheckedSlice;
+use qubit_utils::try_reserve_string;
 
 /// Character output over a borrowed [`String`].
 ///

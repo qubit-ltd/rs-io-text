@@ -6,21 +6,15 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    Error,
-    ErrorKind,
-};
+use std::io::Error;
+use std::io::ErrorKind;
 
-use qubit_io::{
-    BufferedOutput,
-    Output,
-};
-use qubit_io_text::{
-    LineEnding,
-    OutputTextWriter,
-    StringCharOutput,
-    TextWrite,
-};
+use qubit_io::BufferedOutput;
+use qubit_io::Output;
+use qubit_io_text::LineEnding;
+use qubit_io_text::OutputTextWriter;
+use qubit_io_text::StringCharOutput;
+use qubit_io_text::TextWrite;
 
 #[derive(Debug)]
 struct FailingCharOutput;

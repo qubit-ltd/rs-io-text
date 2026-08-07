@@ -7,19 +7,13 @@
 // =============================================================================
 use std::convert::Infallible;
 
-use crate::{
-    TextLineRead,
-    TextRead,
-    adapters::text_cursor::{
-        read_char_at,
-        read_chars_at,
-        read_to_string_at,
-    },
-    line_ending_set::{
-        LineEndingSet,
-        read_line_with,
-    },
-};
+use crate::TextLineRead;
+use crate::TextRead;
+use crate::adapters::text_cursor::read_char_at;
+use crate::adapters::text_cursor::read_chars_at;
+use crate::adapters::text_cursor::read_to_string_at;
+use crate::line_ending_set::LineEndingSet;
+use crate::line_ending_set::read_line_with;
 
 /// Text reader over a borrowed string slice.
 #[derive(Debug)]

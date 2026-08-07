@@ -9,20 +9,17 @@
 #[cfg(coverage)]
 use std::cell::Cell;
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeEncodeError,
-    TranscodeStatus,
-    Transcoder,
-};
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodeError,
-    CharsetEncodeErrorKind,
-    CharsetEncodePolicy,
-    CharsetEncoder,
-    UnmappableAction,
-};
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeStatus;
+use qubit_codec::Transcoder;
+use qubit_codec_text::Charset;
+use qubit_codec_text::CharsetCodec;
+use qubit_codec_text::CharsetEncodeError;
+use qubit_codec_text::CharsetEncodeErrorKind;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::CharsetEncoder;
+use qubit_codec_text::UnmappableAction;
 use qubit_utils::try_reserve_vec;
 
 const CHAR_CHUNK_CAPACITY: usize = 256;
@@ -183,7 +180,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_map_encode_error(
-        charset: qubit_codec_text::Charset,
+        charset: Charset,
         error: TranscodeEncodeError<CharsetEncodeError, char>,
     ) -> CharsetEncodeError {
         map_encode_error(charset, error)
@@ -193,7 +190,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_map_chunk_encode_error(
-        charset: qubit_codec_text::Charset,
+        charset: Charset,
         error: TranscodeEncodeError<CharsetEncodeError, char>,
         input_offset: usize,
     ) -> CharsetEncodeError {
@@ -204,7 +201,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_map_owned_encode_error(
-        charset: qubit_codec_text::Charset,
+        charset: Charset,
         error: CharsetEncodeError,
     ) -> CharsetEncodeError {
         map_owned_encode_error(charset, error)
@@ -214,7 +211,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_ensure_owned_capacity(
-        charset: qubit_codec_text::Charset,
+        charset: Charset,
         output_index: usize,
         required: usize,
     ) -> Result<(), CharsetEncodeError> {
@@ -449,7 +446,7 @@ fn ensure_owned_capacity<T>(
     output: &mut Vec<T>,
     output_index: usize,
     required: usize,
-    charset: qubit_codec_text::Charset,
+    charset: Charset,
 ) -> Result<(), CharsetEncodeError>
 where
     T: Default,
@@ -488,7 +485,7 @@ where
 /// cannot be represented.
 fn map_capacity_bound(
     result: Result<usize, CapacityError>,
-    charset: qubit_codec_text::Charset,
+    charset: Charset,
 ) -> Result<usize, CharsetEncodeError> {
     #[cfg(coverage)]
     if coverage_should_fail_capacity_bound() {
@@ -511,7 +508,7 @@ fn map_capacity_bound(
 ///
 /// Returns the corresponding charset encoding error.
 fn map_encode_error(
-    charset: qubit_codec_text::Charset,
+    charset: Charset,
     error: TranscodeEncodeError<CharsetEncodeError, char>,
 ) -> CharsetEncodeError {
     CharsetEncodeError::from_transcode_error(charset, error)
@@ -529,7 +526,7 @@ fn map_encode_error(
 ///
 /// Returns an error whose input index is relative to the complete string.
 fn map_chunk_encode_error(
-    charset: qubit_codec_text::Charset,
+    charset: Charset,
     error: TranscodeEncodeError<CharsetEncodeError, char>,
     input_offset: usize,
 ) -> CharsetEncodeError {
@@ -569,7 +566,7 @@ fn map_chunk_encode_error(
 /// original error for every other error kind.
 #[cfg(coverage)]
 fn map_owned_encode_error(
-    charset: qubit_codec_text::Charset,
+    charset: Charset,
     error: CharsetEncodeError,
 ) -> CharsetEncodeError {
     if matches!(error.kind(), CharsetEncodeErrorKind::BufferTooSmall { .. }) {
@@ -629,9 +626,7 @@ fn coverage_should_fail_reserve() -> bool {
 ///
 /// Returns an output-length-overflow error at the sentinel maximum index.
 #[inline]
-fn output_length_overflow(
-    charset: qubit_codec_text::Charset,
-) -> CharsetEncodeError {
+fn output_length_overflow(charset: Charset) -> CharsetEncodeError {
     CharsetEncodeError::new(
         charset,
         CharsetEncodeErrorKind::OutputLengthOverflow,

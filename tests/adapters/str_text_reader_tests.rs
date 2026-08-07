@@ -8,13 +8,11 @@
 
 use std::convert::Infallible;
 
-use qubit_io_text::{
-    LineEnding,
-    LineEndingSet,
-    StrTextReader,
-    TextLineRead,
-    TextRead,
-};
+use qubit_io_text::LineEnding;
+use qubit_io_text::LineEndingSet;
+use qubit_io_text::StrTextReader;
+use qubit_io_text::TextLineRead;
+use qubit_io_text::TextRead;
 
 #[test]
 fn test_read_char_returns_unicode_scalars() -> Result<(), Infallible> {

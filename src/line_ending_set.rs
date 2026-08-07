@@ -7,9 +7,9 @@
 // =============================================================================
 //! Configurable sets of text line endings.
 
-use crate::LineEnding;
-
 use std::io;
+
+use crate::LineEnding;
 
 /// A set of line endings accepted by text readers.
 ///

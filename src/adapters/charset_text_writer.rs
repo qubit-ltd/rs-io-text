@@ -7,12 +7,17 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec, CharsetEncodeError, CharsetEncodePolicy, CharsetEncoder, Utf8Codec,
-};
-use qubit_io::{Buffer, Output};
+use qubit_codec_text::CharsetCodec;
+use qubit_codec_text::CharsetEncodeError;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::CharsetEncoder;
+use qubit_codec_text::Utf8Codec;
+use qubit_io::Buffer;
+use qubit_io::Output;
 
-use crate::{BufferedWriter, LineEnding, TextWrite};
+use crate::BufferedWriter;
+use crate::LineEnding;
+use crate::TextWrite;
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
@@ -119,8 +124,13 @@ where
         policy: CharsetEncodePolicy,
         buffer_capacity: usize,
     ) -> Self {
-        Self::try_new_with_buffer_capacity(output, codec, policy, buffer_capacity)
-            .expect("charset encode policy replacement must be encodable")
+        Self::try_new_with_buffer_capacity(
+            output,
+            codec,
+            policy,
+            buffer_capacity,
+        )
+        .expect("charset encode policy replacement must be encodable")
     }
 
     /// Creates a charset text writer with a requested capacity and reports an
@@ -138,7 +148,11 @@ where
     ) -> Result<Self, CharsetEncodeError> {
         let encoder = CharsetEncoder::with_policy(codec, policy)?;
         Ok(Self {
-            writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
+            writer: BufferedWriter::with_capacity(
+                output,
+                encoder,
+                buffer_capacity,
+            ),
         })
     }
 

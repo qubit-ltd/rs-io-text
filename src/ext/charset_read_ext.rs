@@ -8,19 +8,13 @@
 // qubit-style: allow source-test-pair
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecodePolicy,
-};
-use qubit_io::{
-    Input,
-    InputRef,
-};
+use qubit_codec_text::CharsetCodec;
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_io::Input;
+use qubit_io::InputRef;
 
-use crate::{
-    CharsetTextReader,
-    TextRead,
-};
+use crate::CharsetTextReader;
+use crate::TextRead;
 
 /// Extension methods for reading charset-encoded text from byte streams.
 pub trait CharsetReadExt: Input<Item = u8> + Sized {

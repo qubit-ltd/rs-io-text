@@ -9,20 +9,25 @@
 use core::num::NonZeroUsize;
 
 use qubit_codec::Codec;
+use qubit_codec::DecodeFailure;
+#[cfg(coverage)]
+use qubit_codec::TranscodeDecodeError;
+#[cfg(coverage)]
+use qubit_codec::TranscodeDomainError;
+#[cfg(coverage)]
+use qubit_codec::TranscodeFailure;
+use qubit_codec_text::Charset;
+use qubit_codec_text::CharsetCodec;
+use qubit_codec_text::CharsetDecodeError;
+use qubit_codec_text::CharsetDecodeErrorKind;
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetDecodeResult;
+use qubit_codec_text::CharsetEncodeError;
+use qubit_codec_text::CharsetEncodeErrorKind;
+use qubit_codec_text::CharsetEncodeResult;
+use qubit_codec_text::MalformedAction;
+use qubit_codec_text::Utf32U32Codec;
 use qubit_codec_text::Utf8Codec;
-use qubit_codec_text::{
-    Charset,
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodeErrorKind,
-    CharsetDecodePolicy,
-    CharsetDecodeResult,
-    CharsetEncodeError,
-    CharsetEncodeErrorKind,
-    CharsetEncodeResult,
-    MalformedAction,
-    Utf32U32Codec,
-};
 use qubit_io_text::CharsetStringDecoder;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -50,10 +55,7 @@ impl Codec for InvalidInputErrorCodec {
         &mut self,
         _input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let kind = CharsetDecodeErrorKind::malformed_unknown();
         Err(CharsetDecodeError::new(Charset::ASCII, kind, input_index)
             .into_codec_failure())
@@ -105,10 +107,7 @@ impl Codec for HugeDecodeResetBoundsCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -158,10 +157,7 @@ impl Codec for DecodeResetErrorCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -202,10 +198,7 @@ impl Codec for HugeDecodeFinishBoundsCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -247,10 +240,7 @@ impl Codec for DecodeFlushErrorCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (char, NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(char, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok(('A', NonZeroUsize::MIN))
     }
 
@@ -416,18 +406,15 @@ fn test_charset_string_decoder_decode_to_string_applies_incomplete_tail_policy()
 
 #[cfg(coverage)]
 mod coverage_tests {
-    use qubit_codec::{
-        TranscodeDecodeError,
-        TranscodeDomainError,
-        TranscodeFailure,
-    };
-    use qubit_codec_text::{
-        Charset,
-        CharsetDecodeError,
-        CharsetDecodeErrorKind,
-        Utf8Codec,
-    };
-    use qubit_io_text::CharsetStringDecoder;
+
+    use super::Charset;
+    use super::CharsetDecodeError;
+    use super::CharsetDecodeErrorKind;
+    use super::CharsetStringDecoder;
+    use super::TranscodeDecodeError;
+    use super::TranscodeDomainError;
+    use super::TranscodeFailure;
+    use super::Utf8Codec;
 
     fn reset_coverage_hooks() {
         CharsetStringDecoder::<Utf8Codec>::coverage_reset_reserve_hooks();

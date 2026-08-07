@@ -7,19 +7,28 @@
 // =============================================================================
 
 use std::convert::Infallible;
+use std::io::Cursor;
 
-use qubit_io_text::prelude::{
-    CharsetReadExt,
-    CharsetWriteExt,
-    InputTextReader,
-    OutputTextWriter,
-    StrCharInput,
-    StrTextReader,
-    StringCharInput,
-    StringCharOutput,
-    TextRead,
-    TextWrite,
-};
+use qubit_codec_text::AsciiCodec;
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetDecoder;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::CharsetEncoder;
+use qubit_codec_text::Utf8Codec;
+use qubit_io_text::prelude::BufferedReader;
+use qubit_io_text::prelude::BufferedWriter;
+use qubit_io_text::prelude::CharsetReadExt;
+use qubit_io_text::prelude::CharsetStringDecoder;
+use qubit_io_text::prelude::CharsetStringEncoder;
+use qubit_io_text::prelude::CharsetWriteExt;
+use qubit_io_text::prelude::InputTextReader;
+use qubit_io_text::prelude::OutputTextWriter;
+use qubit_io_text::prelude::StrCharInput;
+use qubit_io_text::prelude::StrTextReader;
+use qubit_io_text::prelude::StringCharInput;
+use qubit_io_text::prelude::StringCharOutput;
+use qubit_io_text::prelude::TextRead;
+use qubit_io_text::prelude::TextWrite;
 
 #[test]
 fn test_prelude_exports_text_traits_and_adapters() -> Result<(), Infallible> {
@@ -55,22 +64,6 @@ fn test_prelude_exports_char_io_adapters() -> std::io::Result<()> {
 
 #[test]
 fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
-    use qubit_codec_text::{
-        AsciiCodec,
-        CharsetDecodePolicy,
-        CharsetDecoder,
-        CharsetEncodePolicy,
-        CharsetEncoder,
-        Utf8Codec,
-    };
-    use qubit_io_text::prelude::{
-        BufferedReader,
-        BufferedWriter,
-        CharsetStringDecoder,
-        CharsetStringEncoder,
-    };
-    use std::io::Cursor;
-
     let mut reader = Cursor::new(b"text".to_vec())
         .charset_text_reader(Utf8Codec, CharsetDecodePolicy::report());
     let mut text = String::new();

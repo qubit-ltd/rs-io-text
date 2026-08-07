@@ -8,12 +8,10 @@
 
 use std::convert::Infallible;
 
-use qubit_io_text::{
-    LineEndingSet,
-    StringTextReader,
-    TextLineRead,
-    TextRead,
-};
+use qubit_io_text::LineEndingSet;
+use qubit_io_text::StringTextReader;
+use qubit_io_text::TextLineRead;
+use qubit_io_text::TextRead;
 
 #[test]
 fn test_from_string_reads_owned_text() -> Result<(), std::convert::Infallible> {

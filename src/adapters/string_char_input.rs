@@ -8,10 +8,8 @@
 use std::io::Result;
 
 use qubit_io::Input;
-use qubit_utils::{
-    SliceRange,
-    UncheckedSlice,
-};
+use qubit_utils::SliceRange;
+use qubit_utils::UncheckedSlice;
 
 /// Character input over an owned [`String`].
 ///

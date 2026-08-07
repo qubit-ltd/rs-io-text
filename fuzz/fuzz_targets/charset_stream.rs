@@ -12,19 +12,15 @@ use std::io::Cursor;
 
 use libfuzzer_sys::fuzz_target;
 use qubit_codec::ByteOrder;
-use qubit_codec_text::{
-    CharsetDecodePolicy,
-    CharsetEncodePolicy,
-    Utf16ByteCodec,
-    Utf32ByteCodec,
-    Utf8Codec,
-};
-use qubit_io_text::{
-    CharsetTextReader,
-    CharsetTextWriter,
-    TextRead,
-    TextWrite,
-};
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::Utf16ByteCodec;
+use qubit_codec_text::Utf32ByteCodec;
+use qubit_io_text::CharsetTextReader;
+use qubit_io_text::CharsetTextWriter;
+use qubit_io_text::TextRead;
+use qubit_io_text::TextWrite;
 
 /// Bounds allocations when the target is invoked outside CI.
 const MAX_FUZZ_INPUT_LEN: usize = 4096;
@@ -154,7 +150,9 @@ fn fuzz_multibyte_round_trips(data: &[u8]) {
                 CharsetEncodePolicy::report(),
                 capacity,
             );
-            writer.write_str(text).expect("UTF-16 encoding must succeed");
+            writer
+                .write_str(text)
+                .expect("UTF-16 encoding must succeed");
             writer.finish().expect("UTF-16 writer must finish");
             let (output, pending) = writer.into_parts();
             assert!(pending.readable().is_empty());
@@ -177,7 +175,9 @@ fn fuzz_multibyte_round_trips(data: &[u8]) {
             CharsetEncodePolicy::report(),
             capacity,
         );
-        writer.write_str(text).expect("UTF-32 encoding must succeed");
+        writer
+            .write_str(text)
+            .expect("UTF-32 encoding must succeed");
         writer.finish().expect("UTF-32 writer must finish");
         let (output, pending) = writer.into_parts();
         assert!(pending.readable().is_empty());

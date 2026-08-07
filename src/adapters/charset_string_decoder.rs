@@ -11,25 +11,19 @@ use std::cell::Cell;
 #[cfg(coverage)]
 use std::num::NonZeroUsize;
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeError,
-    TranscodeStatus,
-    Transcoder,
-};
-use qubit_codec_text::{
-    Charset,
-    CharsetCodec,
-    CharsetDecodeError,
-    CharsetDecodeErrorKind,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-    MalformedAction,
-};
-use qubit_utils::{
-    try_reserve_string,
-    try_reserve_vec,
-};
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeStatus;
+use qubit_codec::Transcoder;
+use qubit_codec_text::Charset;
+use qubit_codec_text::CharsetCodec;
+use qubit_codec_text::CharsetDecodeError;
+use qubit_codec_text::CharsetDecodeErrorKind;
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetDecoder;
+use qubit_codec_text::MalformedAction;
+use qubit_utils::try_reserve_string;
+use qubit_utils::try_reserve_vec;
 
 const CHAR_CHUNK_CAPACITY: usize = 256;
 

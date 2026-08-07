@@ -10,10 +10,8 @@ use std::io;
 
 use qubit_utils::try_reserve_string;
 
-use crate::{
-    LineEnding,
-    TextWrite,
-};
+use crate::LineEnding;
+use crate::TextWrite;
 
 /// Text writer over a borrowed [`String`] with configurable line endings.
 #[derive(Debug)]

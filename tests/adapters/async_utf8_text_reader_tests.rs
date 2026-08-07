@@ -6,24 +6,18 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    future::Future,
-    io,
-    pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
-};
+use std::future::Future;
+use std::io;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_io::AsyncInput;
-use qubit_io_text::{
-    AsyncUtf8TextReader,
-    LineEnding,
-    LineEndingSet,
-};
+use qubit_io_text::AsyncUtf8TextReader;
+use qubit_io_text::LineEnding;
+use qubit_io_text::LineEndingSet;
 
 /// Reads a fixed byte sequence without suspending.
 struct ReadyInput {

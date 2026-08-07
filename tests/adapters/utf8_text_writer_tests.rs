@@ -5,18 +5,14 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::io::{
-    self,
-    ErrorKind,
-    Write,
-};
+use std::io;
+use std::io::ErrorKind;
+use std::io::Write;
 
 use qubit_io::Output;
-use qubit_io_text::{
-    LineEnding,
-    TextWrite,
-    Utf8TextWriter,
-};
+use qubit_io_text::LineEnding;
+use qubit_io_text::TextWrite;
+use qubit_io_text::Utf8TextWriter;
 
 #[derive(Debug, Default)]
 struct OutputOnlyWriter {

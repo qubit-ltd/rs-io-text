@@ -7,10 +7,16 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
+use qubit_codec_text::CharsetCodec;
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetDecoder;
 use qubit_io::Input;
 
-use crate::{BufferedReader, LineEndingSet, TextLineRead, TextRead, TextReaderParts};
+use crate::BufferedReader;
+use crate::LineEndingSet;
+use crate::TextLineRead;
+use crate::TextRead;
+use crate::TextReaderParts;
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
@@ -94,7 +100,11 @@ where
     ) -> Self {
         let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::with_capacity(input, decoder, buffer_capacity),
+            reader: BufferedReader::with_capacity(
+                input,
+                decoder,
+                buffer_capacity,
+            ),
         }
     }
 
@@ -214,12 +224,19 @@ where
     }
 
     #[inline]
-    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
+    fn read_chars(
+        &mut self,
+        output: &mut Vec<char>,
+        max: usize,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
+    fn read_to_string(
+        &mut self,
+        output: &mut String,
+    ) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }

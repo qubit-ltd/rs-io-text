@@ -29,7 +29,8 @@ use qubit_io::Buffer;
 pub struct TextReaderParts<I, D> {
     /// The wrapped byte input.
     pub input: I,
-    /// Encoded bytes already read from `input` but not consumed by the decoder.
+    /// Encoded bytes already read from `input` but not consumed by the
+    /// decoder.
     pub unread_bytes: Buffer<u8>,
     /// The decoder retaining codec state across input boundaries.
     pub decoder: D,

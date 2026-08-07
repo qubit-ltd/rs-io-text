@@ -6,23 +6,17 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    Error,
-    ErrorKind,
-};
+use std::io::Error;
+use std::io::ErrorKind;
 
-use qubit_io::{
-    BufferedInput,
-    Input,
-};
-use qubit_io_text::{
-    InputTextReader,
-    LineEnding,
-    LineEndingSet,
-    StringCharInput,
-    TextLineRead,
-    TextRead,
-};
+use qubit_io::BufferedInput;
+use qubit_io::Input;
+use qubit_io_text::InputTextReader;
+use qubit_io_text::LineEnding;
+use qubit_io_text::LineEndingSet;
+use qubit_io_text::StringCharInput;
+use qubit_io_text::TextLineRead;
+use qubit_io_text::TextRead;
 
 #[derive(Debug)]
 struct FailingCharInput;

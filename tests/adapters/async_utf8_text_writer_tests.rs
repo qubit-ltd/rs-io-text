@@ -6,23 +6,17 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    future::Future,
-    io,
-    pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
-};
+use std::future::Future;
+use std::io;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
 use qubit_io::AsyncOutput;
-use qubit_io_text::{
-    AsyncTextWrite,
-    AsyncUtf8TextWriter,
-    LineEnding,
-};
+use qubit_io_text::AsyncTextWrite;
+use qubit_io_text::AsyncUtf8TextWriter;
+use qubit_io_text::LineEnding;
 
 /// Collects written bytes without suspending.
 #[derive(Default)]
