@@ -7,22 +7,10 @@
 // =============================================================================
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-};
-use qubit_io::{
-    Buffer,
-    Input,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
+use qubit_io::Input;
 
-use crate::{
-    BufferedReader,
-    LineEndingSet,
-    TextLineRead,
-    TextRead,
-};
+use crate::{BufferedReader, LineEndingSet, TextLineRead, TextRead, TextReaderParts};
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
@@ -106,11 +94,7 @@ where
     ) -> Self {
         let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::with_capacity(
-                input,
-                decoder,
-                buffer_capacity,
-            ),
+            reader: BufferedReader::with_capacity(input, decoder, buffer_capacity),
         }
     }
 
@@ -155,11 +139,11 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the wrapped input, unread encoded bytes, decoder, and decoded
-    /// characters not yet returned by this reader, in that order.
+    /// Returns named components for the input, unread encoded bytes, decoder,
+    /// and decoded characters not yet returned by this reader.
     #[must_use = "all returned reader state must be handled"]
     #[inline]
-    pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<C>, Vec<char>) {
+    pub fn into_parts(self) -> TextReaderParts<I, CharsetDecoder<C>> {
         self.reader.into_parts()
     }
 
@@ -230,19 +214,12 @@ where
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }

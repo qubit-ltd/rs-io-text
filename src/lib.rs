@@ -22,45 +22,22 @@ mod ext;
 mod io_error;
 mod line_ending;
 mod line_ending_set;
+mod text_reader_parts;
 pub mod prelude;
 mod stream;
 mod traits;
 
 pub use adapters::{
-    AsyncCharsetTextReader,
-    AsyncCharsetTextWriter,
-    AsyncUtf8TextReader,
-    AsyncUtf8TextWriter,
-    CharsetStringDecoder,
-    CharsetStringEncoder,
-    CharsetTextReader,
-    CharsetTextWriter,
-    InputTextReader,
-    OutputTextWriter,
-    StrCharInput,
-    StrTextReader,
-    StringCharInput,
-    StringCharOutput,
-    StringTextReader,
-    StringTextWriter,
-    Utf8TextReader,
-    Utf8TextWriter,
+    AsyncCharsetTextReader, AsyncCharsetTextWriter, AsyncUtf8TextReader, AsyncUtf8TextWriter,
+    CharsetStringDecoder, CharsetStringEncoder, CharsetTextReader, CharsetTextWriter,
+    InputTextReader, OutputTextWriter, StrCharInput, StrTextReader, StringCharInput,
+    StringCharOutput, StringTextReader, StringTextWriter, Utf8TextReader, Utf8TextWriter,
 };
-pub use ext::{
-    CharsetReadExt,
-    CharsetWriteExt,
-};
+pub use ext::{CharsetReadExt, CharsetWriteExt};
 pub use line_ending::LineEnding;
 pub use line_ending_set::LineEndingSet;
-pub use stream::{
-    BufferedReader,
-    BufferedWriter,
-};
+pub use text_reader_parts::TextReaderParts;
+pub use stream::{BufferedReader, BufferedWriter};
 pub use traits::{
-    AsyncTextLineRead,
-    AsyncTextRead,
-    AsyncTextWrite,
-    TextLineRead,
-    TextRead,
-    TextWrite,
+    AsyncTextLineRead, AsyncTextRead, AsyncTextWrite, TextLineRead, TextRead, TextWrite,
 };

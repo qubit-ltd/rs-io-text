@@ -13,34 +13,15 @@ use std::cell::Cell;
 use std::io;
 
 use qubit_codec::{
-    AsyncTranscodeDecodeInput,
-    AsyncTranscodeDecodeStep,
-    TranscodeStatus,
-    Transcoder,
+    AsyncTranscodeDecodeInput, AsyncTranscodeDecodeStep, TranscodeStatus, Transcoder,
 };
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetDecodePolicy,
-    CharsetDecoder,
-};
-use qubit_io::{
-    AsyncInput,
-    Buffer,
-};
+use qubit_codec_text::{CharsetCodec, CharsetDecodePolicy, CharsetDecoder};
+use qubit_io::AsyncInput;
 
-use crate::io_error::{
-    capacity_error_to_io,
-    decode_error_to_io,
-};
-use crate::line_ending_set::{
-    LineEndingSet,
-    append_limited_char,
-};
-use crate::{
-    AsyncTextLineRead,
-    AsyncTextRead,
-    LineEnding,
-};
+use crate::TextReaderParts;
+use crate::io_error::{capacity_error_to_io, decode_error_to_io};
+use crate::line_ending_set::{LineEndingSet, append_limited_char};
+use crate::{AsyncTextLineRead, AsyncTextRead, LineEnding};
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -111,12 +92,7 @@ where
     /// Returns a reader whose construction performs no input operation.
     #[must_use]
     pub fn new(input: I, codec: C, policy: CharsetDecodePolicy) -> Self {
-        Self::new_with_buffer_capacity(
-            input,
-            codec,
-            policy,
-            DEFAULT_BUFFER_CAPACITY,
-        )
+        Self::new_with_buffer_capacity(input, codec, policy, DEFAULT_BUFFER_CAPACITY)
     }
 
     /// Creates an asynchronous charset reader with a requested buffer size.
@@ -173,10 +149,7 @@ where
     /// # Returns
     /// This reader with the requested line-ending configuration.
     #[must_use]
-    pub const fn with_line_endings(
-        mut self,
-        line_endings: LineEndingSet,
-    ) -> Self {
+    pub const fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
         self
     }
@@ -216,19 +189,22 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the wrapped input, unread encoded bytes, decoder, and decoded
-    /// characters not yet returned by this reader, in that order.
+    /// Returns named components for the input, unread encoded bytes, decoder,
+    /// and decoded characters not yet returned by this reader.
     #[must_use = "all returned reader state must be handled"]
-    pub fn into_parts(self) -> (I, Buffer<u8>, CharsetDecoder<C>, Vec<char>) {
+    pub fn into_parts(self) -> TextReaderParts<I, CharsetDecoder<C>> {
         let (input, unread) = self.input.into_parts();
         let mut pending_chars = Vec::new();
         if let Some(ch) = self.pending_char {
             pending_chars.push(ch);
         }
-        pending_chars.extend_from_slice(
-            &self.chars[self.char_position..self.char_limit],
-        );
-        (input, unread, self.decoder, pending_chars)
+        pending_chars.extend_from_slice(&self.chars[self.char_position..self.char_limit]);
+        TextReaderParts {
+            input,
+            unread_bytes: unread,
+            decoder: self.decoder,
+            pending_chars,
+        }
     }
 
     /// Returns whether at least one decoded character is buffered.
@@ -367,11 +343,7 @@ where
                     match progress.status() {
                         TranscodeStatus::Complete => continue,
                         TranscodeStatus::NeedInput { required, .. } => {
-                            if !self
-                                .input
-                                .fill_until_async(required.get())
-                                .await?
-                            {
+                            if !self.input.fill_until_async(required.get()).await? {
                                 return self.decode_eof();
                             }
                         }
@@ -406,10 +378,7 @@ where
         AsyncCharsetTextReader::read_chars_async(self, output, max).await
     }
 
-    async fn read_to_string_async(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    async fn read_to_string_async(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         AsyncCharsetTextReader::read_to_string_async(self, output).await
     }
 }
@@ -419,10 +388,7 @@ where
     I: AsyncInput<Item = u8> + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
-    async fn read_line_async(
-        &mut self,
-        output: &mut String,
-    ) -> Result<bool, Self::Error> {
+    async fn read_line_async(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         AsyncCharsetTextReader::read_line_async(self, output).await
     }
 }
@@ -544,10 +510,7 @@ where
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded prefix. Resume on the same reader and
     /// do not append that prefix a second time.
-    pub async fn read_to_string_async(
-        &mut self,
-        output: &mut String,
-    ) -> io::Result<usize> {
+    pub async fn read_to_string_async(&mut self, output: &mut String) -> io::Result<usize> {
         let mut count = 0;
         if let Some(ch) = self.pending_char.take() {
             output.push(ch);
@@ -594,9 +557,7 @@ where
         let initial_len = output.len();
         let mut count = 0;
         while let Some(ch) = self.read_char_async().await? {
-            if let Err(error) =
-                append_limited_char(output, initial_len, max_append_len, ch)
-            {
+            if let Err(error) = append_limited_char(output, initial_len, max_append_len, ch) {
                 self.pending_char = Some(ch);
                 return Err(error);
             }
@@ -625,10 +586,7 @@ where
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded line prefix. Resume on the same reader
     /// and do not append that prefix a second time.
-    pub async fn read_line_async(
-        &mut self,
-        output: &mut String,
-    ) -> io::Result<bool> {
+    pub async fn read_line_async(&mut self, output: &mut String) -> io::Result<bool> {
         self.read_line_async_impl(output, None).await
     }
 
@@ -644,19 +602,12 @@ where
             read = true;
             if ch == '\r' && self.line_endings.contains(LineEnding::CrLf) {
                 if let Some(max_append_len) = max_append_len
-                    && ch.len_utf8()
-                        > max_append_len
-                            .saturating_sub(output.len() - initial_len)
+                    && ch.len_utf8() > max_append_len.saturating_sub(output.len() - initial_len)
                 {
                     output.truncate(initial_len);
                     self.pending_char = Some(ch);
-                    let error = crate::io_error::text_append_limit_error(
-                        max_append_len,
-                    );
-                    return self
-                        .discard_line_after_limit_async()
-                        .await
-                        .and(Err(error));
+                    let error = crate::io_error::text_append_limit_error(max_append_len);
+                    return self.discard_line_after_limit_async().await.and(Err(error));
                 }
 
                 // Keep CR pending while the CRLF lookahead may suspend. If
@@ -669,17 +620,11 @@ where
                         // CR was checked before the await and output did not
                         // change during lookahead.
                         output.push('\r');
-                        if let Err(error) = self.append_line_char(
-                            output,
-                            initial_len,
-                            max_append_len,
-                            '\n',
-                        ) {
+                        if let Err(error) =
+                            self.append_line_char(output, initial_len, max_append_len, '\n')
+                        {
                             self.pending_char = Some('\n');
-                            return self
-                                .discard_line_after_limit_async()
-                                .await
-                                .and(Err(error));
+                            return self.discard_line_after_limit_async().await.and(Err(error));
                         }
                         return Ok(true);
                     }
@@ -698,14 +643,9 @@ where
                 }
             }
 
-            if let Err(error) =
-                self.append_line_char(output, initial_len, max_append_len, ch)
-            {
+            if let Err(error) = self.append_line_char(output, initial_len, max_append_len, ch) {
                 self.pending_char = Some(ch);
-                return self
-                    .discard_line_after_limit_async()
-                    .await
-                    .and(Err(error));
+                return self.discard_line_after_limit_async().await.and(Err(error));
             }
             if ch == '\n' && self.line_endings.contains(LineEnding::Lf) {
                 return Ok(true);
@@ -753,9 +693,7 @@ where
     }
 
     /// Reads one decoded character without consulting `pending_char`.
-    async fn read_char_from_buffer_async(
-        &mut self,
-    ) -> io::Result<Option<char>> {
+    async fn read_char_from_buffer_async(&mut self) -> io::Result<Option<char>> {
         if !self.fill_chars_async().await? {
             return Ok(None);
         }

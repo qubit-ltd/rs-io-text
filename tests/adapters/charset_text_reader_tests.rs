@@ -6,25 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    self,
-    Cursor,
-    ErrorKind,
-    Read,
-};
+use std::io::{self, Cursor, ErrorKind, Read};
 
-use qubit_codec_text::{
-    CharsetDecodePolicy,
-    Utf8Codec,
-};
+use qubit_codec_text::{CharsetDecodePolicy, Utf8Codec};
 use qubit_io::Input;
 use qubit_io_text::{
-    CharsetReadExt,
-    CharsetTextReader,
-    LineEnding,
-    LineEndingSet,
-    TextLineRead,
-    TextRead,
+    CharsetReadExt, CharsetTextReader, LineEnding, LineEndingSet, TextLineRead, TextRead,
+    TextReaderParts,
 };
 
 struct FailingReader;
@@ -62,8 +50,7 @@ impl Input for InputOnlyReader {
         let read = available.min(count);
         let input_end = self.position + read;
         let output_end = index + read;
-        output[index..output_end]
-            .copy_from_slice(&self.bytes[self.position..input_end]);
+        output[index..output_end].copy_from_slice(&self.bytes[self.position..input_end]);
         self.position = input_end;
         Ok(read)
     }
@@ -72,11 +59,8 @@ impl Input for InputOnlyReader {
 #[test]
 fn test_new_decodes_utf8_text() -> std::io::Result<()> {
     let bytes = "中文\nsecond".as_bytes().to_vec();
-    let mut reader = CharsetTextReader::new(
-        Cursor::new(bytes),
-        Utf8Codec,
-        CharsetDecodePolicy::report(),
-    );
+    let mut reader =
+        CharsetTextReader::new(Cursor::new(bytes), Utf8Codec, CharsetDecodePolicy::report());
     let mut line = String::new();
 
     assert!(reader.read_line(&mut line)?);
@@ -108,8 +92,7 @@ fn test_charset_reader_configures_line_endings() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_charset_reader_read_line_limited_forwards_utf8_limit()
--> std::io::Result<()> {
+fn test_charset_reader_read_line_limited_forwards_utf8_limit() -> std::io::Result<()> {
     let mut reader = CharsetTextReader::new(
         Cursor::new("a中\nnext".as_bytes().to_vec()),
         Utf8Codec,
@@ -132,8 +115,7 @@ fn test_charset_reader_read_line_limited_forwards_utf8_limit()
 #[test]
 fn test_new_accepts_qubit_input_without_std_read() -> std::io::Result<()> {
     let input = InputOnlyReader::new("input中文");
-    let mut reader =
-        CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut output = String::new();
 
     assert_eq!(7, reader.read_to_string(&mut output)?);
@@ -158,16 +140,14 @@ fn test_read_char_preserves_access_to_wrapped_input() -> std::io::Result<()> {
 #[test]
 fn test_accessors_expose_wrapped_reader() {
     let input = Cursor::new("abc".as_bytes().to_vec());
-    let reader =
-        CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let reader = CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
 
     assert_eq!(0, reader.input().position());
     assert_eq!(0, reader.input().position());
 }
 
 #[test]
-fn test_charset_text_reader_into_parts_preserves_unreturned_characters()
--> std::io::Result<()> {
+fn test_charset_text_reader_into_parts_preserves_unreturned_characters() -> std::io::Result<()> {
     let mut reader = CharsetTextReader::new(
         Cursor::new(b"abc".to_vec()),
         Utf8Codec,
@@ -176,9 +156,14 @@ fn test_charset_text_reader_into_parts_preserves_unreturned_characters()
 
     assert_eq!(Some('a'), reader.read_char()?);
 
-    let (input, unread, _decoder, pending_chars) = reader.into_parts();
+    let TextReaderParts {
+        input,
+        unread_bytes,
+        decoder: _decoder,
+        pending_chars,
+    } = reader.into_parts();
     assert_eq!(3, input.position());
-    assert!(unread.readable().is_empty());
+    assert!(unread_bytes.readable().is_empty());
     assert_eq!(['b', 'c'], pending_chars.as_slice());
     Ok(())
 }
@@ -199,11 +184,8 @@ fn test_read_chars_after_decoding() -> std::io::Result<()> {
 
 #[test]
 fn test_new_propagates_reader_errors() {
-    let mut reader = CharsetTextReader::new(
-        FailingReader,
-        Utf8Codec,
-        CharsetDecodePolicy::report(),
-    );
+    let mut reader =
+        CharsetTextReader::new(FailingReader, Utf8Codec, CharsetDecodePolicy::report());
     let error = reader
         .read_char()
         .expect_err("reader errors must be propagated");
@@ -282,8 +264,7 @@ fn test_new_ignores_incomplete_bytes_in_ignore_mode() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_with_capacity_preserves_utf8_tail_across_refills() -> std::io::Result<()>
-{
+fn test_with_capacity_preserves_utf8_tail_across_refills() -> std::io::Result<()> {
     let input = Cursor::new("中🙂".as_bytes().to_vec());
     let mut reader = CharsetTextReader::new_with_buffer_capacity(
         input,
@@ -321,8 +302,7 @@ fn test_all_small_capacities_preserve_utf8_boundaries() -> std::io::Result<()> {
 #[test]
 fn test_charset_read_ext_creates_stream_reader() -> std::io::Result<()> {
     let input = Cursor::new("ext中文".as_bytes().to_vec());
-    let mut reader =
-        input.charset_text_reader(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = input.charset_text_reader(Utf8Codec, CharsetDecodePolicy::report());
     let mut output = String::new();
 
     assert_eq!(5, reader.read_to_string(&mut output)?);
@@ -331,11 +311,9 @@ fn test_charset_read_ext_creates_stream_reader() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_charset_read_ext_accepts_qubit_input_without_std_read()
--> std::io::Result<()> {
+fn test_charset_read_ext_accepts_qubit_input_without_std_read() -> std::io::Result<()> {
     let input = InputOnlyReader::new("ext输入");
-    let mut reader =
-        input.charset_text_reader(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = input.charset_text_reader(Utf8Codec, CharsetDecodePolicy::report());
     let mut output = String::new();
 
     assert_eq!(5, reader.read_to_string(&mut output)?);
@@ -344,14 +322,10 @@ fn test_charset_read_ext_accepts_qubit_input_without_std_read()
 }
 
 #[test]
-fn test_charset_read_ext_creates_buffered_stream_reader() -> std::io::Result<()>
-{
+fn test_charset_read_ext_creates_buffered_stream_reader() -> std::io::Result<()> {
     let input = Cursor::new("Aé🙂".as_bytes().to_vec());
-    let mut reader = input.buffered_charset_text_reader(
-        Utf8Codec,
-        CharsetDecodePolicy::report(),
-        1,
-    );
+    let mut reader =
+        input.buffered_charset_text_reader(Utf8Codec, CharsetDecodePolicy::report(), 1);
     let mut output = String::new();
 
     assert_eq!(3, reader.read_to_string(&mut output)?);
@@ -360,14 +334,10 @@ fn test_charset_read_ext_creates_buffered_stream_reader() -> std::io::Result<()>
 }
 
 #[test]
-fn test_charset_read_ext_reads_one_shot_from_qubit_input() -> std::io::Result<()>
-{
+fn test_charset_read_ext_reads_one_shot_from_qubit_input() -> std::io::Result<()> {
     let mut input = InputOnlyReader::new("one-shot输入");
 
-    let output = input.read_to_string_with_charset(
-        Utf8Codec,
-        CharsetDecodePolicy::report(),
-    )?;
+    let output = input.read_to_string_with_charset(Utf8Codec, CharsetDecodePolicy::report())?;
 
     assert_eq!("one-shot输入", output);
     Ok(())
@@ -377,10 +347,7 @@ fn test_charset_read_ext_reads_one_shot_from_qubit_input() -> std::io::Result<()
 fn test_charset_read_ext_reads_one_shot_text() -> std::io::Result<()> {
     let mut input = Cursor::new("one-shot".as_bytes().to_vec());
 
-    let output = input.read_to_string_with_charset(
-        Utf8Codec,
-        CharsetDecodePolicy::report(),
-    )?;
+    let output = input.read_to_string_with_charset(Utf8Codec, CharsetDecodePolicy::report())?;
 
     assert_eq!("one-shot", output);
     Ok(())
@@ -389,8 +356,7 @@ fn test_charset_read_ext_reads_one_shot_text() -> std::io::Result<()> {
 #[test]
 fn test_charset_reader_limited_read_rolls_back_appended_text() {
     let input = Cursor::new("A中".as_bytes().to_vec());
-    let mut reader =
-        CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut output = String::from("prefix:");
 
     let error = reader
@@ -405,11 +371,8 @@ fn test_charset_reader_limited_read_rolls_back_appended_text() {
 fn test_charset_read_ext_reads_one_shot_limited_text() -> std::io::Result<()> {
     let mut input = Cursor::new("中".as_bytes().to_vec());
 
-    let output = input.read_to_string_with_charset_limited(
-        Utf8Codec,
-        CharsetDecodePolicy::report(),
-        3,
-    )?;
+    let output =
+        input.read_to_string_with_charset_limited(Utf8Codec, CharsetDecodePolicy::report(), 3)?;
 
     assert_eq!("中", output);
     Ok(())

@@ -159,10 +159,10 @@ fn test_utf8_text_reader_into_parts_preserves_unreturned_characters()
 
     assert_eq!(Some('a'), reader.read_char()?);
 
-    let (input, unread, _decoder, pending_chars) = reader.into_parts();
-    assert_eq!(3, input.position());
-    assert!(unread.readable().is_empty());
-    assert_eq!(['b', 'c'], pending_chars.as_slice());
+    let parts = reader.into_parts();
+    assert_eq!(3, parts.input.position());
+    assert!(parts.unread_bytes.readable().is_empty());
+    assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
     Ok(())
 }
 
