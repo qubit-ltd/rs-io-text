@@ -8,21 +8,11 @@
 use std::io;
 
 use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodePolicy,
-    CharsetEncoder,
-    Utf8Codec,
+    CharsetCodec, CharsetEncodeError, CharsetEncodePolicy, CharsetEncoder, Utf8Codec,
 };
-use qubit_io::{
-    Buffer,
-    Output,
-};
+use qubit_io::{Buffer, Output};
 
-use crate::{
-    BufferedWriter,
-    LineEnding,
-    TextWrite,
-};
+use crate::{BufferedWriter, LineEnding, TextWrite};
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
@@ -83,10 +73,25 @@ where
     #[must_use]
     #[inline]
     pub fn new(output: O, codec: C, policy: CharsetEncodePolicy) -> Self {
-        let encoder = create_encoder(codec, policy);
-        Self {
+        Self::try_new(output, codec, policy)
+            .expect("charset encode policy replacement must be encodable")
+    }
+
+    /// Creates a charset text writer and reports an invalid replacement policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
+    /// configured replacement character.
+    pub fn try_new(
+        output: O,
+        codec: C,
+        policy: CharsetEncodePolicy,
+    ) -> Result<Self, CharsetEncodeError> {
+        let encoder = CharsetEncoder::with_policy(codec, policy)?;
+        Ok(Self {
             writer: BufferedWriter::new(output, encoder),
-        }
+        })
     }
 
     /// Creates a charset text writer with a requested byte buffer capacity.
@@ -114,14 +119,27 @@ where
         policy: CharsetEncodePolicy,
         buffer_capacity: usize,
     ) -> Self {
-        let encoder = create_encoder(codec, policy);
-        Self {
-            writer: BufferedWriter::with_capacity(
-                output,
-                encoder,
-                buffer_capacity,
-            ),
-        }
+        Self::try_new_with_buffer_capacity(output, codec, policy, buffer_capacity)
+            .expect("charset encode policy replacement must be encodable")
+    }
+
+    /// Creates a charset text writer with a requested capacity and reports an
+    /// invalid replacement policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
+    /// configured replacement character.
+    pub fn try_new_with_buffer_capacity(
+        output: O,
+        codec: C,
+        policy: CharsetEncodePolicy,
+        buffer_capacity: usize,
+    ) -> Result<Self, CharsetEncodeError> {
+        let encoder = CharsetEncoder::with_policy(codec, policy)?;
+        Ok(Self {
+            writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
+        })
     }
 
     /// Sets the line ending for this writer.
@@ -227,30 +245,4 @@ where
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.writer.flush()
     }
-}
-
-/// Creates a charset encoder from its public policy.
-///
-/// # Parameters
-///
-/// - `codec`: Charset codec used for outgoing text.
-/// - `policy`: Unencodable-character policy.
-///
-/// # Returns
-///
-/// Returns a streaming charset encoder.
-///
-/// # Panics
-///
-/// Panics only when replacement mode cannot build a replacement encoder for
-/// the supplied codec, matching [`CharsetEncoder::new`] semantics.
-pub(crate) fn create_encoder<C>(
-    codec: C,
-    policy: CharsetEncodePolicy,
-) -> CharsetEncoder<C>
-where
-    C: CharsetCodec<Unit = u8>,
-{
-    CharsetEncoder::with_policy(codec, policy)
-        .expect("charset encode policy replacement must be encodable")
 }

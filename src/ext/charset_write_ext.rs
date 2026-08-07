@@ -8,19 +8,10 @@
 // qubit-style: allow source-test-pair
 use std::io;
 
-use qubit_codec_text::{
-    CharsetCodec,
-    CharsetEncodePolicy,
-};
-use qubit_io::{
-    Output,
-    OutputRef,
-};
+use qubit_codec_text::{CharsetCodec, CharsetEncodeError, CharsetEncodePolicy};
+use qubit_io::{Output, OutputRef};
 
-use crate::{
-    CharsetTextWriter,
-    TextWrite,
-};
+use crate::{CharsetTextWriter, TextWrite};
 
 /// Extension methods for writing charset-encoded text to byte streams.
 pub trait CharsetWriteExt: Output<Item = u8> + Sized {
@@ -45,6 +36,18 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
         CharsetTextWriter::new(self, codec, policy)
     }
 
+    /// Fallibly wraps this byte writer as a charset text writer.
+    fn try_charset_text_writer<C>(
+        self,
+        codec: C,
+        policy: CharsetEncodePolicy,
+    ) -> Result<CharsetTextWriter<Self, C>, CharsetEncodeError>
+    where
+        C: CharsetCodec<Unit = u8>,
+    {
+        CharsetTextWriter::try_new(self, codec, policy)
+    }
+
     /// Wraps this byte writer as a charset text writer with a buffer capacity.
     ///
     /// # Parameters
@@ -65,9 +68,20 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        CharsetTextWriter::new_with_buffer_capacity(
-            self, codec, policy, capacity,
-        )
+        CharsetTextWriter::new_with_buffer_capacity(self, codec, policy, capacity)
+    }
+
+    /// Fallibly wraps this byte writer with a requested buffer capacity.
+    fn try_buffered_charset_text_writer<C>(
+        self,
+        codec: C,
+        policy: CharsetEncodePolicy,
+        capacity: usize,
+    ) -> Result<CharsetTextWriter<Self, C>, CharsetEncodeError>
+    where
+        C: CharsetCodec<Unit = u8>,
+    {
+        CharsetTextWriter::try_new_with_buffer_capacity(self, codec, policy, capacity)
     }
 
     /// Writes one string as charset-encoded text.
@@ -91,8 +105,8 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut writer =
-            CharsetTextWriter::new(OutputRef::new(self), codec, policy);
+        let mut writer = CharsetTextWriter::try_new(OutputRef::new(self), codec, policy)
+            .map_err(crate::io_error::encode_error_to_io)?;
         writer.write_str(text)?;
         writer.finish()
     }
