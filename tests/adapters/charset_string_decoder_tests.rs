@@ -26,8 +26,8 @@ use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodeErrorKind;
 use qubit_codec_text::CharsetEncodeResult;
 use qubit_codec_text::MalformedAction;
-use qubit_codec_text::Utf32U32Codec;
 use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::Utf32U32Codec;
 use qubit_io_text::CharsetStringDecoder;
 
 #[derive(Clone, Copy, Debug, Default)]
