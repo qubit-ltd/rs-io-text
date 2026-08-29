@@ -31,7 +31,7 @@ streams without selecting an async runtime.
 
 ```toml
 [dependencies]
-qubit-io-text = "0.3"
+qubit-io-text = "0.4"
 ```
 
 ## Quick Start: Encode a UTF-8 Text Message
@@ -64,7 +64,7 @@ directly in the consuming package:
 
 ```toml
 [dependencies]
-qubit-io-text = "0.3"
+qubit-io-text = "0.4"
 qubit-codec-text = "0.4"
 qubit-io = "0.15"
 ```
