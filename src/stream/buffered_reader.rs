@@ -146,10 +146,7 @@ where
     /// # Returns
     /// This reader with the requested line-ending configuration.
     #[must_use]
-    pub const fn with_line_endings(
-        mut self,
-        line_endings: LineEndingSet,
-    ) -> Self {
+    pub const fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
         self
     }
@@ -193,9 +190,7 @@ where
         if let Some(ch) = self.pending_char {
             pending_chars.push(ch);
         }
-        pending_chars.extend_from_slice(
-            &self.chars[self.char_position..self.char_limit],
-        );
+        pending_chars.extend_from_slice(&self.chars[self.char_position..self.char_limit]);
         TextReaderParts {
             input: inner,
             unread_bytes: unread,
@@ -241,10 +236,7 @@ where
         if self.started {
             return Ok(());
         }
-        let required = self
-            .decoder
-            .max_reset_output_len()
-            .map_err(capacity_error_to_io)?;
+        let required = self.decoder.max_reset_output_len().map_err(capacity_error_to_io)?;
         if self.chars.len() < required {
             self.chars.resize(required, '\0');
         }
@@ -299,8 +291,7 @@ where
     fn discard_line_after_limit(&mut self) -> io::Result<()> {
         let line_endings = self.line_endings;
         let mut pending = self.pending_char.take();
-        let result =
-            discard_line_with(line_endings, &mut pending, || self.read_char());
+        let result = discard_line_with(line_endings, &mut pending, || self.read_char());
         self.pending_char = pending;
         result
     }
@@ -403,8 +394,7 @@ where
         }
         match coverage_status(progress.status(), true) {
             TranscodeStatus::NeedOutput { .. } => {
-                self.chars
-                    .resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
+                self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
                 return self.fill_chars();
             }
             TranscodeStatus::Complete => {
@@ -443,17 +433,11 @@ where
     /// and restores `output` to its original length when the next decoded
     /// character would exceed `max_append_len`. Previously consumed characters
     /// remain consumed by the reader.
-    pub fn read_to_string_limited(
-        &mut self,
-        output: &mut String,
-        max_append_len: usize,
-    ) -> io::Result<usize> {
+    pub fn read_to_string_limited(&mut self, output: &mut String, max_append_len: usize) -> io::Result<usize> {
         let initial_len = output.len();
         let mut count = 0;
         while let Some(ch) = self.read_char()? {
-            if let Err(error) =
-                append_limited_char(output, initial_len, max_append_len, ch)
-            {
+            if let Err(error) = append_limited_char(output, initial_len, max_append_len, ch) {
                 self.pending_char = Some(ch);
                 return Err(error);
             }
@@ -482,17 +466,11 @@ where
     /// length when the line exceeds `max_append_len`. The remainder of the
     /// oversized line is consumed through its configured line ending before
     /// the error is returned.
-    pub fn read_line_limited(
-        &mut self,
-        output: &mut String,
-        max_append_len: usize,
-    ) -> io::Result<bool> {
+    pub fn read_line_limited(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
         let initial_len = output.len();
         let mut read = false;
         while let Some(ch) = self.read_char()? {
-            if let Err(error) =
-                append_limited_char(output, initial_len, max_append_len, ch)
-            {
+            if let Err(error) = append_limited_char(output, initial_len, max_append_len, ch) {
                 self.pending_char = Some(ch);
                 return self.discard_line_after_limit().and(Err(error));
             }
@@ -504,22 +482,14 @@ where
                 if self.line_endings.contains(crate::LineEnding::CrLf) {
                     match self.read_char()? {
                         Some('\n') => {
-                            if let Err(error) = append_limited_char(
-                                output,
-                                initial_len,
-                                max_append_len,
-                                '\n',
-                            ) {
+                            if let Err(error) = append_limited_char(output, initial_len, max_append_len, '\n') {
                                 self.pending_char = Some('\n');
-                                return self
-                                    .discard_line_after_limit()
-                                    .and(Err(error));
+                                return self.discard_line_after_limit().and(Err(error));
                             }
                             return Ok(true);
                         }
                         Some(next) => {
-                            if self.line_endings.contains(crate::LineEnding::Cr)
-                            {
+                            if self.line_endings.contains(crate::LineEnding::Cr) {
                                 self.pending_char = Some(next);
                                 return Ok(true);
                             }
@@ -544,10 +514,7 @@ thread_local! {
 }
 
 #[cfg(coverage)]
-fn coverage_status(
-    status: TranscodeStatus,
-    from_fill: bool,
-) -> TranscodeStatus {
+fn coverage_status(status: TranscodeStatus, from_fill: bool) -> TranscodeStatus {
     let mode = COVERAGE_FORCE_STATUS.with(|state| state.replace(0));
     match (from_fill, mode) {
         (false, 1) | (true, 3) => TranscodeStatus::NeedInput {
@@ -572,10 +539,7 @@ fn coverage_force_fill_error() -> bool {
 }
 
 #[cfg(not(coverage))]
-fn coverage_status(
-    status: TranscodeStatus,
-    _from_fill: bool,
-) -> TranscodeStatus {
+fn coverage_status(status: TranscodeStatus, _from_fill: bool) -> TranscodeStatus {
     status
 }
 
@@ -595,18 +559,12 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
-        let ch = unsafe {
-            UncheckedSlice::read(self.chars.as_slice(), self.char_position)
-        };
+        let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
         self.char_position += 1;
         Ok(Some(ch))
     }
 
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         if max > 0
             && let Some(ch) = self.pending_char.take()
@@ -625,10 +583,7 @@ where
         Ok(count)
     }
 
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         if let Some(ch) = self.pending_char.take() {
             output.push(ch);
@@ -654,10 +609,7 @@ where
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let line_endings = self.line_endings;
         let mut pending_char = self.pending_char.take();
-        let result =
-            read_line_with(line_endings, output, &mut pending_char, || {
-                self.read_char()
-            });
+        let result = read_line_with(line_endings, output, &mut pending_char, || self.read_char());
         self.pending_char = pending_char;
         result
     }

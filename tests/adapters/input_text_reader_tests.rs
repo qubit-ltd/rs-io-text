@@ -24,12 +24,7 @@ struct FailingCharInput;
 impl Input for FailingCharInput {
     type Item = char;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        _output: &mut [char],
-        _index: usize,
-        _count: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, _output: &mut [char], _index: usize, _count: usize) -> std::io::Result<usize> {
         Err(Error::other("read failed"))
     }
 }
@@ -42,12 +37,7 @@ struct CrThenErrorThenChar {
 impl Input for CrThenErrorThenChar {
     type Item = char;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [char],
-        index: usize,
-        _count: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [char], index: usize, _count: usize) -> std::io::Result<usize> {
         match self.state {
             0 => {
                 output[index] = '\r';
@@ -92,16 +82,10 @@ impl ChunkedCharInput {
 impl Input for ChunkedCharInput {
     type Item = char;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [char],
-        index: usize,
-        count: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [char], index: usize, count: usize) -> std::io::Result<usize> {
         let available = self.chars.len().saturating_sub(self.position);
         let read = available.min(count).min(self.max_chunk);
-        output[index..index + read]
-            .copy_from_slice(&self.chars[self.position..self.position + read]);
+        output[index..index + read].copy_from_slice(&self.chars[self.position..self.position + read]);
         self.position += read;
         Ok(read)
     }
@@ -128,8 +112,7 @@ fn test_read_line_accepts_crlf_and_cr_by_default() -> std::io::Result<()> {
 #[test]
 fn test_read_line_can_restrict_accepted_endings() -> std::io::Result<()> {
     let input = StringCharInput::new("first\rsecond\nthird".to_owned());
-    let mut reader = InputTextReader::new(input)
-        .with_line_endings(LineEndingSet::only(LineEnding::Lf));
+    let mut reader = InputTextReader::new(input).with_line_endings(LineEndingSet::only(LineEnding::Lf));
     let mut line = String::new();
 
     assert_eq!(LineEndingSet::LF, reader.line_endings());
@@ -143,20 +126,17 @@ fn test_read_line_can_restrict_accepted_endings() -> std::io::Result<()> {
 
 #[test]
 fn test_read_line_handles_chunked_crlf_and_cr_paths() -> std::io::Result<()> {
-    let mut reader =
-        InputTextReader::new(ChunkedCharInput::new("first\r\nnext", 1));
+    let mut reader = InputTextReader::new(ChunkedCharInput::new("first\r\nnext", 1));
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("first\r\n", line);
 
-    let mut reader =
-        InputTextReader::new(ChunkedCharInput::new("first\rnext", 1));
+    let mut reader = InputTextReader::new(ChunkedCharInput::new("first\rnext", 1));
     line.clear();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("first\r", line);
 
-    let mut reader = InputTextReader::new(ChunkedCharInput::new("tail\r", 1))
-        .with_line_endings(LineEndingSet::CRLF);
+    let mut reader = InputTextReader::new(ChunkedCharInput::new("tail\r", 1)).with_line_endings(LineEndingSet::CRLF);
     line.clear();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("tail\r", line);
@@ -164,8 +144,7 @@ fn test_read_line_handles_chunked_crlf_and_cr_paths() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_line_preserves_cr_when_crlf_lookahead_fails() -> std::io::Result<()>
-{
+fn test_read_line_preserves_cr_when_crlf_lookahead_fails() -> std::io::Result<()> {
     let mut reader = InputTextReader::new(CrThenErrorThenChar { state: 0 });
     let mut line = String::new();
 
@@ -226,8 +205,7 @@ fn test_new_accepts_already_buffered_input() -> std::io::Result<()> {
 
 #[test]
 fn test_from_boxed_wraps_unbuffered_input() -> std::io::Result<()> {
-    let input: Box<dyn Input<Item = char>> =
-        Box::new(StringCharInput::new("boxed".to_owned()));
+    let input: Box<dyn Input<Item = char>> = Box::new(StringCharInput::new("boxed".to_owned()));
     let mut reader = InputTextReader::from_boxed(input);
     let mut output = String::new();
 
@@ -239,8 +217,7 @@ fn test_from_boxed_wraps_unbuffered_input() -> std::io::Result<()> {
 
 #[test]
 fn test_from_boxed_keeps_buffered_input() -> std::io::Result<()> {
-    let input: Box<dyn Input<Item = char>> =
-        Box::new(BufferedInput::new(StringCharInput::new("buf".to_owned())));
+    let input: Box<dyn Input<Item = char>> = Box::new(BufferedInput::new(StringCharInput::new("buf".to_owned())));
     let mut reader = InputTextReader::from_boxed(input);
     let debug = format!("{reader:?}");
 
@@ -333,21 +310,15 @@ fn test_read_methods_propagate_input_errors() {
     assert_other_error(InputTextReader::new(FailingCharInput).read_char());
 
     let mut chars = vec!['x'];
-    assert_other_error(
-        InputTextReader::new(FailingCharInput).read_chars(&mut chars, 1),
-    );
+    assert_other_error(InputTextReader::new(FailingCharInput).read_chars(&mut chars, 1));
     assert_eq!(vec!['x'], chars);
 
     let mut text = String::from("seed:");
-    assert_other_error(
-        InputTextReader::new(FailingCharInput).read_to_string(&mut text),
-    );
+    assert_other_error(InputTextReader::new(FailingCharInput).read_to_string(&mut text));
     assert_eq!("seed:", text);
 
     let mut line = String::from("seed:");
-    assert_other_error(
-        InputTextReader::new(FailingCharInput).read_line(&mut line),
-    );
+    assert_other_error(InputTextReader::new(FailingCharInput).read_line(&mut line));
     assert_eq!("seed:", line);
 }
 
@@ -381,8 +352,7 @@ fn test_read_line_without_newline_reads_direct_chunk() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_read_line_preserves_batched_tail_for_next_read() -> std::io::Result<()>
-{
+fn test_read_line_preserves_batched_tail_for_next_read() -> std::io::Result<()> {
     let input = StringCharInput::new("a\nb\nc".to_owned());
     let mut reader = InputTextReader::new(input);
     let mut line = String::new();

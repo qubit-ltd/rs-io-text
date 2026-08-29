@@ -78,8 +78,7 @@ where
     #[must_use]
     #[inline]
     pub fn new(output: O, codec: C, policy: CharsetEncodePolicy) -> Self {
-        Self::try_new(output, codec, policy)
-            .expect("charset encode policy replacement must be encodable")
+        Self::try_new(output, codec, policy).expect("charset encode policy replacement must be encodable")
     }
 
     /// Creates a charset text writer and reports an invalid replacement policy.
@@ -88,11 +87,7 @@ where
     ///
     /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
     /// configured replacement character.
-    pub fn try_new(
-        output: O,
-        codec: C,
-        policy: CharsetEncodePolicy,
-    ) -> Result<Self, CharsetEncodeError> {
+    pub fn try_new(output: O, codec: C, policy: CharsetEncodePolicy) -> Result<Self, CharsetEncodeError> {
         let encoder = CharsetEncoder::with_policy(codec, policy)?;
         Ok(Self {
             writer: BufferedWriter::new(output, encoder),
@@ -118,19 +113,9 @@ where
     /// by the codec.
     #[must_use]
     #[inline]
-    pub fn new_with_buffer_capacity(
-        output: O,
-        codec: C,
-        policy: CharsetEncodePolicy,
-        buffer_capacity: usize,
-    ) -> Self {
-        Self::try_new_with_buffer_capacity(
-            output,
-            codec,
-            policy,
-            buffer_capacity,
-        )
-        .expect("charset encode policy replacement must be encodable")
+    pub fn new_with_buffer_capacity(output: O, codec: C, policy: CharsetEncodePolicy, buffer_capacity: usize) -> Self {
+        Self::try_new_with_buffer_capacity(output, codec, policy, buffer_capacity)
+            .expect("charset encode policy replacement must be encodable")
     }
 
     /// Creates a charset text writer with a requested capacity and reports an
@@ -148,11 +133,7 @@ where
     ) -> Result<Self, CharsetEncodeError> {
         let encoder = CharsetEncoder::with_policy(codec, policy)?;
         Ok(Self {
-            writer: BufferedWriter::with_capacity(
-                output,
-                encoder,
-                buffer_capacity,
-            ),
+            writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
         })
     }
 

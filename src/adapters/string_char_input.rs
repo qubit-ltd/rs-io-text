@@ -68,12 +68,7 @@ impl Input for StringCharInput {
 
     /// Reads characters into an indexed output range.
     #[inline]
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [char],
-        index: usize,
-        count: usize,
-    ) -> Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [char], index: usize, count: usize) -> Result<usize> {
         debug_assert!(
             SliceRange::range_fits(output.len(), index, count),
             "unchecked read range exceeds output buffer"

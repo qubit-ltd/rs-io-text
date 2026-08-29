@@ -34,18 +34,12 @@ impl InputOnlyReader {
 impl Input for InputOnlyReader {
     type Item = u8;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> io::Result<usize> {
         let available = self.bytes.len() - self.position;
         let read = available.min(count);
         let input_end = self.position + read;
         let output_end = index + read;
-        output[index..output_end]
-            .copy_from_slice(&self.bytes[self.position..input_end]);
+        output[index..output_end].copy_from_slice(&self.bytes[self.position..input_end]);
         self.position = input_end;
         Ok(read)
     }
@@ -113,9 +107,8 @@ fn test_read_char_and_line_from_utf8_reader() -> std::io::Result<()> {
 
 #[test]
 fn test_utf8_reader_configures_line_endings() -> std::io::Result<()> {
-    let mut reader =
-        Utf8TextReader::new(Cursor::new(b"first\rsecond\nthird".to_vec()))
-            .with_line_endings(LineEndingSet::only(LineEnding::Cr));
+    let mut reader = Utf8TextReader::new(Cursor::new(b"first\rsecond\nthird".to_vec()))
+        .with_line_endings(LineEndingSet::only(LineEnding::Cr));
     assert_eq!(LineEndingSet::CR, reader.line_endings());
 
     let mut line = String::new();
@@ -125,10 +118,8 @@ fn test_utf8_reader_configures_line_endings() -> std::io::Result<()> {
 }
 
 #[test]
-fn test_utf8_reader_read_line_limited_preserves_existing_output()
--> std::io::Result<()> {
-    let mut reader =
-        Utf8TextReader::new(Cursor::new("a中\nnext".as_bytes().to_vec()));
+fn test_utf8_reader_read_line_limited_preserves_existing_output() -> std::io::Result<()> {
+    let mut reader = Utf8TextReader::new(Cursor::new("a中\nnext".as_bytes().to_vec()));
     let mut output = String::from("prefix-");
 
     let error = reader
@@ -149,8 +140,7 @@ fn test_new_accessors_expose_wrapped_input() {
 }
 
 #[test]
-fn test_utf8_text_reader_into_parts_preserves_unreturned_characters()
--> std::io::Result<()> {
+fn test_utf8_text_reader_into_parts_preserves_unreturned_characters() -> std::io::Result<()> {
     let mut reader = Utf8TextReader::new(Cursor::new(b"abc".to_vec()));
 
     assert_eq!(Some('a'), reader.read_char()?);
@@ -249,9 +239,7 @@ fn test_read_char_retries_interrupted_first_byte() -> std::io::Result<()> {
 fn test_read_char_propagates_io_errors() {
     let mut reader = Utf8TextReader::new(FailingReader);
 
-    let error = reader
-        .read_char()
-        .expect_err("reader I/O errors must be propagated");
+    let error = reader.read_char().expect_err("reader I/O errors must be propagated");
     assert_eq!(ErrorKind::Other, error.kind());
 }
 
@@ -260,9 +248,7 @@ fn test_read_char_reports_invalid_utf8() {
     let input = Cursor::new(vec![0xE4, 0xFF, 0xAD]);
     let mut reader = Utf8TextReader::new(input);
 
-    let error = reader
-        .read_char()
-        .expect_err("invalid UTF-8 scalar must be rejected");
+    let error = reader.read_char().expect_err("invalid UTF-8 scalar must be rejected");
     assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
@@ -282,9 +268,7 @@ fn test_read_char_reports_truncated_utf8_sequence() {
     let input = Cursor::new(vec![0xE4, 0xB8]);
     let mut reader = Utf8TextReader::new(input);
 
-    let error = reader
-        .read_char()
-        .expect_err("truncated UTF-8 scalar must be rejected");
+    let error = reader.read_char().expect_err("truncated UTF-8 scalar must be rejected");
     assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 

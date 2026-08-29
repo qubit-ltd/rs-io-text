@@ -56,24 +56,15 @@ impl AsyncTextWrite for AsyncWriter {
         Ok(())
     }
 
-    async fn write_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> Result<usize, Self::Error> {
+    async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
         Ok(chars.len())
     }
 
-    async fn write_str_async(
-        &mut self,
-        text: &str,
-    ) -> Result<usize, Self::Error> {
+    async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
         Ok(text.len())
     }
 
-    async fn write_line_fully_async(
-        &mut self,
-        _line: &str,
-    ) -> Result<(), Self::Error> {
+    async fn write_line_fully_async(&mut self, _line: &str) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -99,10 +90,7 @@ impl AsyncTextWrite for PartialAsyncWriter {
         Ok(())
     }
 
-    async fn write_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> Result<usize, Self::Error> {
+    async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
         let Some(ch) = chars.first() else {
             return Ok(0);
         };
@@ -110,10 +98,7 @@ impl AsyncTextWrite for PartialAsyncWriter {
         Ok(1)
     }
 
-    async fn write_str_async(
-        &mut self,
-        text: &str,
-    ) -> Result<usize, Self::Error> {
+    async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
         let Some(ch) = text.chars().next() else {
             return Ok(0);
         };
@@ -121,10 +106,7 @@ impl AsyncTextWrite for PartialAsyncWriter {
         Ok(ch.len_utf8())
     }
 
-    async fn write_line_fully_async(
-        &mut self,
-        _line: &str,
-    ) -> Result<(), Self::Error> {
+    async fn write_line_fully_async(&mut self, _line: &str) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -146,24 +128,15 @@ impl AsyncTextWrite for FailingAsyncWriter {
         Err(WriteError)
     }
 
-    async fn write_chars_async(
-        &mut self,
-        _chars: &[char],
-    ) -> Result<usize, Self::Error> {
+    async fn write_chars_async(&mut self, _chars: &[char]) -> Result<usize, Self::Error> {
         Err(WriteError)
     }
 
-    async fn write_str_async(
-        &mut self,
-        _text: &str,
-    ) -> Result<usize, Self::Error> {
+    async fn write_str_async(&mut self, _text: &str) -> Result<usize, Self::Error> {
         Err(WriteError)
     }
 
-    async fn write_line_fully_async(
-        &mut self,
-        _line: &str,
-    ) -> Result<(), Self::Error> {
+    async fn write_line_fully_async(&mut self, _line: &str) -> Result<(), Self::Error> {
         Err(WriteError)
     }
 
@@ -185,24 +158,15 @@ impl AsyncTextWrite for ZeroProgressAsyncWriter {
         Ok(())
     }
 
-    async fn write_chars_async(
-        &mut self,
-        _chars: &[char],
-    ) -> Result<usize, Self::Error> {
+    async fn write_chars_async(&mut self, _chars: &[char]) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
-    async fn write_str_async(
-        &mut self,
-        _text: &str,
-    ) -> Result<usize, Self::Error> {
+    async fn write_str_async(&mut self, _text: &str) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
-    async fn write_line_fully_async(
-        &mut self,
-        _line: &str,
-    ) -> Result<(), Self::Error> {
+    async fn write_line_fully_async(&mut self, _line: &str) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -224,24 +188,15 @@ impl AsyncTextWrite for OverreportingAsyncWriter {
         Ok(())
     }
 
-    async fn write_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> Result<usize, Self::Error> {
+    async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
         Ok(chars.len().saturating_add(1))
     }
 
-    async fn write_str_async(
-        &mut self,
-        text: &str,
-    ) -> Result<usize, Self::Error> {
+    async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
         Ok(text.len().saturating_add(1))
     }
 
-    async fn write_line_fully_async(
-        &mut self,
-        _line: &str,
-    ) -> Result<(), Self::Error> {
+    async fn write_line_fully_async(&mut self, _line: &str) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -263,24 +218,15 @@ impl AsyncTextWrite for NonBoundaryAsyncWriter {
         Ok(())
     }
 
-    async fn write_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> Result<usize, Self::Error> {
+    async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
         Ok(chars.len())
     }
 
-    async fn write_str_async(
-        &mut self,
-        _text: &str,
-    ) -> Result<usize, Self::Error> {
+    async fn write_str_async(&mut self, _text: &str) -> Result<usize, Self::Error> {
         Ok(1)
     }
 
-    async fn write_line_fully_async(
-        &mut self,
-        _line: &str,
-    ) -> Result<(), Self::Error> {
+    async fn write_line_fully_async(&mut self, _line: &str) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -313,10 +259,7 @@ fn test_async_text_read_defaults_cover_limits_and_errors() {
     assert_eq!(&['a'], chars.as_slice());
 
     let mut reader = FailingAsyncReader;
-    assert_eq!(
-        Err(ReadError),
-        complete(reader.read_chars_async(&mut Vec::new(), 1)),
-    );
+    assert_eq!(Err(ReadError), complete(reader.read_chars_async(&mut Vec::new(), 1)),);
     assert_eq!(
         Err(ReadError),
         complete(reader.read_to_string_async(&mut String::new())),
@@ -335,10 +278,7 @@ fn test_async_text_write_defaults_complete_partial_writes() {
         text: String::new(),
     };
 
-    assert_eq!(
-        Ok(()),
-        complete(writer.write_chars_fully_async(&['A', '中', '🙂'])),
-    );
+    assert_eq!(Ok(()), complete(writer.write_chars_fully_async(&['A', '中', '🙂'])),);
     assert_eq!(Ok(()), complete(writer.write_str_fully_async("A中🙂")));
     assert_eq!("A中🙂", writer.chars);
     assert_eq!("A中🙂", writer.text);
@@ -348,53 +288,40 @@ fn test_async_text_write_defaults_complete_partial_writes() {
 fn test_async_text_write_defaults_propagate_errors() {
     let mut writer = FailingAsyncWriter;
 
-    assert_eq!(
-        Err(WriteError),
-        complete(writer.write_chars_fully_async(&['A'])),
-    );
+    assert_eq!(Err(WriteError), complete(writer.write_chars_fully_async(&['A'])),);
     assert_eq!(Err(WriteError), complete(writer.write_str_fully_async("A")),);
 }
 
 #[test]
-#[should_panic(
-    expected = "AsyncTextWrite::write_chars_async returned zero for nonempty input"
-)]
+#[should_panic(expected = "AsyncTextWrite::write_chars_async returned zero for nonempty input")]
 fn test_async_text_write_default_character_write_rejects_zero_progress() {
     let mut writer = ZeroProgressAsyncWriter;
     let _ = complete(writer.write_chars_fully_async(&['A']));
 }
 
 #[test]
-#[should_panic(
-    expected = "AsyncTextWrite::write_str_async returned zero for nonempty input"
-)]
+#[should_panic(expected = "AsyncTextWrite::write_str_async returned zero for nonempty input")]
 fn test_async_text_write_default_string_write_rejects_zero_progress() {
     let mut writer = ZeroProgressAsyncWriter;
     let _ = complete(writer.write_str_fully_async("A"));
 }
 
 #[test]
-#[should_panic(
-    expected = "AsyncTextWrite::write_chars_async returned more characters than supplied"
-)]
+#[should_panic(expected = "AsyncTextWrite::write_chars_async returned more characters than supplied")]
 fn test_async_text_write_default_character_write_rejects_overreporting() {
     let mut writer = OverreportingAsyncWriter;
     let _ = complete(writer.write_chars_fully_async(&['A']));
 }
 
 #[test]
-#[should_panic(
-    expected = "AsyncTextWrite::write_str_async returned more bytes than supplied"
-)]
+#[should_panic(expected = "AsyncTextWrite::write_str_async returned more bytes than supplied")]
 fn test_async_text_write_default_string_write_rejects_overreporting() {
     let mut writer = OverreportingAsyncWriter;
     let _ = complete(writer.write_str_fully_async("A"));
 }
 
 #[test]
-#[should_panic(
-    expected = "AsyncTextWrite::write_str_async returned a non-character-boundary prefix"
-)]
+#[should_panic(expected = "AsyncTextWrite::write_str_async returned a non-character-boundary prefix")]
 fn test_async_text_write_default_string_write_rejects_non_boundary_progress() {
     let mut writer = NonBoundaryAsyncWriter;
     let _ = complete(writer.write_str_fully_async("é"));

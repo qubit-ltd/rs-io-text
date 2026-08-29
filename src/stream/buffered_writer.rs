@@ -96,10 +96,7 @@ where
     #[must_use]
     pub fn with_capacity(inner: W, encoder: E, capacity: usize) -> Self {
         let one = nonzero(1).get();
-        let min_output_capacity = encoder
-            .max_transcode_output_len(one)
-            .unwrap_or(one)
-            .max(one);
+        let min_output_capacity = encoder.max_transcode_output_len(one).unwrap_or(one).max(one);
         let capacity = capacity.max(min_output_capacity);
         Self {
             output: TranscodeEncodeOutput::with_capacity(inner, capacity),
@@ -196,13 +193,8 @@ where
     /// Returns encoding errors or I/O errors from the wrapped writer.
     fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
         self.ensure_started()?;
-        self.output.transcode(
-            &mut self.encoder,
-            &mut encode_error_to_io,
-            chars,
-            0,
-            chars.len(),
-        )?;
+        self.output
+            .transcode(&mut self.encoder, &mut encode_error_to_io, chars, 0, chars.len())?;
         Ok(())
     }
 
@@ -210,10 +202,7 @@ where
     ///
     /// This is crate-private because bypassing the encoder is only valid for a
     /// stateless UTF-8 encoder whose input is already a valid Rust string.
-    pub(crate) fn write_encoded_bytes(
-        &mut self,
-        bytes: &[u8],
-    ) -> io::Result<()> {
+    pub(crate) fn write_encoded_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
         self.ensure_open()?;
         if bytes.is_empty() {
             return Ok(());
@@ -223,11 +212,9 @@ where
         while offset < bytes.len() {
             let requested = (bytes.len() - offset).min(DEFAULT_BUFFER_CAPACITY);
             self.output.ensure_spare_capacity(requested)?;
-            let (units, output_index, available) =
-                self.output.spare_raw_parts_mut();
+            let (units, output_index, available) = self.output.spare_raw_parts_mut();
             let count = requested.min(available);
-            units[output_index..output_index + count]
-                .copy_from_slice(&bytes[offset..offset + count]);
+            units[output_index..output_index + count].copy_from_slice(&bytes[offset..offset + count]);
             // SAFETY: `count` units were initialized in the spare window above.
             unsafe {
                 self.output.advance(count);
@@ -247,8 +234,7 @@ where
         if self.started {
             return Ok(());
         }
-        self.output
-            .reset(&mut self.encoder, &mut encode_error_to_io)?;
+        self.output.reset(&mut self.encoder, &mut encode_error_to_io)?;
         self.started = true;
         Ok(())
     }

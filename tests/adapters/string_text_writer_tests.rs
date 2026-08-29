@@ -28,12 +28,10 @@ fn test_string_implements_text_write() -> Result<(), Infallible> {
 }
 
 #[test]
-fn test_string_text_writer_uses_configured_line_ending() -> std::io::Result<()>
-{
+fn test_string_text_writer_uses_configured_line_ending() -> std::io::Result<()> {
     let mut output = String::new();
     {
-        let mut writer = StringTextWriter::new(&mut output)
-            .with_line_ending(LineEnding::CrLf);
+        let mut writer = StringTextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
 
         writer.write_line("first")?;
         writer.write_str("second")?;

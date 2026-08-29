@@ -59,10 +59,7 @@ impl StringTextReader {
     /// # Returns
     /// This reader with the requested line-ending configuration.
     #[must_use]
-    pub const fn with_line_endings(
-        mut self,
-        line_endings: LineEndingSet,
-    ) -> Self {
+    pub const fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
         self
     }
@@ -95,11 +92,7 @@ impl TextRead for StringTextReader {
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         if max > 0
             && let Some(ch) = self.pending_char.take()
@@ -117,17 +110,13 @@ impl TextRead for StringTextReader {
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         if let Some(ch) = self.pending_char.take() {
             output.push(ch);
             count = 1;
         }
-        Ok(count
-            + read_to_string_at(self.text.as_str(), &mut self.position, output))
+        Ok(count + read_to_string_at(self.text.as_str(), &mut self.position, output))
     }
 }
 
@@ -138,10 +127,9 @@ impl TextLineRead for StringTextReader {
         let position = &mut self.position;
         let mut pending_char = self.pending_char.take();
         let line_endings = self.line_endings;
-        let result =
-            read_line_with(line_endings, output, &mut pending_char, || {
-                Ok(read_char_at(text, position))
-            });
+        let result = read_line_with(line_endings, output, &mut pending_char, || {
+            Ok(read_char_at(text, position))
+        });
         self.pending_char = pending_char;
         result
     }

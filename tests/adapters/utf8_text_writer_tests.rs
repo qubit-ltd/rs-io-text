@@ -22,12 +22,7 @@ struct OutputOnlyWriter {
 impl Output for OutputOnlyWriter {
     type Item = u8;
 
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[u8],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> io::Result<usize> {
         let end = index + count;
         self.bytes.extend_from_slice(&input[index..end]);
         Ok(count)
@@ -67,8 +62,7 @@ fn test_new_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
 fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
-        let mut writer =
-            Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
+        let mut writer = Utf8TextWriter::new(&mut output).with_line_ending(LineEnding::CrLf);
 
         writer.write_char('中')?;
         writer.write_chars(&['x', 'y'])?;
@@ -114,9 +108,7 @@ fn test_finish_then_into_parts_returns_output() -> std::io::Result<()> {
 fn test_finish_error_leaves_utf8_writer_available_for_retry() {
     let mut writer = Utf8TextWriter::new(FailingWriter);
 
-    let error = writer
-        .finish()
-        .expect_err("finish should report write failure");
+    let error = writer.finish().expect_err("finish should report write failure");
 
     assert_eq!(ErrorKind::Other, error.kind());
     let _ = writer.output();

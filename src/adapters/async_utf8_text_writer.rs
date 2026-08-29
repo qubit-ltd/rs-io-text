@@ -142,24 +142,15 @@ where
         self.0.write_char_async(ch).await
     }
 
-    async fn write_chars_async(
-        &mut self,
-        chars: &[char],
-    ) -> Result<usize, Self::Error> {
+    async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
         self.0.write_chars_async(chars).await
     }
 
-    async fn write_str_async(
-        &mut self,
-        text: &str,
-    ) -> Result<usize, Self::Error> {
+    async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
         self.0.write_str_async(text).await
     }
 
-    async fn write_line_fully_async(
-        &mut self,
-        line: &str,
-    ) -> Result<(), Self::Error> {
+    async fn write_line_fully_async(&mut self, line: &str) -> Result<(), Self::Error> {
         self.0.write_line_fully_async(line).await
     }
 

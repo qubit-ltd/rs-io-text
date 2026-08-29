@@ -28,8 +28,7 @@ fn test_read_char_returns_unicode_scalars() -> Result<(), Infallible> {
 }
 
 #[test]
-fn test_read_line_accepts_all_common_line_endings_by_default()
--> Result<(), Infallible> {
+fn test_read_line_accepts_all_common_line_endings_by_default() -> Result<(), Infallible> {
     let mut reader = StrTextReader::new("lf\ncrlf\r\ncr\rtail");
     let mut line = String::new();
 
@@ -49,8 +48,7 @@ fn test_read_line_accepts_all_common_line_endings_by_default()
 
 #[test]
 fn test_read_line_honors_configured_line_endings() -> Result<(), Infallible> {
-    let mut reader = StrTextReader::new("first\rsecond\nthird")
-        .with_line_endings(LineEndingSet::only(LineEnding::Cr));
+    let mut reader = StrTextReader::new("first\rsecond\nthird").with_line_endings(LineEndingSet::only(LineEnding::Cr));
     let mut line = String::new();
 
     assert!(reader.read_line(&mut line)?);
@@ -62,10 +60,8 @@ fn test_read_line_honors_configured_line_endings() -> Result<(), Infallible> {
 }
 
 #[test]
-fn test_read_line_pending_character_is_returned_by_other_read_methods()
--> Result<(), Infallible> {
-    let mut reader = StrTextReader::new("first\rsecond")
-        .with_line_endings(LineEndingSet::ALL);
+fn test_read_line_pending_character_is_returned_by_other_read_methods() -> Result<(), Infallible> {
+    let mut reader = StrTextReader::new("first\rsecond").with_line_endings(LineEndingSet::ALL);
     assert_eq!(LineEndingSet::ALL, reader.line_endings());
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
@@ -82,25 +78,19 @@ fn test_read_line_pending_character_is_returned_by_other_read_methods()
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
     let mut output = String::new();
-    assert_eq!(
-        1 + "econd".chars().count(),
-        reader.read_to_string(&mut output)?
-    );
+    assert_eq!(1 + "econd".chars().count(), reader.read_to_string(&mut output)?);
     assert_eq!("second", output);
     Ok(())
 }
 
 #[test]
-fn test_read_line_crlf_only_handles_lone_cr_and_eof() -> Result<(), Infallible>
-{
-    let mut reader = StrTextReader::new("first\rsecond\r\nlast")
-        .with_line_endings(LineEndingSet::CRLF);
+fn test_read_line_crlf_only_handles_lone_cr_and_eof() -> Result<(), Infallible> {
+    let mut reader = StrTextReader::new("first\rsecond\r\nlast").with_line_endings(LineEndingSet::CRLF);
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("first\rsecond\r\n", line);
 
-    let mut reader =
-        StrTextReader::new("tail\r").with_line_endings(LineEndingSet::CRLF);
+    let mut reader = StrTextReader::new("tail\r").with_line_endings(LineEndingSet::CRLF);
     line.clear();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("tail\r", line);

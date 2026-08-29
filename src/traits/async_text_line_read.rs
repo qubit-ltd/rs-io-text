@@ -33,8 +33,5 @@ pub trait AsyncTextLineRead: AsyncTextRead {
     ///
     /// Returns an implementation-specific source or decoding error. A line
     /// prefix can remain in `output` when a later read fails.
-    async fn read_line_async(
-        &mut self,
-        output: &mut String,
-    ) -> Result<bool, Self::Error>;
+    async fn read_line_async(&mut self, output: &mut String) -> Result<bool, Self::Error>;
 }

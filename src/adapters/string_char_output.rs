@@ -57,12 +57,7 @@ impl Output for StringCharOutput<'_> {
 
     /// Writes characters from an indexed input range.
     #[inline]
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[char],
-        index: usize,
-        count: usize,
-    ) -> Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[char], index: usize, count: usize) -> Result<usize> {
         // SAFETY: The caller guarantees that the range is valid inside
         // `input`.
         let source = unsafe { UncheckedSlice::subslice(input, index, count) };

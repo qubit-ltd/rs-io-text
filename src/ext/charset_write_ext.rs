@@ -29,11 +29,7 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     /// # Returns
     ///
     /// Returns a streaming text writer with the default buffer capacity.
-    fn charset_text_writer<C>(
-        self,
-        codec: C,
-        policy: CharsetEncodePolicy,
-    ) -> CharsetTextWriter<Self, C>
+    fn charset_text_writer<C>(self, codec: C, policy: CharsetEncodePolicy) -> CharsetTextWriter<Self, C>
     where
         C: CharsetCodec<Unit = u8>,
     {
@@ -72,9 +68,7 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        CharsetTextWriter::new_with_buffer_capacity(
-            self, codec, policy, capacity,
-        )
+        CharsetTextWriter::new_with_buffer_capacity(self, codec, policy, capacity)
     }
 
     /// Fallibly wraps this byte writer with a requested buffer capacity.
@@ -87,9 +81,7 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     where
         C: CharsetCodec<Unit = u8>,
     {
-        CharsetTextWriter::try_new_with_buffer_capacity(
-            self, codec, policy, capacity,
-        )
+        CharsetTextWriter::try_new_with_buffer_capacity(self, codec, policy, capacity)
     }
 
     /// Writes one string as charset-encoded text.
@@ -104,18 +96,12 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     ///
     /// Returns I/O errors from the wrapped writer or invalid-input errors from
     /// charset encoding.
-    fn write_str_with_charset<C>(
-        &mut self,
-        text: &str,
-        codec: C,
-        policy: CharsetEncodePolicy,
-    ) -> io::Result<()>
+    fn write_str_with_charset<C>(&mut self, text: &str, codec: C, policy: CharsetEncodePolicy) -> io::Result<()>
     where
         C: CharsetCodec<Unit = u8>,
     {
-        let mut writer =
-            CharsetTextWriter::try_new(OutputRef::new(self), codec, policy)
-                .map_err(crate::io_error::encode_error_to_io)?;
+        let mut writer = CharsetTextWriter::try_new(OutputRef::new(self), codec, policy)
+            .map_err(crate::io_error::encode_error_to_io)?;
         writer.write_str(text)?;
         writer.finish()
     }

@@ -64,9 +64,7 @@ fn fuzz_replacing_utf8(data: &[u8]) {
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(data.to_vec()),
             Utf8Codec,
-            CharsetDecodePolicy::replace(
-                CharsetDecodePolicy::DEFAULT_REPLACEMENT,
-            ),
+            CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
             capacity,
         );
         let mut output = String::new();
@@ -91,9 +89,7 @@ fn fuzz_utf8_round_trip(data: &[u8]) {
             CharsetEncodePolicy::report(),
             capacity,
         );
-        writer
-            .write_str(text)
-            .expect("valid UTF-8 must encode in strict mode");
+        writer.write_str(text).expect("valid UTF-8 must encode in strict mode");
         writer.finish().expect("in-memory UTF-8 writer must finish");
         let (output, pending) = writer.into_parts();
         assert!(pending.readable().is_empty());
@@ -119,9 +115,7 @@ fn fuzz_bounded_utf8_reads(data: &[u8]) {
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(data.to_vec()),
             Utf8Codec,
-            CharsetDecodePolicy::replace(
-                CharsetDecodePolicy::DEFAULT_REPLACEMENT,
-            ),
+            CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
             capacity,
         );
         let mut output = String::new();
@@ -150,9 +144,7 @@ fn fuzz_multibyte_round_trips(data: &[u8]) {
                 CharsetEncodePolicy::report(),
                 capacity,
             );
-            writer
-                .write_str(text)
-                .expect("UTF-16 encoding must succeed");
+            writer.write_str(text).expect("UTF-16 encoding must succeed");
             writer.finish().expect("UTF-16 writer must finish");
             let (output, pending) = writer.into_parts();
             assert!(pending.readable().is_empty());
@@ -175,9 +167,7 @@ fn fuzz_multibyte_round_trips(data: &[u8]) {
             CharsetEncodePolicy::report(),
             capacity,
         );
-        writer
-            .write_str(text)
-            .expect("UTF-32 encoding must succeed");
+        writer.write_str(text).expect("UTF-32 encoding must succeed");
         writer.finish().expect("UTF-32 writer must finish");
         let (output, pending) = writer.into_parts();
         assert!(pending.readable().is_empty());

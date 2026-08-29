@@ -49,11 +49,7 @@ pub trait AsyncTextRead {
     ///
     /// Returns the first error reported while reading. A successfully appended
     /// prefix remains in `output` when a later read fails.
-    async fn read_chars_async(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    async fn read_chars_async(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max {
             let Some(ch) = self.read_char_async().await? else {
@@ -82,10 +78,7 @@ pub trait AsyncTextRead {
     ///
     /// Returns the first source or decoding error. A successfully appended
     /// prefix remains in `output` when a later read fails.
-    async fn read_to_string_async(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    async fn read_to_string_async(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         while let Some(ch) = self.read_char_async().await? {
             output.push(ch);

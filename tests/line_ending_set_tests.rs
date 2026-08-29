@@ -25,9 +25,7 @@ fn test_line_ending_set_defaults_to_all_common_endings() {
 
 #[test]
 fn test_line_ending_set_can_be_composed_and_reduced() {
-    let endings = LineEndingSet::LF
-        .with(LineEnding::CrLf)
-        .without(LineEnding::Lf);
+    let endings = LineEndingSet::LF.with(LineEnding::CrLf).without(LineEnding::Lf);
 
     assert!(endings.contains(LineEnding::CrLf));
     assert!(!endings.contains(LineEnding::Lf));
@@ -48,8 +46,7 @@ fn test_line_ending_set_can_be_composed_and_reduced() {
 #[cfg(coverage)]
 #[test]
 fn test_line_ending_reader_covers_cr_only_boundary() {
-    let mut reader =
-        StrTextReader::new("prefix\rtail").with_line_endings(LineEndingSet::CR);
+    let mut reader = StrTextReader::new("prefix\rtail").with_line_endings(LineEndingSet::CR);
     let mut line = String::new();
 
     assert!(reader.read_line(&mut line).is_ok_and(|read| read));

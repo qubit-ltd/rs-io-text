@@ -92,19 +92,10 @@ where
     /// too-small capacities enough to retain built-in charset tails.
     #[must_use]
     #[inline]
-    pub fn new_with_buffer_capacity(
-        input: I,
-        codec: C,
-        policy: CharsetDecodePolicy,
-        buffer_capacity: usize,
-    ) -> Self {
+    pub fn new_with_buffer_capacity(input: I, codec: C, policy: CharsetDecodePolicy, buffer_capacity: usize) -> Self {
         let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::with_capacity(
-                input,
-                decoder,
-                buffer_capacity,
-            ),
+            reader: BufferedReader::with_capacity(input, decoder, buffer_capacity),
         }
     }
 
@@ -174,11 +165,7 @@ where
     /// and restores `output` to its original length when the decoded text
     /// exceeds `max_append_len`. Previously consumed characters remain
     /// consumed by the reader.
-    pub fn read_to_string_limited(
-        &mut self,
-        output: &mut String,
-        max_append_len: usize,
-    ) -> io::Result<usize> {
+    pub fn read_to_string_limited(&mut self, output: &mut String, max_append_len: usize) -> io::Result<usize> {
         self.reader.read_to_string_limited(output, max_append_len)
     }
 
@@ -202,11 +189,7 @@ where
     ///
     /// Returns input or decoding errors, or [`io::ErrorKind::InvalidData`]
     /// when the decoded line exceeds `max_append_len`.
-    pub fn read_line_limited(
-        &mut self,
-        output: &mut String,
-        max_append_len: usize,
-    ) -> io::Result<bool> {
+    pub fn read_line_limited(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
         self.reader.read_line_limited(output, max_append_len)
     }
 }
@@ -224,19 +207,12 @@ where
     }
 
     #[inline]
-    fn read_chars(
-        &mut self,
-        output: &mut Vec<char>,
-        max: usize,
-    ) -> Result<usize, Self::Error> {
+    fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
     #[inline]
-    fn read_to_string(
-        &mut self,
-        output: &mut String,
-    ) -> Result<usize, Self::Error> {
+    fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
     }
 }

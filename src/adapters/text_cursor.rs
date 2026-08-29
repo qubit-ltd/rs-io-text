@@ -30,12 +30,7 @@ pub(crate) fn read_char_at(text: &str, position: &mut usize) -> Option<char> {
 ///
 /// # Returns
 /// The number of characters appended.
-pub(crate) fn read_chars_at(
-    text: &str,
-    position: &mut usize,
-    output: &mut Vec<char>,
-    max: usize,
-) -> usize {
+pub(crate) fn read_chars_at(text: &str, position: &mut usize, output: &mut Vec<char>, max: usize) -> usize {
     let mut count = 0;
     while count < max {
         match read_char_at(text, position) {
@@ -58,11 +53,7 @@ pub(crate) fn read_chars_at(
 ///
 /// # Returns
 /// The number of characters appended.
-pub(crate) fn read_to_string_at(
-    text: &str,
-    position: &mut usize,
-    output: &mut String,
-) -> usize {
+pub(crate) fn read_to_string_at(text: &str, position: &mut usize, output: &mut String) -> usize {
     let remaining = &text[*position..];
     let count = remaining.chars().count();
     output.push_str(remaining);

@@ -27,8 +27,7 @@ fn test_from_string_reads_owned_text() -> Result<(), std::convert::Infallible> {
 }
 
 #[test]
-fn test_read_line_accepts_common_endings_by_default() -> Result<(), Infallible>
-{
+fn test_read_line_accepts_common_endings_by_default() -> Result<(), Infallible> {
     let mut reader = StringTextReader::new("a\rb\r\nc\nend".to_owned());
     let mut line = String::new();
 
@@ -48,8 +47,7 @@ fn test_read_line_accepts_common_endings_by_default() -> Result<(), Infallible>
 }
 
 #[test]
-fn test_read_line_pending_character_is_returned_by_other_read_methods()
--> Result<(), Infallible> {
+fn test_read_line_pending_character_is_returned_by_other_read_methods() -> Result<(), Infallible> {
     let mut reader = StringTextReader::new("first\rsecond".to_owned());
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
@@ -72,16 +70,13 @@ fn test_read_line_pending_character_is_returned_by_other_read_methods()
 }
 
 #[test]
-fn test_read_line_crlf_only_handles_lone_cr_and_eof() -> Result<(), Infallible>
-{
-    let mut reader = StringTextReader::new("first\rsecond\r\nlast".to_owned())
-        .with_line_endings(LineEndingSet::CRLF);
+fn test_read_line_crlf_only_handles_lone_cr_and_eof() -> Result<(), Infallible> {
+    let mut reader = StringTextReader::new("first\rsecond\r\nlast".to_owned()).with_line_endings(LineEndingSet::CRLF);
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("first\rsecond\r\n", line);
 
-    let mut reader = StringTextReader::new("tail\r".to_owned())
-        .with_line_endings(LineEndingSet::CRLF);
+    let mut reader = StringTextReader::new("tail\r".to_owned()).with_line_endings(LineEndingSet::CRLF);
     line.clear();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("tail\r", line);
@@ -101,8 +96,7 @@ fn test_read_chars_reads_owned_text() -> Result<(), std::convert::Infallible> {
 }
 
 #[test]
-fn test_read_chars_with_zero_max_does_not_advance()
--> Result<(), std::convert::Infallible> {
+fn test_read_chars_with_zero_max_does_not_advance() -> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new("ab".to_owned());
     let mut chars = vec!['x'];
 
@@ -113,8 +107,7 @@ fn test_read_chars_with_zero_max_does_not_advance()
 }
 
 #[test]
-fn test_read_to_string_appends_remaining_owned_text()
--> Result<(), std::convert::Infallible> {
+fn test_read_to_string_appends_remaining_owned_text() -> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new("ab中".to_owned());
     let mut output = String::from("prefix:");
 
@@ -126,8 +119,7 @@ fn test_read_to_string_appends_remaining_owned_text()
 }
 
 #[test]
-fn test_read_line_returns_false_at_eof() -> Result<(), std::convert::Infallible>
-{
+fn test_read_line_returns_false_at_eof() -> Result<(), std::convert::Infallible> {
     let mut reader = StringTextReader::new(String::new());
     let mut line = String::from("seed");
 

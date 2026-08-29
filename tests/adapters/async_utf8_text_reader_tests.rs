@@ -48,8 +48,7 @@ impl AsyncInput for ReadyInput {
         let count = count.min(self.bytes.len() - self.position);
         let input_end = self.position + count;
         let output_end = output_index + count;
-        output[output_index..output_end]
-            .copy_from_slice(&self.bytes[self.position..input_end]);
+        output[output_index..output_end].copy_from_slice(&self.bytes[self.position..input_end]);
         self.position = input_end;
         Poll::Ready(Ok(count))
     }
@@ -69,13 +68,8 @@ where
 }
 
 #[test]
-fn test_async_utf8_text_reader_decodes_text_and_exposes_inner_reader()
--> io::Result<()> {
-    let mut reader = AsyncUtf8TextReader::with_capacity(
-        ReadyInput::new("A中"),
-        CharsetDecodePolicy::report(),
-        1,
-    );
+fn test_async_utf8_text_reader_decodes_text_and_exposes_inner_reader() -> io::Result<()> {
+    let mut reader = AsyncUtf8TextReader::with_capacity(ReadyInput::new("A中"), CharsetDecodePolicy::report(), 1);
     let mut text = String::new();
 
     assert_eq!(2, complete(reader.read_to_string_async(&mut text))?);
@@ -100,12 +94,8 @@ fn test_async_utf8_text_reader_configuration_and_deref_accessors() {
 }
 
 #[test]
-fn test_async_utf8_text_reader_forwards_all_async_read_methods()
--> io::Result<()> {
-    let mut reader = AsyncUtf8TextReader::with_policy(
-        ReadyInput::new("a\nb"),
-        CharsetDecodePolicy::report(),
-    );
+fn test_async_utf8_text_reader_forwards_all_async_read_methods() -> io::Result<()> {
+    let mut reader = AsyncUtf8TextReader::with_policy(ReadyInput::new("a\nb"), CharsetDecodePolicy::report());
     assert_eq!(Some('a'), complete(reader.read_char_async())?);
 
     let mut chars = Vec::new();

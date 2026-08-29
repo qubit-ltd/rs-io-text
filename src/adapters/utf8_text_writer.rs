@@ -61,11 +61,7 @@ where
     #[must_use]
     pub fn new(output: O) -> Self {
         Self {
-            writer: CharsetTextWriter::new(
-                output,
-                Utf8Codec,
-                CharsetEncodePolicy::report(),
-            ),
+            writer: CharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report()),
         }
     }
 

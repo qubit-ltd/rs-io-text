@@ -140,8 +140,7 @@ where
     #[cfg(coverage)]
     #[doc(hidden)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
-        COVERAGE_RESERVE_FAIL_AFTER
-            .with(|state| state.set(successful_attempts));
+        COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Shrinks the next character buffer capacity in coverage builds.
@@ -227,10 +226,7 @@ where
     /// Returns [`CharsetDecodeError`] when decoding fails, output sizing
     /// overflows, or the configured decode policy rejects malformed or
     /// incomplete input.
-    pub fn decode_to_string(
-        &mut self,
-        input: &[C::Unit],
-    ) -> Result<String, CharsetDecodeError> {
+    pub fn decode_to_string(&mut self, input: &[C::Unit]) -> Result<String, CharsetDecodeError> {
         let mut output = String::new();
         self.decode_to_string_into(input, 0, &mut output)?;
         Ok(output)
@@ -262,9 +258,7 @@ where
         if input_index > input.len() {
             return Err(CharsetDecodeError::new(
                 self.charset,
-                CharsetDecodeErrorKind::InvalidInputIndex {
-                    input_len: input.len(),
-                },
+                CharsetDecodeErrorKind::InvalidInputIndex { input_len: input.len() },
                 input_index,
             ));
         }
@@ -295,17 +289,13 @@ where
         input_index: usize,
         output: &mut String,
     ) -> Result<(), CharsetDecodeError> {
-        let reset_capacity = match coverage_capacity_result(
-            self.decoder.max_reset_output_len(),
-            true,
-        ) {
+        let reset_capacity = match coverage_capacity_result(self.decoder.max_reset_output_len(), true) {
             Ok(capacity) => capacity,
             Err(_) => return Err(output_length_overflow(self.charset)),
         };
         let char_capacity = reset_capacity.max(CHAR_CHUNK_CAPACITY);
         #[cfg(coverage)]
-        let char_capacity =
-            char_capacity.saturating_sub(coverage_take_char_capacity_shrink());
+        let char_capacity = char_capacity.saturating_sub(coverage_take_char_capacity_shrink());
         let mut chars = Vec::new();
         ensure_char_capacity(&mut chars, char_capacity, self.charset)?;
         let reset_written = match self.decoder.reset(&mut chars, 0) {
@@ -317,23 +307,15 @@ where
 
         let mut input_cursor = input_index;
         loop {
-            let progress = match self.decoder.transcode_eof(
-                input,
-                input_cursor,
-                &mut chars,
-                0,
-            ) {
+            let progress = match self.decoder.transcode_eof(input, input_cursor, &mut chars, 0) {
                 Ok(progress) => progress,
                 Err(error) => {
                     return Err(map_decode_error(self.charset, error));
                 }
             };
             append_chars(output, &chars[..progress.written()], self.charset)?;
-            let checked_output_char_count =
-                coverage_output_count(output_char_count);
-            let Some(next_output_char_count) =
-                checked_output_char_count.checked_add(progress.written())
-            else {
+            let checked_output_char_count = coverage_output_count(output_char_count);
+            let Some(next_output_char_count) = checked_output_char_count.checked_add(progress.written()) else {
                 return Err(output_length_overflow(self.charset));
             };
             output_char_count = next_output_char_count;
@@ -346,29 +328,18 @@ where
                         required: required.get(),
                         available,
                     };
-                    return Err(CharsetDecodeError::new(
-                        self.charset,
-                        kind,
-                        input_cursor,
-                    ));
+                    return Err(CharsetDecodeError::new(self.charset, kind, input_cursor));
                 }
                 TranscodeStatus::NeedOutput { required, .. } => {
                     if progress.read() == 0 && progress.written() == 0 {
                         let required = required.get().max(CHAR_CHUNK_CAPACITY);
-                        ensure_char_capacity(
-                            &mut chars,
-                            required,
-                            self.charset,
-                        )?;
+                        ensure_char_capacity(&mut chars, required, self.charset)?;
                     }
                 }
             }
         }
 
-        let finish_capacity = match coverage_capacity_result(
-            self.decoder.max_finish_output_len(),
-            false,
-        ) {
+        let finish_capacity = match coverage_capacity_result(self.decoder.max_finish_output_len(), false) {
             Ok(capacity) => capacity,
             Err(_) => return Err(output_length_overflow(self.charset)),
         };
@@ -376,11 +347,7 @@ where
         let finish_written = match self.decoder.finish(&mut chars, 0) {
             Ok(written) => written,
             Err(error) => {
-                return Err(map_finish_decode_error(
-                    self.charset,
-                    error,
-                    output_char_count,
-                ));
+                return Err(map_finish_decode_error(self.charset, error, output_char_count));
             }
         };
         append_chars(output, &chars[..finish_written], self.charset)
@@ -399,11 +366,7 @@ where
 ///
 /// Returns [`CharsetDecodeErrorKind::OutputLengthOverflow`] when the allocation
 /// cannot be reserved.
-fn ensure_char_capacity(
-    chars: &mut Vec<char>,
-    required: usize,
-    charset: Charset,
-) -> Result<(), CharsetDecodeError> {
+fn ensure_char_capacity(chars: &mut Vec<char>, required: usize, charset: Charset) -> Result<(), CharsetDecodeError> {
     if required <= chars.len() {
         return Ok(());
     }
@@ -430,11 +393,7 @@ fn ensure_char_capacity(
 ///
 /// Returns [`CharsetDecodeErrorKind::OutputLengthOverflow`] when the required
 /// UTF-8 storage cannot be reserved.
-fn append_chars(
-    output: &mut String,
-    chars: &[char],
-    charset: Charset,
-) -> Result<(), CharsetDecodeError> {
+fn append_chars(output: &mut String, chars: &[char], charset: Charset) -> Result<(), CharsetDecodeError> {
     let byte_capacity = required_string_capacity(chars);
     let reserve_failed = try_reserve_string(output, byte_capacity).is_err();
     #[cfg(coverage)]
@@ -456,10 +415,7 @@ fn append_chars(
 /// # Returns
 ///
 /// Returns the corresponding charset decoding error.
-fn map_decode_error(
-    charset: Charset,
-    error: TranscodeDecodeError<CharsetDecodeError>,
-) -> CharsetDecodeError {
+fn map_decode_error(charset: Charset, error: TranscodeDecodeError<CharsetDecodeError>) -> CharsetDecodeError {
     CharsetDecodeError::from_transcode_error(charset, error)
 }
 
@@ -483,11 +439,7 @@ fn map_finish_decode_error(
     if matches!(error.kind(), CharsetDecodeErrorKind::OutputLengthOverflow) {
         return error;
     }
-    CharsetDecodeError::new(
-        charset,
-        error.kind(),
-        output_offset.saturating_add(error.index()),
-    )
+    CharsetDecodeError::new(charset, error.kind(), output_offset.saturating_add(error.index()))
 }
 
 #[cfg(coverage)]
@@ -560,10 +512,7 @@ fn coverage_output_count(count: usize) -> usize {
 }
 
 #[cfg(coverage)]
-fn coverage_capacity_result(
-    result: Result<usize, CapacityError>,
-    reset: bool,
-) -> Result<usize, CapacityError> {
+fn coverage_capacity_result(result: Result<usize, CapacityError>, reset: bool) -> Result<usize, CapacityError> {
     let force = if reset {
         COVERAGE_FORCE_RESET_CAPACITY_ERROR.with(|state| state.replace(false))
     } else {
@@ -577,10 +526,7 @@ fn coverage_capacity_result(
 }
 
 #[cfg(not(coverage))]
-fn coverage_capacity_result(
-    result: Result<usize, CapacityError>,
-    _reset: bool,
-) -> Result<usize, CapacityError> {
+fn coverage_capacity_result(result: Result<usize, CapacityError>, _reset: bool) -> Result<usize, CapacityError> {
     result
 }
 
@@ -595,11 +541,7 @@ fn coverage_capacity_result(
 /// Returns an output-length-overflow error at the sentinel maximum index.
 #[inline]
 fn output_length_overflow(charset: Charset) -> CharsetDecodeError {
-    CharsetDecodeError::new(
-        charset,
-        CharsetDecodeErrorKind::OutputLengthOverflow,
-        usize::MAX,
-    )
+    CharsetDecodeError::new(charset, CharsetDecodeErrorKind::OutputLengthOverflow, usize::MAX)
 }
 
 /// Returns the UTF-8 byte capacity required for a decoded character slice.

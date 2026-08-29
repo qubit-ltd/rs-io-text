@@ -66,21 +66,13 @@ where
         .expect("valid fixture should encode")
 }
 
-fn report_allocation<C>(
-    encoding: &str,
-    codec: C,
-    fixture_name: &str,
-    input: &str,
-) where
+fn report_allocation<C>(encoding: &str, codec: C, fixture_name: &str, input: &str)
+where
     C: CharsetCodec + Clone,
     C::Unit: Default,
 {
     let mut encoder = CharsetStringEncoder::new(codec.clone());
-    let (encoded, encode_peak) = measure_peak(|| {
-        encoder
-            .encode_str(input)
-            .expect("valid fixture should encode")
-    });
+    let (encoded, encode_peak) = measure_peak(|| encoder.encode_str(input).expect("valid fixture should encode"));
     println!(
         "allocation encode/{encoding}/{fixture_name}: output_len={}, \
          output_capacity={}, peak_bytes={encode_peak}",
@@ -89,11 +81,8 @@ fn report_allocation<C>(
     );
 
     let mut decoder = CharsetStringDecoder::new(codec);
-    let (decoded, decode_peak) = measure_peak(|| {
-        decoder
-            .decode_to_string(&encoded)
-            .expect("valid fixture should decode")
-    });
+    let (decoded, decode_peak) =
+        measure_peak(|| decoder.decode_to_string(&encoded).expect("valid fixture should decode"));
     println!(
         "allocation decode/{encoding}/{fixture_name}: output_len={}, \
          output_capacity={}, peak_bytes={decode_peak}",
@@ -102,12 +91,8 @@ fn report_allocation<C>(
     );
 }
 
-fn bench_owned_encode<C>(
-    criterion: &mut Criterion,
-    encoding: &str,
-    codec: C,
-    fixtures: &[(String, String)],
-) where
+fn bench_owned_encode<C>(criterion: &mut Criterion, encoding: &str, codec: C, fixtures: &[(String, String)])
+where
     C: CharsetCodec + Clone,
     C::Unit: Default,
 {
@@ -118,28 +103,20 @@ fn bench_owned_encode<C>(
     for (fixture_name, input) in fixtures {
         let mut encoder = CharsetStringEncoder::new(codec.clone());
         group.throughput(Throughput::Bytes(input.len() as u64));
-        group.bench_with_input(
-            BenchmarkId::new(encoding, fixture_name),
-            input,
-            |bencher, input| {
-                bencher.iter(|| {
-                    let output = encoder
-                        .encode_str(black_box(input))
-                        .expect("valid fixture should encode");
-                    black_box((output.len(), output.capacity()));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new(encoding, fixture_name), input, |bencher, input| {
+            bencher.iter(|| {
+                let output = encoder
+                    .encode_str(black_box(input))
+                    .expect("valid fixture should encode");
+                black_box((output.len(), output.capacity()));
+            });
+        });
     }
     group.finish();
 }
 
-fn bench_owned_decode<C>(
-    criterion: &mut Criterion,
-    encoding: &str,
-    codec: C,
-    fixtures: &[(String, String)],
-) where
+fn bench_owned_decode<C>(criterion: &mut Criterion, encoding: &str, codec: C, fixtures: &[(String, String)])
+where
     C: CharsetCodec + Clone,
     C::Unit: Default,
 {
@@ -154,26 +131,19 @@ fn bench_owned_decode<C>(
     for ((fixture_name, input), encoded) in fixtures.iter().zip(&encoded) {
         let mut decoder = CharsetStringDecoder::new(codec.clone());
         group.throughput(Throughput::Bytes(input.len() as u64));
-        group.bench_with_input(
-            BenchmarkId::new(encoding, fixture_name),
-            encoded,
-            |bencher, encoded| {
-                bencher.iter(|| {
-                    let output = decoder
-                        .decode_to_string(black_box(encoded))
-                        .expect("valid fixture should decode");
-                    black_box((output.len(), output.capacity()));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new(encoding, fixture_name), encoded, |bencher, encoded| {
+            bencher.iter(|| {
+                let output = decoder
+                    .decode_to_string(black_box(encoded))
+                    .expect("valid fixture should decode");
+                black_box((output.len(), output.capacity()));
+            });
+        });
     }
     group.finish();
 }
 
-fn bench_streaming_charset(
-    criterion: &mut Criterion,
-    fixtures: &[(String, String)],
-) {
+fn bench_streaming_charset(criterion: &mut Criterion, fixtures: &[(String, String)]) {
     let mut group = criterion.benchmark_group("streaming_charset_utf8");
     group.sample_size(SAMPLE_SIZE);
     group.warm_up_time(Duration::from_secs(2));
@@ -181,51 +151,31 @@ fn bench_streaming_charset(
 
     for (fixture_name, input) in fixtures {
         group.throughput(Throughput::Bytes(input.len() as u64));
-        group.bench_with_input(
-            BenchmarkId::new("read", fixture_name),
-            input,
-            |bencher, input| {
-                bencher.iter_batched(
-                    || Cursor::new(input.as_bytes().to_vec()),
-                    |input| {
-                        let mut reader = CharsetTextReader::new(
-                            input,
-                            Utf8Codec,
-                            CharsetDecodePolicy::report(),
-                        );
-                        let mut output = String::new();
-                        reader
-                            .read_to_string(&mut output)
-                            .expect("UTF-8 stream should decode");
-                        black_box(output);
-                    },
-                    criterion::BatchSize::SmallInput,
-                );
-            },
-        );
-        group.bench_with_input(
-            BenchmarkId::new("write", fixture_name),
-            input,
-            |bencher, input| {
-                bencher.iter_batched(
-                    || Cursor::new(Vec::with_capacity(input.len())),
-                    |output| {
-                        let mut writer = CharsetTextWriter::new(
-                            output,
-                            Utf8Codec,
-                            CharsetEncodePolicy::report(),
-                        );
-                        writer
-                            .write_str(input)
-                            .expect("UTF-8 stream should encode");
-                        writer.finish().expect("UTF-8 stream should finish");
-                        let (output, pending) = writer.into_parts();
-                        let _ = black_box((output.into_inner(), pending));
-                    },
-                    criterion::BatchSize::SmallInput,
-                );
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("read", fixture_name), input, |bencher, input| {
+            bencher.iter_batched(
+                || Cursor::new(input.as_bytes().to_vec()),
+                |input| {
+                    let mut reader = CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+                    let mut output = String::new();
+                    reader.read_to_string(&mut output).expect("UTF-8 stream should decode");
+                    black_box(output);
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
+        group.bench_with_input(BenchmarkId::new("write", fixture_name), input, |bencher, input| {
+            bencher.iter_batched(
+                || Cursor::new(Vec::with_capacity(input.len())),
+                |output| {
+                    let mut writer = CharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
+                    writer.write_str(input).expect("UTF-8 stream should encode");
+                    writer.finish().expect("UTF-8 stream should finish");
+                    let (output, pending) = writer.into_parts();
+                    let _ = black_box((output.into_inner(), pending));
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
         group.bench_with_input(
             BenchmarkId::new("write_fast_utf8", fixture_name),
             input,
@@ -234,9 +184,7 @@ fn bench_streaming_charset(
                     || Cursor::new(Vec::with_capacity(input.len())),
                     |output| {
                         let mut writer = Utf8TextWriter::new(output);
-                        writer
-                            .write_str(input)
-                            .expect("UTF-8 stream should encode");
+                        writer.write_str(input).expect("UTF-8 stream should encode");
                         writer.finish().expect("UTF-8 stream should finish");
                         let (output, pending) = writer.into_parts();
                         let _ = black_box((output.into_inner(), pending));

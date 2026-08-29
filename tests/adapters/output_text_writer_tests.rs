@@ -22,12 +22,7 @@ struct FailingCharOutput;
 impl Output for FailingCharOutput {
     type Item = char;
 
-    unsafe fn write_unchecked(
-        &mut self,
-        _input: &[char],
-        _index: usize,
-        _count: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, _input: &[char], _index: usize, _count: usize) -> std::io::Result<usize> {
         Err(Error::other("write failed"))
     }
 
@@ -49,8 +44,7 @@ fn test_write_text_to_char_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
         let output = StringCharOutput::new(&mut text);
-        let mut writer =
-            OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
+        let mut writer = OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
 
         writer.write_char('中')?;
         writer.write_chars(&['a', '🙂'])?;
@@ -102,8 +96,7 @@ fn test_new_accepts_already_buffered_output() -> std::io::Result<()> {
 fn test_from_boxed_wraps_unbuffered_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
-        let output: Box<dyn Output<Item = char> + '_> =
-            Box::new(StringCharOutput::new(&mut text));
+        let output: Box<dyn Output<Item = char> + '_> = Box::new(StringCharOutput::new(&mut text));
         let mut writer = OutputTextWriter::from_boxed(output);
 
         assert!(writer.get_ref().is_buffered());
@@ -119,10 +112,8 @@ fn test_from_boxed_wraps_unbuffered_output() -> std::io::Result<()> {
 fn test_from_boxed_keeps_buffered_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
-        let output: Box<dyn Output<Item = char> + '_> =
-            Box::new(BufferedOutput::new(StringCharOutput::new(&mut text)));
-        let mut writer = OutputTextWriter::from_boxed(output)
-            .with_line_ending(LineEnding::Cr);
+        let output: Box<dyn Output<Item = char> + '_> = Box::new(BufferedOutput::new(StringCharOutput::new(&mut text)));
+        let mut writer = OutputTextWriter::from_boxed(output).with_line_ending(LineEnding::Cr);
 
         assert!(writer.get_ref().is_buffered());
         writer.write_line("box")?;
