@@ -30,7 +30,7 @@ Charset 算法保留在 `qubit-codec-text`；本 crate 只负责在流上驱动�
 
 ```toml
 [dependencies]
-qubit-io-text = "0.4"
+qubit-io-text = "0.5"
 ```
 
 ## 快速开始：编码一条 UTF-8 文本消息
@@ -62,7 +62,7 @@ Charset 和异步示例使用这些 crate 所拥有的类型，因此消费方�
 
 ```toml
 [dependencies]
-qubit-io-text = "0.4"
+qubit-io-text = "0.5"
 qubit-codec-text = "0.4"
 qubit-io = "0.15"
 ```
