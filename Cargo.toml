@@ -30,8 +30,8 @@ doctest = true
 [dependencies]
 qubit-utils = "0.3"
 qubit-io = "0.16"
-qubit-codec = { version = "0.13", features = ["io"] }
-qubit-codec-text = "0.5"
+qubit-codec = { version = "0.14", features = ["io"] }
+qubit-codec-text = "0.6"
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }

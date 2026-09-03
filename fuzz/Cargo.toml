@@ -10,8 +10,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-qubit-codec = { version = "0.13", features = ["io"] }
-qubit-codec-text = "0.5"
+qubit-codec = { version = "0.14", features = ["io"] }
+qubit-codec-text = "0.6"
 qubit-io-text = { path = ".." }
 
 [[bin]]
