@@ -115,7 +115,7 @@ where
 输入后再继续。`*_fully_async` 是便利循环，取消后无法可靠恢复其源位置；取消敏感场景
 只使用单步 API，不要重试完整文本。
 
-本 crate 不拥有 charset 算法，也不选择异步运行时。需要贯穿场景教程时，请参阅
+本 crate 不拥有 charset 算法，也不选择异步运行时。需要实战场景教程时，请参阅
 [中文用户指南](doc/user_guide.zh_CN.md)或 [English user guide](doc/user_guide.md)；
 全部公开项目请参阅 [API 文档](https://docs.rs/qubit-io-text)。
 

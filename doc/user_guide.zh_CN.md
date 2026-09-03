@@ -25,7 +25,7 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 `TextRead::read_to_string` 将内容追加到目标并返回追加的 Unicode scalar value 数量，
 而不是 UTF-8 字节数；`TextWrite::write_line` 会追加配置好的 `LineEnding`。
 
-## 贯穿场景：在字节流上保持 Unicode 文本
+## 实战场景：在字节流上保持 Unicode 文本
 
 假设应用收到一条 UTF-8 消息，添加一个以 CRLF 结束的 header 后，要将有效字节交给
 另一个组件。流程是在构造时确定 codec 和错误策略，写入文本，完成 codec 生命周期，
