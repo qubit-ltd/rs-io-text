@@ -1,6 +1,6 @@
 [package]
 name = "qubit-io-text"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.94"
 authors = ["Haixing Hu <starfish.hu@gmail.com>"]
@@ -29,9 +29,9 @@ doctest = true
 
 [dependencies]
 qubit-utils = "0.3"
-qubit-io = "0.16"
-qubit-codec = { version = "0.14", features = ["io"] }
-qubit-codec-text = "0.6"
+qubit-io = "0.17"
+qubit-codec = { version = "0.15", features = ["io"] }
+qubit-codec-text = "0.7"
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
