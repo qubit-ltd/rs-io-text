@@ -1,7 +1,7 @@
 # Coverage exemptions
 
 The crate keeps only the following source-level exemptions in
-`.rs-ci-coverage.json`:
+`.infra/ci/coverage.json`:
 
 - `src/adapters/async_charset_text_reader.rs`: the async reader's cancellation
   and poll-state branches are driven by executor scheduling and several
