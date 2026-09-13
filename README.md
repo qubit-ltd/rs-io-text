@@ -65,8 +65,8 @@ directly in the consuming package:
 ```toml
 [dependencies]
 qubit-io-text = "0.6"
-qubit-codec-text = "0.4"
-qubit-io = "0.15"
+qubit-codec-text = "0.7"
+qubit-io = "0.17"
 ```
 
 ## Runtime-Neutral Async

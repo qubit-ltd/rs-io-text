@@ -4,7 +4,7 @@
 [API 文档](https://docs.rs/qubit-io-text)
 
 本指南面向需要处理 Unicode 文本和文本行、而不是已编码字节的 Rust 应用，适用于
-`qubit-io-text` 0.5。Charset 算法来自 `qubit-codec-text`，字节流和字符流抽象来自
+`qubit-io-text` 0.6。Charset 算法来自 `qubit-codec-text`，字节流和字符流抽象来自
 `qubit-io`。
 
 ## 概念模型
@@ -35,9 +35,9 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 
 ```toml
 [dependencies]
-qubit-io-text = "0.5"
-qubit-codec-text = "0.4"
-qubit-io = "0.15"
+qubit-io-text = "0.6"
+qubit-codec-text = "0.7"
+qubit-io = "0.17"
 ```
 
 本指南使用由 `qubit-codec-text` 和 `qubit-io` 提供的 `Utf8Codec` 与
