@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 /// Asynchronously reads Unicode scalar values and strings from a text source.
 ///
 /// Implementations may suspend while waiting for source data. Returned futures
