@@ -34,7 +34,7 @@ qubit-codec = { version = "0.15", features = ["io"] }
 qubit-codec-text = "0.7"
 
 [dev-dependencies]
-criterion = { version = "0.8", default-features = false }
+criterion = { version = "^0.8", default-features = false }
 
 [[bench]]
 name = "string_adapters"
