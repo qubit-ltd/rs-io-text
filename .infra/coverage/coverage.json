@@ -1,8 +1,3 @@
 {
-  "threshold_exempt_files": {
-    "qubit-io-text": [
-      "src/adapters/async_charset_text_reader.rs",
-      "src/adapters/async_charset_text_writer.rs"
-    ]
-  }
+  "threshold_exempt_files": {}
 }
