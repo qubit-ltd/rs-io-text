@@ -770,6 +770,59 @@ fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()
 }
 
 #[test]
+fn async_charset_reader_trait_methods_forward_to_reader() -> io::Result<()> {
+    let input = ChunkedAsyncInput::new(b"A\nB".to_vec(), 4, false);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+
+    assert_eq!(Some('A'), complete(AsyncTextRead::read_char_async(&mut reader))?);
+
+    let mut chars = Vec::new();
+    assert_eq!(
+        1,
+        complete(AsyncTextRead::read_chars_async(&mut reader, &mut chars, 1))?
+    );
+    assert_eq!(vec!['\n'], chars);
+
+    let mut text = String::new();
+    assert_eq!(
+        1,
+        complete(AsyncTextRead::read_to_string_async(&mut reader, &mut text))?
+    );
+    assert_eq!("B", text);
+
+    let input = ChunkedAsyncInput::new(b"line\n".to_vec(), 4, false);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut line = String::new();
+    assert!(complete(AsyncTextLineRead::read_line_async(&mut reader, &mut line))?);
+    assert_eq!("line\n", line);
+    Ok(())
+}
+
+#[test]
+fn async_charset_writer_trait_methods_forward_to_writer() -> io::Result<()> {
+    let output = ChunkedAsyncOutput::new(64, false);
+    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report())
+        .with_line_ending(LineEnding::CrLf);
+
+    assert_eq!(LineEnding::CrLf, AsyncTextWrite::line_ending(&writer));
+    complete(AsyncTextWrite::write_char_async(&mut writer, 'A'))?;
+    assert_eq!(
+        2,
+        complete(AsyncTextWrite::write_chars_async(&mut writer, &['B', 'C']))?
+    );
+    assert_eq!(1, complete(AsyncTextWrite::write_str_async(&mut writer, "D"))?);
+    complete(AsyncTextWrite::write_line_fully_async(&mut writer, "E"))?;
+    complete(AsyncTextWrite::flush_async(&mut writer))?;
+    complete(AsyncTextWrite::finish_async(&mut writer))?;
+
+    let (output, pending) = writer.into_parts();
+    assert!(pending.is_empty());
+    assert_eq!(b"ABCDE\r\n", output.bytes.as_slice());
+    assert!(output.flushed);
+    Ok(())
+}
+
+#[test]
 fn async_charset_writer_commits_source_before_later_delivery_can_pend() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(2, false);
     let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
