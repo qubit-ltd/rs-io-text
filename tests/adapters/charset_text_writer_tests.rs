@@ -321,6 +321,22 @@ fn test_charset_write_ext_creates_buffered_stream_writer() -> std::io::Result<()
 }
 
 #[test]
+fn test_charset_write_ext_try_creates_buffered_stream_writer() -> std::io::Result<()> {
+    let output = Vec::new();
+    let mut writer = output
+        .try_buffered_charset_text_writer(Utf8Codec, CharsetEncodePolicy::report(), 1)
+        .expect("UTF-8 writer configuration should be valid");
+
+    writer.write_str("buffered")?;
+    writer.finish()?;
+    let (output, pending) = writer.into_parts();
+
+    assert!(pending.is_empty());
+    assert_eq!(b"buffered", output.as_slice());
+    Ok(())
+}
+
+#[test]
 fn test_charset_write_ext_writes_one_shot_to_qubit_output() -> std::io::Result<()> {
     let mut output = OutputOnlyWriter::default();
 
