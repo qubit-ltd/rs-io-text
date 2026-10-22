@@ -16,6 +16,19 @@ use qubit_utils::UncheckedSlice;
 /// `StrCharInput` exposes borrowed text as a `qubit_io::Input<Item = char>`.
 /// The current position is stored as a UTF-8 byte offset and is always advanced
 /// on character boundaries.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io::Input;
+/// use qubit_io_text::StrCharInput;
+///
+/// let mut input = StrCharInput::new("hello");
+/// let mut output = [' '; 5];
+/// assert_eq!(Input::read(&mut input, &mut output)?, 5);
+/// assert_eq!(output, ['h', 'e', 'l', 'l', 'o']);
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct StrCharInput<'a> {
     text: &'a str,
@@ -30,6 +43,7 @@ impl<'a> StrCharInput<'a> {
     ///
     /// # Returns
     /// A character input positioned at the start of the text.
+    #[inline]
     #[must_use]
     pub const fn new(text: &'a str) -> Self {
         Self { text, position: 0 }
@@ -39,6 +53,7 @@ impl<'a> StrCharInput<'a> {
     ///
     /// # Returns
     /// The current byte position.
+    #[inline]
     #[must_use]
     pub const fn position(&self) -> usize {
         self.position
@@ -48,6 +63,7 @@ impl<'a> StrCharInput<'a> {
     ///
     /// # Returns
     /// The borrowed string slice.
+    #[inline]
     #[must_use]
     pub const fn get_ref(&self) -> &'a str {
         self.text

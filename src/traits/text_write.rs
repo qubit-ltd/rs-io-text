@@ -11,6 +11,19 @@ use crate::LineEnding;
 ///
 /// `TextWrite` accepts Rust Unicode text and delegates byte encoding, storage,
 /// logging, or other sink-specific behavior to the concrete implementation.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::StringTextWriter;
+/// use qubit_io_text::TextWrite;
+///
+/// let mut output = String::new();
+/// let mut writer = StringTextWriter::new(&mut output);
+/// writer.write_line("hello").expect("writing to a string succeeds");
+///
+/// assert_eq!(output, "hello\n");
+/// ```
 pub trait TextWrite {
     /// Error returned by this text sink.
     type Error;
@@ -20,6 +33,7 @@ pub trait TextWrite {
     /// # Returns
     /// The configured line ending. Implementations default to
     /// [`LineEnding::Lf`].
+    #[inline]
     #[must_use]
     fn line_ending(&self) -> LineEnding {
         LineEnding::Lf
@@ -33,6 +47,7 @@ pub trait TextWrite {
     /// # Errors
     /// Returns an implementation-specific error when the character cannot be
     /// accepted by the sink.
+    #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
         let mut buffer = [0_u8; 4];
         self.write_str(ch.encode_utf8(&mut buffer))
@@ -71,6 +86,7 @@ pub trait TextWrite {
     /// # Errors
     /// Returns an implementation-specific error when the line or line ending
     /// cannot be accepted by the sink.
+    #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.write_str(line)?;
         self.write_str(self.line_ending().as_str())

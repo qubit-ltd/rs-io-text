@@ -16,11 +16,36 @@ use crate::line_ending_set::LineEndingSet;
 use crate::line_ending_set::read_line_with;
 
 /// Text reader over a borrowed string slice.
+///
+/// The reader borrows its input and tracks its position as a UTF-8 byte
+/// offset. It recognizes LF, CRLF, and CR line endings by default.
+///
+/// # Type Parameters
+///
+/// - `'a`: Lifetime of the borrowed text.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::StrTextReader;
+/// use qubit_io_text::TextRead;
+///
+/// let mut reader = StrTextReader::new("hello");
+/// let mut output = String::new();
+/// let count = reader.read_to_string(&mut output)?;
+/// assert_eq!(count, 5);
+/// assert_eq!(output, "hello");
+/// # Ok::<(), std::convert::Infallible>(())
+/// ```
 #[derive(Debug)]
 pub struct StrTextReader<'a> {
+    /// Borrowed text being consumed by this reader.
     text: &'a str,
+    /// UTF-8 byte offset of the next unread character.
     position: usize,
+    /// Line terminators recognized by [`TextLineRead::read_line`].
     line_endings: LineEndingSet,
+    /// Character retained after line-ending lookahead for the next read.
     pending_char: Option<char>,
 }
 
@@ -33,6 +58,7 @@ impl<'a> StrTextReader<'a> {
     /// # Returns
     /// A reader positioned at the start of the text.
     #[must_use]
+    #[inline]
     pub const fn new(text: &'a str) -> Self {
         Self {
             text,
@@ -47,8 +73,16 @@ impl<'a> StrTextReader<'a> {
     /// # Returns
     /// The current byte position.
     #[must_use]
+    #[inline]
     pub const fn position(&self) -> usize {
         self.position
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    #[inline]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.line_endings
     }
 
     /// Sets the line endings recognized by [`TextLineRead::read_line`].
@@ -59,15 +93,10 @@ impl<'a> StrTextReader<'a> {
     /// # Returns
     /// This reader with the requested line-ending configuration.
     #[must_use]
+    #[inline]
     pub const fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
         self
-    }
-
-    /// Returns the line endings recognized by this reader.
-    #[must_use]
-    pub const fn line_endings(&self) -> LineEndingSet {
-        self.line_endings
     }
 }
 

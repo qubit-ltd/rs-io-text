@@ -14,9 +14,24 @@ use crate::LineEnding;
 use crate::TextWrite;
 
 /// Text writer over a borrowed [`String`] with configurable line endings.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::StringTextWriter;
+/// use qubit_io_text::TextWrite;
+///
+/// let mut output = String::new();
+/// let mut writer = StringTextWriter::new(&mut output);
+/// writer.write_line("hello")?;
+/// assert_eq!(output, "hello\n");
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct StringTextWriter<'a> {
+    /// Destination string that receives each written character.
     output: &'a mut String,
+    /// Terminator appended by [`TextWrite::write_line`].
     line_ending: LineEnding,
 }
 
@@ -29,6 +44,7 @@ impl<'a> StringTextWriter<'a> {
     /// # Returns
     /// A string text writer using LF line endings.
     #[must_use]
+    #[inline]
     pub fn new(output: &'a mut String) -> Self {
         Self {
             output,
@@ -44,6 +60,7 @@ impl<'a> StringTextWriter<'a> {
     /// # Returns
     /// This writer with the configured line ending.
     #[must_use]
+    #[inline]
     pub const fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
         self.line_ending = line_ending;
         self
@@ -54,6 +71,7 @@ impl<'a> StringTextWriter<'a> {
     /// # Returns
     /// A shared reference to the destination string.
     #[must_use]
+    #[inline]
     pub fn get_ref(&self) -> &String {
         self.output
     }
@@ -62,6 +80,8 @@ impl<'a> StringTextWriter<'a> {
     ///
     /// # Returns
     /// A mutable reference to the destination string.
+    #[must_use]
+    #[inline]
     pub fn get_mut(&mut self) -> &mut String {
         self.output
     }

@@ -13,6 +13,7 @@
 ///
 /// # Returns
 /// The next character, or `None` when `position` is at EOF.
+#[inline]
 pub(crate) fn read_char_at(text: &str, position: &mut usize) -> Option<char> {
     let ch = text.get(*position..)?.chars().next()?;
     *position += ch.len_utf8();
@@ -52,6 +53,9 @@ pub(crate) fn read_chars_at(text: &str, position: &mut usize, output: &mut Vec<c
 ///
 /// # Returns
 /// The number of characters appended.
+///
+/// # Panics
+/// Panics if `position` is outside `text` or is not a UTF-8 character boundary.
 pub(crate) fn read_to_string_at(text: &str, position: &mut usize, output: &mut String) -> usize {
     let remaining = &text[*position..];
     let count = remaining.chars().count();

@@ -34,6 +34,11 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// the explicit `*_fully_async` methods when a complete source range is
 /// required; those convenience loops can commit a prefix before cancellation.
 ///
+/// # Type Parameters
+///
+/// - `O`: Asynchronous byte output that receives encoded data.
+/// - `C`: Charset codec that converts Unicode characters to bytes.
+///
 /// # Examples
 ///
 /// ```no_run
@@ -63,10 +68,15 @@ where
     O: AsyncOutput<Item = u8>,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Holds encoded bytes until the wrapped output accepts them.
     output: AsyncTranscodeEncodeOutput<O>,
+    /// Maintains charset encoding state across write operations.
     encoder: CharsetEncoder<C>,
+    /// Supplies the terminator appended by complete line writes.
     line_ending: LineEnding,
+    /// Records whether encoder initialization has run.
     started: bool,
+    /// Records whether encoder finalization has succeeded.
     finished: bool,
 }
 
@@ -98,6 +108,17 @@ where
 
     /// Creates an asynchronous charset writer and reports an invalid
     /// replacement policy.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Asynchronous byte output that receives encoded bytes.
+    /// - `codec`: Charset codec used to encode text.
+    /// - `policy`: Unmappable-character policy.
+    ///
+    /// # Returns
+    ///
+    /// Returns a writer whose buffer uses the default capacity and whose line
+    /// ending is LF.
     ///
     /// # Errors
     ///
@@ -133,6 +154,19 @@ where
     /// Creates an asynchronous charset writer with a requested capacity and
     /// reports an invalid replacement policy.
     ///
+    /// # Parameters
+    ///
+    /// - `output`: Asynchronous byte output that receives encoded bytes.
+    /// - `codec`: Charset codec used to encode text.
+    /// - `policy`: Unmappable-character policy.
+    /// - `buffer_capacity`: Requested encoded-byte capacity, raised if needed
+    ///   to hold one encoded character.
+    ///
+    /// # Returns
+    ///
+    /// Returns a writer using the requested effective capacity and LF line
+    /// endings.
+    ///
     /// # Errors
     ///
     /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
@@ -155,28 +189,14 @@ where
         })
     }
 
-    /// Sets the line ending used by [`Self::write_line_fully_async`].
-    ///
-    /// # Parameters
-    ///
-    /// - `line_ending`: Line ending for subsequent line writes.
-    ///
-    /// # Returns
-    ///
-    /// Returns this configured writer.
-    #[must_use]
-    pub const fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
-        self.line_ending = line_ending;
-        self
-    }
-
     /// Returns a shared reference to the asynchronous byte output.
     ///
     /// # Returns
     ///
     /// Returns the wrapped output. Encoded bytes may still be pending in this
     /// writer.
-    #[must_use]
+    #[must_use = "use the returned output reference to access the wrapped output"]
+    #[inline]
     pub const fn output(&self) -> &O {
         self.output.inner()
     }
@@ -189,6 +209,8 @@ where
     /// # Returns
     ///
     /// Returns the wrapped output.
+    #[must_use = "use the returned output reference to access the wrapped output"]
+    #[inline]
     pub fn output_mut(&mut self) -> &mut O {
         self.output.inner_mut()
     }
@@ -199,8 +221,25 @@ where
     ///
     /// Returns the line ending used by future line writes.
     #[must_use]
+    #[inline]
     pub const fn configured_line_ending(&self) -> LineEnding {
         self.line_ending
+    }
+
+    /// Sets the line ending used by [`Self::write_line_fully_async`].
+    ///
+    /// # Parameters
+    ///
+    /// - `line_ending`: Line ending for subsequent line writes.
+    ///
+    /// # Returns
+    ///
+    /// Returns this configured writer.
+    #[must_use]
+    #[inline]
+    pub const fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
+        self.line_ending = line_ending;
+        self
     }
 
     /// Returns the wrapped output and every encoded byte still pending.
@@ -274,27 +313,6 @@ where
     O: AsyncOutput<Item = u8> + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
-    /// Starts the encoder lifecycle and sends any stream prefix.
-    async fn ensure_started_async(&mut self) -> io::Result<()> {
-        if !self.started {
-            let mut map_error = encode_error_to_io;
-            self.output.reset_async(&mut self.encoder, &mut map_error).await?;
-            self.started = true;
-        }
-        self.output.drain_async().await
-    }
-
-    /// Encodes one character-slice progress step.
-    async fn encode_chars_async(&mut self, chars: &[char]) -> io::Result<usize> {
-        self.ensure_started_async().await?;
-        let mut map_error = encode_error_to_io;
-        let progress = self
-            .output
-            .transcode_async(&mut self.encoder, &mut map_error, chars, 0, chars.len())
-            .await?;
-        Ok(progress.read())
-    }
-
     /// Asynchronously writes one character.
     ///
     /// # Parameters
@@ -340,6 +358,15 @@ where
     }
 
     /// Asynchronously writes an entire character slice.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Characters to encode and write.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors. A character prefix may already be
+    /// committed when an error is returned.
     ///
     /// # Cancellation safety
     ///
@@ -391,6 +418,15 @@ where
 
     /// Asynchronously writes an entire UTF-8 Rust string through the selected
     /// charset.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: Unicode text to encode and write.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors. A UTF-8 prefix may already be
+    /// committed when an error is returned.
     ///
     /// # Cancellation safety
     ///
@@ -465,5 +501,26 @@ where
             self.finished = true;
         }
         self.output.flush_async().await
+    }
+
+    /// Starts the encoder lifecycle and sends any stream prefix.
+    async fn ensure_started_async(&mut self) -> io::Result<()> {
+        if !self.started {
+            let mut map_error = encode_error_to_io;
+            self.output.reset_async(&mut self.encoder, &mut map_error).await?;
+            self.started = true;
+        }
+        self.output.drain_async().await
+    }
+
+    /// Encodes one character-slice progress step.
+    async fn encode_chars_async(&mut self, chars: &[char]) -> io::Result<usize> {
+        self.ensure_started_async().await?;
+        let mut map_error = encode_error_to_io;
+        let progress = self
+            .output
+            .transcode_async(&mut self.encoder, &mut map_error, chars, 0, chars.len())
+            .await?;
+        Ok(progress.read())
     }
 }

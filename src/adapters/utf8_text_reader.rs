@@ -97,6 +97,7 @@ where
     ///
     /// # Returns
     /// This reader with the requested line-ending configuration.
+    #[inline]
     #[must_use]
     pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.reader = self.reader.with_line_endings(line_endings);
@@ -104,6 +105,7 @@ where
     }
 
     /// Returns the line endings recognized by this reader.
+    #[inline]
     #[must_use]
     pub const fn line_endings(&self) -> LineEndingSet {
         self.reader.line_endings()
@@ -156,6 +158,7 @@ where
     /// and restores `output` to its original length when the decoded text
     /// exceeds `max_append_len`. Previously consumed characters remain
     /// consumed by the reader.
+    #[inline]
     pub fn read_to_string_limited(&mut self, output: &mut String, max_append_len: usize) -> io::Result<usize> {
         self.reader.read_to_string_limited(output, max_append_len)
     }
@@ -180,6 +183,7 @@ where
     ///
     /// Returns input or UTF-8 errors, or [`io::ErrorKind::InvalidData`]
     /// when the decoded line exceeds `max_append_len`.
+    #[inline]
     pub fn read_line_limited(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
         self.reader.read_line_limited(output, max_append_len)
     }

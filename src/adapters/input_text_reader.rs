@@ -22,6 +22,23 @@ use crate::line_ending_set::LineEndingSet;
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 
 /// Text reader over a boxed `qubit_io::Input<Item = char>`.
+///
+/// The reader buffers characters internally so line reads can preserve text
+/// fetched beyond a line ending. Use [`into_parts`](Self::into_parts) when
+/// consuming the reader if those pending characters must be retained.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::{InputTextReader, StringCharInput, TextRead};
+///
+/// let input = StringCharInput::new("hello".to_owned());
+/// let mut reader = InputTextReader::new(input);
+/// let mut text = String::new();
+/// reader.read_to_string(&mut text)?;
+/// assert_eq!(text, "hello");
+/// # Ok::<(), std::io::Error>(())
+/// ```
 pub struct InputTextReader<'a> {
     input: Box<dyn Input<Item = char> + 'a>,
     pending: VecDeque<char>,
@@ -39,6 +56,7 @@ impl<'a> InputTextReader<'a> {
     /// # Returns
     /// A text reader wrapping `input`.
     #[must_use]
+    #[inline]
     pub fn new<I>(input: I) -> Self
     where
         I: Input<Item = char> + 'a,
@@ -60,6 +78,7 @@ impl<'a> InputTextReader<'a> {
     /// # Returns
     /// A text reader wrapping `input`.
     #[must_use]
+    #[inline]
     pub fn from_boxed(input: Box<dyn Input<Item = char> + 'a>) -> Self {
         let input = if input.is_buffered() {
             input
@@ -78,6 +97,7 @@ impl<'a> InputTextReader<'a> {
     /// # Returns
     /// The wrapped input trait object.
     #[must_use]
+    #[inline]
     pub fn get_ref(&self) -> &(dyn Input<Item = char> + 'a) {
         self.input.as_ref()
     }
@@ -103,6 +123,7 @@ impl<'a> InputTextReader<'a> {
     /// Returns the underlying boxed character input and pending characters in
     /// logical read order.
     #[must_use = "the returned input and pending characters must be handled"]
+    #[inline]
     pub fn into_parts(self) -> (Box<dyn Input<Item = char> + 'a>, Vec<char>) {
         (self.input, self.pending.into_iter().collect())
     }
@@ -116,6 +137,7 @@ impl<'a> InputTextReader<'a> {
     /// # Returns
     /// The underlying boxed character input.
     #[must_use]
+    #[inline]
     pub fn into_inner(self) -> Box<dyn Input<Item = char> + 'a> {
         self.input
     }
@@ -128,6 +150,7 @@ impl<'a> InputTextReader<'a> {
     /// # Returns
     /// This reader with the requested line-ending configuration.
     #[must_use]
+    #[inline]
     pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
         self
@@ -135,10 +158,12 @@ impl<'a> InputTextReader<'a> {
 
     /// Returns the line endings recognized by this reader.
     #[must_use]
+    #[inline]
     pub const fn line_endings(&self) -> LineEndingSet {
         self.line_endings
     }
 
+    /// Moves up to `max` queued characters into `output` and returns the count.
     fn drain_pending_chars(&mut self, output: &mut Vec<char>, max: usize) -> usize {
         let mut count = 0;
         while count < max {
@@ -151,6 +176,7 @@ impl<'a> InputTextReader<'a> {
         count
     }
 
+    /// Moves every queued character into `output` and returns the count.
     fn drain_pending_string(&mut self, output: &mut String) -> usize {
         let mut count = 0;
         while let Some(ch) = self.pending.pop_front() {

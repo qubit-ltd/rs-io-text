@@ -27,6 +27,23 @@ use crate::LineEndingSet;
 /// # Type Parameters
 ///
 /// - `I`: Asynchronous byte input that supplies UTF-8 encoded data.
+///
+/// # Examples
+///
+/// ```no_run
+/// use qubit_io::AsyncInput;
+/// use qubit_io_text::AsyncUtf8TextReader;
+///
+/// async fn read_all<I>(input: I) -> std::io::Result<String>
+/// where
+///     I: AsyncInput<Item = u8> + Unpin,
+/// {
+///     let mut reader = AsyncUtf8TextReader::new(input);
+///     let mut text = String::new();
+///     reader.read_to_string_async(&mut text).await?;
+///     Ok(text)
+/// }
+/// ```
 #[derive(Debug)]
 pub struct AsyncUtf8TextReader<I>(AsyncCharsetTextReader<I, Utf8Codec>)
 where
@@ -94,6 +111,7 @@ where
     ///
     /// # Returns
     /// This reader with the requested line-ending configuration.
+    #[inline]
     #[must_use]
     pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.0 = self.0.with_line_endings(line_endings);
@@ -101,6 +119,7 @@ where
     }
 
     /// Returns the line endings recognized by this reader.
+    #[inline]
     #[must_use]
     pub const fn line_endings(&self) -> LineEndingSet {
         self.0.line_endings()

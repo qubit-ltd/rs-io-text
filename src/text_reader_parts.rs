@@ -14,6 +14,27 @@ use qubit_io::Buffer;
 /// The input can be physically ahead of `unread_bytes`; consume the byte
 /// buffer before reading from `input`. Process `pending_chars` before reading
 /// more decoded text. The decoder is returned without being finalized.
+///
+/// # Type Parameters
+///
+/// - `I`: The byte input returned by the reader.
+/// - `D`: The decoder, including any codec state retained across input
+///   boundaries.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
+/// use qubit_io_text::{BufferedReader, TextReaderParts};
+///
+/// let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+/// let reader = BufferedReader::new(Cursor::new(b"hello".to_vec()), decoder);
+/// let parts: TextReaderParts<_, _> = reader.into_parts();
+/// assert!(parts.unread_bytes.is_empty());
+/// assert!(parts.pending_chars.is_empty());
+/// ```
 #[must_use = "all returned reader state must be handled"]
 #[derive(Debug)]
 pub struct TextReaderParts<I, D> {

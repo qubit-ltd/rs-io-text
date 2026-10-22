@@ -129,12 +129,14 @@ where
     ///
     /// Returns the wrapped writer. Pending bytes may still be buffered.
     #[must_use]
+    #[inline]
     pub const fn inner(&self) -> &W {
         self.output.inner()
     }
 
     /// Returns the configured line ending.
     #[must_use]
+    #[inline]
     pub const fn configured_line_ending(&self) -> LineEnding {
         self.line_ending
     }

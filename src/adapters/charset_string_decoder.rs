@@ -118,6 +118,7 @@ where
     }
 
     /// Returns a mutable reference to the wrapped charset decoder.
+    #[must_use]
     #[inline(always)]
     pub fn decoder_mut(&mut self) -> &mut CharsetDecoder<C> {
         &mut self.decoder

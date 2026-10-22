@@ -13,6 +13,18 @@ use crate::TextRead;
 /// complete terminator in the output. Readers expose a line-ending set when a
 /// narrower or broader policy is required. Custom implementations may retain
 /// their own line-boundary policy.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::StringTextReader;
+/// use qubit_io_text::TextLineRead;
+///
+/// let mut reader = StringTextReader::new("first\nsecond".to_owned());
+/// let mut line = String::new();
+/// assert!(reader.read_line(&mut line).unwrap());
+/// assert_eq!(line, "first\n");
+/// ```
 pub trait TextLineRead: TextRead {
     /// Reads one line into `output`.
     ///

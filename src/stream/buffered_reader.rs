@@ -69,14 +69,25 @@ pub struct BufferedReader<R, D>
 where
     R: Input<Item = u8>,
 {
+    /// Owns the byte reader and preserves encoded bytes not yet consumed by the
+    /// decoder.
     input: TranscodeDecodeInput<R>,
+    /// Converts the buffered encoded bytes into Unicode scalar values.
     decoder: D,
+    /// Stores decoded characters awaiting delivery to the caller.
     chars: Vec<char>,
+    /// Index of the next decoded character to return.
     char_position: usize,
+    /// Exclusive end of the currently buffered decoded characters.
     char_limit: usize,
+    /// Line-ending sequences recognized by line-reading methods.
     line_endings: LineEndingSet,
+    /// Holds a character consumed ahead while resolving a line-ending sequence
+    /// or limit.
     pending_char: Option<char>,
+    /// Records whether decoder reset has completed.
     started: bool,
+    /// Records whether decoder finalization has completed.
     finished: bool,
 }
 
@@ -135,6 +146,7 @@ where
     /// Returns the wrapped reader. It may already be positioned beyond bytes
     /// retained in this reader's internal buffer.
     #[must_use]
+    #[inline]
     pub const fn inner(&self) -> &R {
         self.input.inner()
     }
@@ -147,6 +159,7 @@ where
     /// # Returns
     /// This reader with the requested line-ending configuration.
     #[must_use]
+    #[inline]
     pub const fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
         self
@@ -154,6 +167,7 @@ where
 
     /// Returns the line endings recognized by this reader.
     #[must_use]
+    #[inline]
     pub const fn line_endings(&self) -> LineEndingSet {
         self.line_endings
     }

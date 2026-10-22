@@ -12,6 +12,24 @@
 /// use an implementation that provides the required future bounds.
 /// Cancellation behavior is implementation-specific; callers must consult the
 /// concrete reader before retrying a cancelled operation.
+///
+/// # Examples
+///
+/// ```no_run
+/// use qubit_io::AsyncInput;
+/// use qubit_io_text::AsyncTextRead;
+/// use qubit_io_text::AsyncUtf8TextReader;
+///
+/// async fn read_text<I>(input: I) -> std::io::Result<String>
+/// where
+///     I: AsyncInput<Item = u8> + Unpin,
+/// {
+///     let mut reader = AsyncUtf8TextReader::new(input);
+///     let mut text = String::new();
+///     reader.read_to_string_async(&mut text).await?;
+///     Ok(text)
+/// }
+/// ```
 #[allow(async_fn_in_trait)]
 pub trait AsyncTextRead {
     /// Error returned by this text source.

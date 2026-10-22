@@ -26,6 +26,22 @@ use crate::LineEnding;
 /// # Type Parameters
 ///
 /// - `O`: Asynchronous byte output that receives UTF-8 encoded data.
+///
+/// # Examples
+///
+/// ```no_run
+/// use qubit_io::AsyncOutput;
+/// use qubit_io_text::AsyncUtf8TextWriter;
+///
+/// async fn write_text<O>(output: O) -> std::io::Result<()>
+/// where
+///     O: AsyncOutput<Item = u8> + Unpin,
+/// {
+///     let mut writer = AsyncUtf8TextWriter::new(output);
+///     writer.write_str_fully_async("hello").await?;
+///     writer.finish_async().await
+/// }
+/// ```
 #[derive(Debug)]
 pub struct AsyncUtf8TextWriter<O>(AsyncCharsetTextWriter<O, Utf8Codec>)
 where

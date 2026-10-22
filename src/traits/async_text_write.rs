@@ -25,6 +25,8 @@ pub trait AsyncTextWrite {
     /// # Returns
     ///
     /// Returns the line ending appended by [`Self::write_line_fully_async`].
+    #[must_use]
+    #[inline]
     fn line_ending(&self) -> LineEnding {
         LineEnding::Lf
     }
@@ -129,7 +131,7 @@ pub trait AsyncTextWrite {
     /// # Panics
     ///
     /// Panics when [`Self::write_str_async`] violates its nonzero-progress
-    ///, bounded-progress, or UTF-8 character-boundary contract for a nonempty
+    /// bounded-progress, or UTF-8 character-boundary contract for a nonempty
     /// input.
     async fn write_str_fully_async(&mut self, text: &str) -> Result<(), Self::Error> {
         let mut offset = 0;

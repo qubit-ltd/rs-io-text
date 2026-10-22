@@ -16,6 +16,22 @@ use crate::CharsetTextReader;
 use crate::TextRead;
 
 /// Extension methods for reading charset-encoded text from byte streams.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// use qubit_codec_text::{CharsetDecodePolicy, Utf8Codec};
+/// use qubit_io_text::{CharsetReadExt, TextRead};
+///
+/// let input = Cursor::new("中文".as_bytes().to_vec());
+/// let mut reader = input.charset_text_reader(Utf8Codec, CharsetDecodePolicy::report());
+/// let mut text = String::new();
+/// reader.read_to_string(&mut text)?;
+/// assert_eq!("中文", text);
+/// # Ok::<(), std::io::Error>(())
+/// ```
 pub trait CharsetReadExt: Input<Item = u8> + Sized {
     /// Wraps this byte reader as a charset text reader.
     ///
@@ -27,6 +43,8 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     /// # Returns
     ///
     /// Returns a streaming text reader with the default buffer capacity.
+    #[must_use]
+    #[inline]
     fn charset_text_reader<C>(self, codec: C, policy: CharsetDecodePolicy) -> CharsetTextReader<Self, C>
     where
         C: CharsetCodec<Unit = u8>,
@@ -45,6 +63,8 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     /// # Returns
     ///
     /// Returns a streaming text reader using at least `capacity` bytes.
+    #[must_use]
+    #[inline]
     fn buffered_charset_text_reader<C>(
         self,
         codec: C,

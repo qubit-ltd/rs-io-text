@@ -138,6 +138,7 @@ where
     /// Returns the wrapped input. It may be positioned beyond encoded bytes
     /// retained by this reader.
     #[must_use]
+    #[inline]
     pub const fn input(&self) -> &I {
         self.input.inner()
     }
@@ -150,6 +151,7 @@ where
     /// # Returns
     /// This reader with the requested line-ending configuration.
     #[must_use]
+    #[inline]
     pub const fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
         self
@@ -157,6 +159,7 @@ where
 
     /// Returns the line endings recognized by this reader.
     #[must_use]
+    #[inline]
     pub const fn line_endings(&self) -> LineEndingSet {
         self.line_endings
     }
@@ -389,6 +392,7 @@ thread_local! {
     static COVERAGE_FORCE_EOF_STATUS: Cell<u8> = const { Cell::new(0) };
 }
 
+/// Applies a one-shot coverage override to the EOF transcode status.
 #[cfg(coverage)]
 fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
     match COVERAGE_FORCE_EOF_STATUS.with(|state| state.replace(0)) {
@@ -402,6 +406,7 @@ fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
     }
 }
 
+/// Returns the EOF transcode status unchanged outside coverage builds.
 #[cfg(not(coverage))]
 fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
     status
@@ -711,6 +716,7 @@ where
         }
     }
 
+    /// Appends one line character, enforcing the optional UTF-8 byte limit.
     fn append_line_char(
         &mut self,
         output: &mut String,

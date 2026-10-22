@@ -16,11 +16,32 @@ use crate::line_ending_set::LineEndingSet;
 use crate::line_ending_set::read_line_with;
 
 /// Text reader over an owned string.
+///
+/// The reader tracks its position as a UTF-8 byte offset and recognizes LF,
+/// CRLF, and CR line endings by default.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::StringTextReader;
+/// use qubit_io_text::TextRead;
+///
+/// let mut reader = StringTextReader::new(String::from("hello"));
+/// let mut output = String::new();
+/// let count = reader.read_to_string(&mut output)?;
+/// assert_eq!(count, 5);
+/// assert_eq!(output, "hello");
+/// # Ok::<(), std::convert::Infallible>(())
+/// ```
 #[derive(Debug)]
 pub struct StringTextReader {
+    /// Owned UTF-8 text being consumed by this reader.
     text: String,
+    /// UTF-8 byte offset of the next unread character.
     position: usize,
+    /// Line terminators recognized by [`TextLineRead::read_line`].
     line_endings: LineEndingSet,
+    /// Character retained after line-ending lookahead for the next read.
     pending_char: Option<char>,
 }
 
@@ -32,6 +53,7 @@ impl StringTextReader {
     ///
     /// # Returns
     /// A reader positioned at the start of the text.
+    #[inline]
     #[must_use]
     pub fn new(text: String) -> Self {
         Self {
@@ -46,6 +68,7 @@ impl StringTextReader {
     ///
     /// # Returns
     /// The current byte position.
+    #[inline]
     #[must_use]
     pub const fn position(&self) -> usize {
         self.position
@@ -58,6 +81,7 @@ impl StringTextReader {
     ///
     /// # Returns
     /// This reader with the requested line-ending configuration.
+    #[inline]
     #[must_use]
     pub const fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
         self.line_endings = line_endings;
@@ -66,6 +90,7 @@ impl StringTextReader {
 
     /// Returns the line endings recognized by this reader.
     #[must_use]
+    #[inline]
     pub const fn line_endings(&self) -> LineEndingSet {
         self.line_endings
     }
@@ -74,6 +99,7 @@ impl StringTextReader {
     ///
     /// # Returns
     /// The original string owned by this reader.
+    #[inline]
     #[must_use]
     pub fn into_inner(self) -> String {
         self.text

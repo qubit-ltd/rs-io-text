@@ -6,6 +6,15 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 /// Line ending used by text writers when writing a complete line.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::LineEnding;
+///
+/// let line_ending = LineEnding::CrLf;
+/// assert_eq!(line_ending.as_str(), "\r\n");
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum LineEnding {
     /// Unix line ending, `\n`.

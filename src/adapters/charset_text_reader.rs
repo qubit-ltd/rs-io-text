@@ -99,21 +99,9 @@ where
         }
     }
 
-    /// Sets the line endings recognized by [`TextLineRead::read_line`].
-    ///
-    /// # Parameters
-    /// - `line_endings`: Accepted line-ending sequences.
-    ///
-    /// # Returns
-    /// This reader with the requested line-ending configuration.
-    #[must_use]
-    pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
-        self.reader = self.reader.with_line_endings(line_endings);
-        self
-    }
-
     /// Returns the line endings recognized by this reader.
     #[must_use]
+    #[inline]
     pub const fn line_endings(&self) -> LineEndingSet {
         self.reader.line_endings()
     }
@@ -128,6 +116,20 @@ where
     #[inline(always)]
     pub const fn input(&self) -> &I {
         self.reader.inner()
+    }
+
+    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    ///
+    /// # Parameters
+    /// - `line_endings`: Accepted line-ending sequences.
+    ///
+    /// # Returns
+    /// This reader with the requested line-ending configuration.
+    #[must_use]
+    #[inline]
+    pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
+        self.reader = self.reader.with_line_endings(line_endings);
+        self
     }
 
     /// Consumes this reader and returns every component that may contain

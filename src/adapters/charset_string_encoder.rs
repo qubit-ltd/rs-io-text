@@ -51,6 +51,7 @@ pub struct CharsetStringEncoder<C>
 where
     C: CharsetCodec,
 {
+    /// Streaming encoder that performs the underlying charset conversion.
     encoder: CharsetEncoder<C>,
 }
 
@@ -124,6 +125,7 @@ where
     }
 
     /// Returns a mutable reference to the wrapped charset encoder.
+    #[must_use]
     #[inline(always)]
     pub fn encoder_mut(&mut self) -> &mut CharsetEncoder<C> {
         &mut self.encoder

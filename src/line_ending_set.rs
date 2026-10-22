@@ -15,6 +15,18 @@ use crate::LineEnding;
 ///
 /// The default set accepts LF, CRLF, and CR. When both CRLF and CR are
 /// enabled, a CRLF sequence is consumed as one line ending.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::LineEnding;
+/// use qubit_io_text::LineEndingSet;
+///
+/// let endings = LineEndingSet::only(LineEnding::CrLf).with(LineEnding::Lf);
+/// assert!(endings.contains(LineEnding::CrLf));
+/// assert!(endings.contains(LineEnding::Lf));
+/// assert!(!endings.contains(LineEnding::Cr));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct LineEndingSet(u8);
 
@@ -32,6 +44,12 @@ impl LineEndingSet {
     pub const ALL: Self = Self(Self::LF.0 | Self::CRLF.0 | Self::CR.0);
 
     /// Creates a set accepting one line ending.
+    ///
+    /// # Parameters
+    /// `line_ending` is the line ending to include.
+    ///
+    /// # Returns
+    /// A set containing only `line_ending`.
     #[must_use]
     pub const fn only(line_ending: LineEnding) -> Self {
         match line_ending {
@@ -42,24 +60,45 @@ impl LineEndingSet {
     }
 
     /// Returns whether this set accepts `line_ending`.
+    ///
+    /// # Parameters
+    /// `line_ending` is the line ending to check.
+    ///
+    /// # Returns
+    /// `true` if this set accepts `line_ending`.
     #[must_use]
     pub const fn contains(self, line_ending: LineEnding) -> bool {
         self.0 & Self::only(line_ending).0 != 0
     }
 
     /// Adds one line ending to this set.
+    ///
+    /// # Parameters
+    /// `line_ending` is the line ending to add.
+    ///
+    /// # Returns
+    /// A set containing the previous line endings and `line_ending`.
     #[must_use]
     pub const fn with(self, line_ending: LineEnding) -> Self {
         Self(self.0 | Self::only(line_ending).0)
     }
 
     /// Removes one line ending from this set.
+    ///
+    /// # Parameters
+    /// `line_ending` is the line ending to remove.
+    ///
+    /// # Returns
+    /// A set containing the previous line endings except `line_ending`.
     #[must_use]
     pub const fn without(self, line_ending: LineEnding) -> Self {
         Self(self.0 & !Self::only(line_ending).0)
     }
 
     /// Returns whether this set accepts no line endings.
+    ///
+    /// # Returns
+    /// `true` when no line ending is accepted.
     #[must_use]
     pub const fn is_empty(self) -> bool {
         self.0 == 0
@@ -72,7 +111,26 @@ impl Default for LineEndingSet {
     }
 }
 
-/// Reads one line using configurable line-ending recognition.
+/// Reads characters into `output` until an accepted line ending or end of
+/// input is reached.
+///
+/// The character in `pending` is consumed before `read_char` is called. When
+/// recognizing CRLF requires lookahead and the callback returns an error, the
+/// CR remains in `pending` so the operation can be retried without losing it.
+/// The callback's error is returned unchanged.
+///
+/// # Parameters
+/// - `line_endings` selects the line-ending sequences that terminate the read.
+/// - `output` receives the consumed characters, including a recognized ending.
+/// - `pending` supplies a character saved by an earlier read and stores any
+///   character retained for a later read.
+/// - `read_char` retrieves the next character and may return the caller's
+///   error.
+///
+/// # Returns
+/// `Ok(true)` if at least one character was read, including a line ending;
+/// `Ok(false)` if the input was already exhausted. `Err` contains an error
+/// returned by `read_char`.
 pub(crate) fn read_line_with<E, ReadChar>(
     line_endings: LineEndingSet,
     output: &mut String,
@@ -138,12 +196,26 @@ where
     Ok(read)
 }
 
-/// Consumes one line using configurable line-ending recognition.
+/// Discards characters until an accepted line ending or end of input.
 ///
 /// The character already held in `pending` is consumed before the callback is
 /// consulted. This is used after a bounded line read has failed so the next
 /// read starts at the following logical line rather than at a suffix of the
 /// oversized line.
+///
+/// If CRLF recognition requires lookahead and the callback fails, the CR is
+/// retained in `pending` and the callback error is returned unchanged.
+///
+/// # Parameters
+/// - `line_endings` selects the line-ending sequences that terminate discard.
+/// - `pending` supplies a saved character and stores any character after the
+///   discarded line ending.
+/// - `read_char` retrieves the next character and may return the caller's
+///   error.
+///
+/// # Errors
+/// Returns the error produced by `read_char` while consuming or looking ahead
+/// for a line ending.
 pub(crate) fn discard_line_with<E, ReadChar>(
     line_endings: LineEndingSet,
     pending: &mut Option<char>,
@@ -194,7 +266,20 @@ where
     }
 }
 
-/// Appends one character while enforcing a UTF-8 byte limit.
+/// Appends `ch` to `output` if doing so stays within the UTF-8 byte limit.
+///
+/// On overflow, truncates `output` back to `initial_len` before returning an
+/// error, so callers do not retain a partial line.
+///
+/// # Parameters
+/// - `output` is the string to extend or truncate.
+/// - `initial_len` is its byte length before this bounded append operation.
+/// - `max_append_len` is the maximum number of bytes that may be appended.
+/// - `ch` is the character to append.
+///
+/// # Errors
+/// Returns an `io::Error` when appending `ch` would exceed `max_append_len`;
+/// the error records that configured limit.
 pub(crate) fn append_limited_char(
     output: &mut String,
     initial_len: usize,

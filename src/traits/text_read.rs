@@ -10,6 +10,20 @@
 /// `TextRead` operates on Rust [`char`] and [`str`] values. Implementations are
 /// responsible for decoding any external byte encoding before exposing text to
 /// callers.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::StringTextReader;
+/// use qubit_io_text::TextRead;
+///
+/// let mut reader = StringTextReader::new("hello".to_owned());
+/// let mut text = String::new();
+/// let count = reader.read_to_string(&mut text).expect("in-memory reads succeed");
+///
+/// assert_eq!(count, 5);
+/// assert_eq!(text, "hello");
+/// ```
 pub trait TextRead {
     /// Error returned by this text source.
     type Error;

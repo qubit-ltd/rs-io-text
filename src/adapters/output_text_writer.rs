@@ -86,6 +86,7 @@ impl<'a> OutputTextWriter<'a> {
     /// # Returns
     /// The wrapped output trait object.
     #[must_use]
+    #[inline]
     pub fn get_ref(&self) -> &(dyn Output<Item = char> + 'a) {
         self.output.as_ref()
     }
@@ -98,6 +99,7 @@ impl<'a> OutputTextWriter<'a> {
     ///
     /// # Returns
     /// The wrapped output trait object.
+    #[must_use]
     #[inline(always)]
     pub fn get_mut(&mut self) -> &mut (dyn Output<Item = char> + 'a) {
         self.output.as_mut()

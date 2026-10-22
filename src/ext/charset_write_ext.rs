@@ -17,6 +17,21 @@ use crate::CharsetTextWriter;
 use crate::TextWrite;
 
 /// Extension methods for writing charset-encoded text to byte streams.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
+/// use qubit_io_text::{CharsetWriteExt, TextWrite};
+///
+/// let mut bytes = Vec::new();
+/// let mut writer = (&mut bytes).charset_text_writer(Utf8Codec, CharsetEncodePolicy::report());
+/// writer.write_str("中文")?;
+/// writer.finish()?;
+/// drop(writer);
+/// assert_eq!("中文".as_bytes(), bytes.as_slice());
+/// # Ok::<(), std::io::Error>(())
+/// ```
 pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     /// Wraps this byte writer as a charset text writer.
     ///
@@ -28,6 +43,8 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     /// # Returns
     ///
     /// Returns a streaming text writer with the default buffer capacity.
+    #[must_use]
+    #[inline]
     fn charset_text_writer<C>(self, codec: C, policy: CharsetEncodePolicy) -> CharsetTextWriter<Self, C>
     where
         C: CharsetCodec<Unit = u8>,
@@ -36,6 +53,21 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     }
 
     /// Fallibly wraps this byte writer as a charset text writer.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Charset codec used for outgoing text.
+    /// - `policy`: Unencodable text handling policy.
+    ///
+    /// # Returns
+    ///
+    /// Returns the configured writer when the replacement policy is valid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
+    /// configured replacement character.
+    #[inline]
     fn try_charset_text_writer<C>(
         self,
         codec: C,
@@ -58,6 +90,8 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     /// # Returns
     ///
     /// Returns a streaming text writer using at least `capacity` bytes.
+    #[must_use]
+    #[inline]
     fn buffered_charset_text_writer<C>(
         self,
         codec: C,
@@ -71,6 +105,22 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     }
 
     /// Fallibly wraps this byte writer with a requested buffer capacity.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Charset codec used for outgoing text.
+    /// - `policy`: Unencodable text handling policy.
+    /// - `capacity`: Requested byte buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// Returns the configured writer when the replacement policy is valid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
+    /// configured replacement character.
+    #[inline]
     fn try_buffered_charset_text_writer<C>(
         self,
         codec: C,

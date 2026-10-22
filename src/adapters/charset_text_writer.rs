@@ -83,6 +83,16 @@ where
 
     /// Creates a charset text writer and reports an invalid replacement policy.
     ///
+    /// # Parameters
+    ///
+    /// - `output`: Byte writer to receive encoded bytes.
+    /// - `codec`: Byte-oriented charset codec used for outgoing text.
+    /// - `policy`: Unencodable text handling policy.
+    ///
+    /// # Returns
+    ///
+    /// Returns a text writer using LF line endings.
+    ///
     /// # Errors
     ///
     /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
@@ -121,6 +131,17 @@ where
     /// Creates a charset text writer with a requested capacity and reports an
     /// invalid replacement policy.
     ///
+    /// # Parameters
+    ///
+    /// - `output`: Byte writer to receive encoded bytes.
+    /// - `codec`: Byte-oriented charset codec used for outgoing text.
+    /// - `policy`: Unencodable text handling policy.
+    /// - `buffer_capacity`: Requested internal byte buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// Returns a text writer using LF line endings.
+    ///
     /// # Errors
     ///
     /// Returns [`CharsetEncodeError`] when replacement mode cannot encode the
@@ -135,6 +156,17 @@ where
         Ok(Self {
             writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
         })
+    }
+
+    /// Returns a shared reference to the wrapped byte writer.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped byte writer. Pending bytes may still be buffered.
+    #[must_use = "the returned output and pending buffer must be handled"]
+    #[inline(always)]
+    pub const fn output(&self) -> &O {
+        self.writer.inner()
     }
 
     /// Sets the line ending for this writer.
@@ -153,17 +185,6 @@ where
         self
     }
 
-    /// Returns a shared reference to the wrapped byte writer.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped byte writer. Pending bytes may still be buffered.
-    #[must_use = "the returned output and pending buffer must be handled"]
-    #[inline(always)]
-    pub const fn output(&self) -> &O {
-        self.writer.inner()
-    }
-
     /// Finishes codec-owned output and flushes pending bytes.
     ///
     /// # Errors
@@ -171,6 +192,11 @@ where
     /// Returns encoding finalization errors or I/O errors from the wrapped
     /// writer. After a successful finish, later write calls return
     /// [`io::ErrorKind::InvalidInput`].
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` after finishing codec output and flushing pending
+    /// bytes.
     #[inline]
     pub fn finish(&mut self) -> io::Result<()> {
         self.writer.finish()
