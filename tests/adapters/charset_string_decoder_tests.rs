@@ -262,7 +262,7 @@ fn test_charset_string_decoder_rolls_back_after_late_malformed_input() {
     input.push(0xff);
     let mut output = String::from("seed:");
 
-    decoder
+    let _error = decoder
         .decode_to_string_into(&input, 0, &mut output)
         .expect_err("late malformed UTF-8 should fail the closed conversion");
 
