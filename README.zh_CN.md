@@ -50,7 +50,10 @@ writer.write_line("hello")?;
 writer.write_str("中文")?;
 writer.finish()?;
 
-let (output, pending) = writer.into_parts();
+let (output, recovery) = writer.into_parts();
+let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+    unreachable!("no inner write panicked");
+};
 assert!(pending.readable().is_empty());
 assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
 # Ok::<(), std::io::Error>(())
@@ -94,8 +97,9 @@ where
 ```
 
 在依赖 codec trailer 或底层 flush 结果前，必须调用 `finish()` 或
-`finish_async()`。finish 失败时 writer 仍由调用方持有，可检查或重试。finish 成功
-后，使用 `into_parts()` 可在不执行额外 I/O 的情况下取回 owned output。
+`finish_async()`。finish 失败时 writer 仍由调用方持有，可检查或重试。同步 `finish()` 成功
+后，同步 `into_parts()` 会在不执行额外 I/O 的情况下取回 owned output 和 `BufferedOutputRecovery`。
+异步 `into_parts()` 仍返回原始待写字节向量。同步恢复得到的 `Pending` 仅在外围协议允许时重试；`Indeterminate` 表示底层写入 panic，可能已经产生前缀副作用，不能自动重放。恢复不会调用 finish；编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。
 
 ## 核心能力
 

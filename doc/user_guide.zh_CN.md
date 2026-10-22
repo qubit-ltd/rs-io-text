@@ -141,8 +141,7 @@ where
   文本。
 - `finish` 或 `finish_async` 失败后，writer 仍可用于重试。
 - 异步 reader 的 `input()` 可能已越过其缓冲文本。
-- `into_parts()` 不执行 I/O；在成功 finish 前调用它会明确放弃尚未发出的 codec
-  lifecycle 输出。
+- 同步 buffered writer 的 `into_parts()` 不执行 I/O，并返回 `BufferedOutputRecovery`。`Pending` 表示尚未被报告写出的字节；`Indeterminate` 表示底层写入 panic，可能产生前缀副作用，不应自动重放。恢复不会调用 finish，编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。异步 writer 的 `into_parts()` 仍返回原始待写字节向量。
 - 当需要限制解码结果时，使用 `read_to_string_limited`、
   `read_to_string_limited_async` 或
   `read_to_string_with_charset_limited`。上限按该调用追加的 UTF-8 字节计算；

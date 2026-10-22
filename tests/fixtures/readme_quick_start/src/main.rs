@@ -20,6 +20,10 @@ fn main() -> std::io::Result<()> {
     writer.finish()?;
 
     let (output, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
     assert!(pending.readable().is_empty());
     assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
     Ok(())

@@ -9,7 +9,7 @@ use std::io;
 
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
-use qubit_io::Buffer;
+use qubit_io::BufferedOutputRecovery;
 use qubit_io::Output;
 
 use crate::CharsetTextWriter;
@@ -31,7 +31,10 @@ use crate::TextWrite;
 /// let mut writer = Utf8TextWriter::new(&mut bytes);
 /// writer.write_str("hello")?;
 /// writer.finish()?;
-/// let (output, pending) = writer.into_parts();
+/// let (output, recovery) = writer.into_parts();
+/// let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+///     unreachable!("no inner write panicked");
+/// };
 /// assert!(pending.readable().is_empty());
 /// assert_eq!(b"hello", output.as_slice());
 /// # Ok::<(), std::io::Error>(())
@@ -124,21 +127,23 @@ where
     pub fn finish(&mut self) -> io::Result<()> {
         self.writer.finish()
     }
-
-    /// Returns the wrapped byte output and every encoded byte still pending.
+    /// Recovers the wrapped output and the status of encoded bytes retained by this writer.
     ///
-    /// This method does not call [`Self::finish`] or flush the wrapped output.
-    /// Call [`Self::finish`] first for normal completion; otherwise the
-    /// returned buffer contains encoded bytes that have not reached the
-    /// returned output.
+    /// This method performs no I/O and does not call [`Self::finish`] or flush
+    /// the wrapped output. `Pending` bytes were not reported as written and may
+    /// be retried. `Indeterminate` means an inner write panicked and may have
+    /// produced an external prefix; do not replay it automatically. Call
+    /// `finish` first for normal completion. Recovery does not replace finish:
+    /// encoder lifecycle output not yet emitted may not be present in the
+    /// returned byte buffer.
     ///
     /// # Returns
     ///
-    /// Returns the wrapped output and pending encoded bytes in logical write
-    /// order.
-    #[must_use = "the returned output and pending buffer must be handled"]
+    /// Returns the wrapped output and pending or indeterminate encoded bytes in
+    /// logical write order.
+    #[must_use = "the wrapped output and recovery status must be handled"]
     #[inline(always)]
-    pub fn into_parts(self) -> (O, Buffer<u8>) {
+    pub fn into_parts(self) -> (O, BufferedOutputRecovery<u8>) {
         self.writer.into_parts()
     }
 }

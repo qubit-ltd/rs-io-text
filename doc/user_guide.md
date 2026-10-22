@@ -149,8 +149,7 @@ single-step APIs for cancellation-sensitive protocols.
   Unicode text that the selected codec cannot encode.
 - A failing `finish` or `finish_async` leaves the writer available for retry.
 - `input()` can be positioned beyond text already buffered by an async reader.
-- `into_parts()` performs no I/O. Calling it before a successful finish
-  explicitly abandons codec lifecycle output that has not yet been emitted.
+- Synchronous buffered-writer `into_parts()` performs no I/O and returns `BufferedOutputRecovery`. `Pending` bytes were not reported as written; `Indeterminate` means a panicking inner write may have produced a prefix and must not be replayed automatically. Recovery does not call finish, and encoder lifecycle output not yet emitted may not be present in the returned buffer. Async writer `into_parts()` still returns its raw pending byte vector.
 - Use `read_to_string_limited`, `read_to_string_limited_async`, or
   `read_to_string_with_charset_limited` when decoded output needs a bound.
   The limit applies to UTF-8 bytes appended by that call; exceeding it

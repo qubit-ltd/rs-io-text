@@ -368,6 +368,26 @@ impl Output for FlushFailOnceOutput {
     }
 }
 
+
+#[derive(Default)]
+struct PanicOutput {
+    bytes: Vec<u8>,
+}
+
+impl Output for PanicOutput {
+    type Item = u8;
+
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> std::io::Result<usize> {
+        let committed = count.min(1);
+        self.bytes.extend_from_slice(&input[index..index + committed]);
+        panic!("scripted output panic after committing a prefix");
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 #[test]
 fn test_buffered_writer_encodes_utf8_into_shared_output_buffer() -> std::io::Result<()> {
     let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
@@ -377,8 +397,12 @@ fn test_buffered_writer_encodes_utf8_into_shared_output_buffer() -> std::io::Res
     writer.write_str("Aé🙂")?;
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
 
-    assert!(pending.is_empty());
+    assert!(pending.readable().is_empty());
     assert_eq!("Aé🙂".as_bytes(), cursor.into_inner().as_slice());
     Ok(())
 }
@@ -410,7 +434,11 @@ fn test_buffered_writer_accessors_empty_writes_and_finish_state() -> std::io::Re
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 
     let (cursor, pending) = writer.into_parts();
-    assert!(pending.is_empty());
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
+    assert!(pending.readable().is_empty());
     assert_eq!(b"prefix:A", cursor.into_inner().as_slice());
     Ok(())
 }
@@ -425,8 +453,12 @@ fn test_buffered_writer_flushes_exact_string_chunks() -> std::io::Result<()> {
     writer.write_str(text.as_str())?;
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
 
-    assert!(pending.is_empty());
+    assert!(pending.readable().is_empty());
     assert_eq!(text.as_bytes(), cursor.into_inner().as_slice());
     Ok(())
 }
@@ -448,8 +480,12 @@ fn test_buffered_writer_emits_finish_output() -> std::io::Result<()> {
 
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
 
-    assert!(pending.is_empty());
+    assert!(pending.readable().is_empty());
     assert_eq!(b"!", cursor.into_inner().as_slice());
     Ok(())
 }
@@ -462,8 +498,12 @@ fn test_buffered_writer_runs_complete_lifecycle_on_first_write() -> std::io::Res
     writer.write_char('B')?;
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
 
-    assert!(pending.is_empty());
+    assert!(pending.readable().is_empty());
     assert_eq!(b"^AB!", cursor.into_inner().as_slice());
     Ok(())
 }
@@ -474,8 +514,12 @@ fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream() -> std::io::R
 
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
 
-    assert!(pending.is_empty());
+    assert!(pending.readable().is_empty());
     assert_eq!(b"^!", cursor.into_inner().as_slice());
     Ok(())
 }
@@ -570,8 +614,12 @@ fn test_buffered_writer_retries_finish_after_flush_failure() -> std::io::Result<
 
     writer.finish()?;
     let (output, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
 
-    assert!(pending.is_empty());
+    assert!(pending.readable().is_empty());
     assert_eq!(b"^A!", output.bytes.as_slice());
     assert!(output.flushed);
     Ok(())
@@ -594,8 +642,26 @@ fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()> 
     writer.write_line("line")?;
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
 
-    assert!(pending.is_empty());
+    assert!(pending.readable().is_empty());
     assert_eq!(b"line\r\n", cursor.into_inner().as_slice());
     Ok(())
+}
+
+#[test]
+fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
+    let mut writer = BufferedWriter::new(PanicOutput::default(), CharsetEncoder::new(Utf8Codec));
+    writer.write_str("text").expect("the encoded value should be buffered");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        TextWrite::flush(&mut writer)
+    }));
+    assert!(result.is_err());
+
+    let (inner, recovery) = writer.into_parts();
+    assert_eq!(b"t", inner.bytes.as_slice());
+    assert!(matches!(recovery, qubit_io::BufferedOutputRecovery::Indeterminate(_)));
 }

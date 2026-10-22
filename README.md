@@ -51,7 +51,10 @@ writer.write_line("hello")?;
 writer.write_str("中文")?;
 writer.finish()?;
 
-let (output, pending) = writer.into_parts();
+let (output, recovery) = writer.into_parts();
+let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+    unreachable!("no inner write panicked");
+};
 assert!(pending.readable().is_empty());
 assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
 # Ok::<(), std::io::Error>(())
@@ -97,8 +100,13 @@ where
 
 Call `finish()` or `finish_async()` before depending on codec trailers or the
 underlying output flush. A failed finish retains the writer, so callers can
-inspect or retry it. After a successful finish, `into_parts()` recovers the
-owned output without performing further I/O.
+inspect or retry it. After successful synchronous `finish()`, synchronous
+`into_parts()` recovers the owned output and a `BufferedOutputRecovery` without
+performing further I/O. Async `into_parts()` continues to return its raw pending
+byte vector. Retry synchronous `Pending` bytes only when safe for the surrounding
+protocol. `Indeterminate` means a panicking inner write may have committed a
+prefix, so do not replay it automatically. Recovery does not call finish, and
+encoder lifecycle output not yet emitted may be absent from the returned buffer.
 
 ## What It Provides
 

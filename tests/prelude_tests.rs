@@ -93,7 +93,11 @@ fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
     writer.write_str("C")?;
     writer.finish()?;
     let (output, pending) = writer.into_parts();
-    assert!(pending.is_empty());
+    let pending = match pending {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => buffer,
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("unexpected indeterminate recovery"),
+    };
+    assert!(pending.readable().is_empty());
     assert_eq!(b"C", output.as_slice());
     Ok(())
 }
