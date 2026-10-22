@@ -11,9 +11,9 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
-qubit-codec = { version = "0.16", features = ["io"] }
-qubit-codec-text = { version = "0.8" }
+libfuzzer-sys = "^0.4"
+qubit-codec = { version = "^0.16", features = ["io"] }
+qubit-codec-text = "^0.8"
 qubit-io-text = { path = ".." }
 
 [[bin]]
