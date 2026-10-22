@@ -144,7 +144,7 @@ fn test_accessors_expose_wrapped_reader() {
     let reader = CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
 
     assert_eq!(0, reader.input().position());
-    assert_eq!(0, reader.input().position());
+    assert_eq!(b"abc", reader.input().get_ref().as_slice());
 }
 
 #[test]

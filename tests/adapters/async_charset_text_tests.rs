@@ -47,7 +47,7 @@ where
 }
 
 #[test]
-fn async_charset_writer_try_new_reports_unencodable_replacement() {
+fn test_async_charset_writer_try_new_reports_unencodable_replacement() {
     let result = AsyncCharsetTextWriter::try_new(
         ChunkedAsyncOutput::new(1, false),
         AsciiCodec,
@@ -63,7 +63,7 @@ where
 }
 
 #[test]
-fn async_text_traits_cover_charset_and_utf8_adapters() {
+fn test_async_text_traits_cover_charset_and_utf8_adapters() {
     assert_async_reader::<AsyncCharsetTextReader<ChunkedAsyncInput, Utf8Codec>>();
     assert_async_reader::<AsyncUtf8TextReader<ChunkedAsyncInput>>();
     assert_async_writer::<AsyncCharsetTextWriter<ChunkedAsyncOutput, Utf8Codec>>();
@@ -352,7 +352,7 @@ where
 }
 
 #[test]
-fn async_charset_reader_decodes_across_pending_and_byte_boundaries() -> io::Result<()> {
+fn test_async_charset_reader_decodes_across_pending_and_byte_boundaries() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("中🙂\nnext".as_bytes().to_vec(), 1, true);
     let mut reader =
         AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 1);
@@ -369,7 +369,7 @@ fn async_charset_reader_decodes_across_pending_and_byte_boundaries() -> io::Resu
 }
 
 #[test]
-fn async_charset_reader_accepts_common_line_endings_by_default() -> io::Result<()> {
+fn test_async_charset_reader_accepts_common_line_endings_by_default() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("first\r\nsecond\rthird\nend".as_bytes().to_vec(), 1, true);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut line = String::new();
@@ -389,7 +389,7 @@ fn async_charset_reader_accepts_common_line_endings_by_default() -> io::Result<(
 }
 
 #[test]
-fn async_charset_reader_preserves_pending_line_tail_for_all_read_methods() -> io::Result<()> {
+fn test_async_charset_reader_preserves_pending_line_tail_for_all_read_methods() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"first\rsecond".to_vec(), 1, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut line = String::new();
@@ -414,7 +414,7 @@ fn async_charset_reader_preserves_pending_line_tail_for_all_read_methods() -> io
 }
 
 #[test]
-fn async_charset_reader_configured_line_endings_cover_crlf_paths() -> io::Result<()> {
+fn test_async_charset_reader_configured_line_endings_cover_crlf_paths() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"first\rsecond\r\nlast".to_vec(), 1, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report())
         .with_line_endings(LineEndingSet::CRLF);
@@ -449,7 +449,7 @@ fn async_charset_reader_configured_line_endings_cover_crlf_paths() -> io::Result
 }
 
 #[test]
-fn async_charset_reader_limited_cr_line_is_a_boundary() -> io::Result<()> {
+fn test_async_charset_reader_limited_cr_line_is_a_boundary() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"first\nnext".to_vec(), 1, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut line = String::new();
@@ -472,7 +472,7 @@ fn async_charset_reader_limited_cr_line_is_a_boundary() -> io::Result<()> {
 
 #[cfg(coverage)]
 #[test]
-fn async_charset_reader_covers_eof_status_recovery_branches() -> io::Result<()> {
+fn test_async_charset_reader_covers_eof_status_recovery_branches() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(Vec::new(), 1, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     AsyncCharsetTextReader::<ChunkedAsyncInput, Utf8Codec>::coverage_force_next_eof_status(1);
@@ -487,7 +487,7 @@ fn async_charset_reader_covers_eof_status_recovery_branches() -> io::Result<()> 
 }
 
 #[test]
-fn async_charset_reader_retains_partial_character_when_future_is_cancelled() -> io::Result<()> {
+fn test_async_charset_reader_retains_partial_character_when_future_is_cancelled() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("中".as_bytes().to_vec(), 1, false);
     let mut reader =
         AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 1);
@@ -503,7 +503,7 @@ fn async_charset_reader_retains_partial_character_when_future_is_cancelled() -> 
 }
 
 #[test]
-fn async_charset_reader_line_cancellation_preserves_cr_lookahead() -> io::Result<()> {
+fn test_async_charset_reader_line_cancellation_preserves_cr_lookahead() -> io::Result<()> {
     let progress = Rc::new(Cell::new(0));
     let input = ChunkedAsyncInput::new(b"first\r\nnext".to_vec(), 1, false).with_progress(progress.clone());
     let mut reader =
@@ -524,7 +524,7 @@ fn async_charset_reader_line_cancellation_preserves_cr_lookahead() -> io::Result
 }
 
 #[test]
-fn async_charset_reader_limited_reads_preserve_pending_order_and_endings() -> io::Result<()> {
+fn test_async_charset_reader_limited_reads_preserve_pending_order_and_endings() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"first\rbc".to_vec(), 1, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut line = String::new();
@@ -548,7 +548,7 @@ fn async_charset_reader_limited_reads_preserve_pending_order_and_endings() -> io
 
 #[cfg(coverage)]
 #[test]
-fn async_charset_reader_covers_limited_line_ending_branches() -> io::Result<()> {
+fn test_async_charset_reader_covers_limited_line_ending_branches() -> io::Result<()> {
     let mut reader = AsyncCharsetTextReader::new(
         ChunkedAsyncInput::new(b"a\r\nb".to_vec(), 1, false),
         Utf8Codec,
@@ -602,7 +602,7 @@ fn async_charset_reader_covers_limited_line_ending_branches() -> io::Result<()> 
 }
 
 #[test]
-fn async_charset_reader_applies_incomplete_eof_policy() -> io::Result<()> {
+fn test_async_charset_reader_applies_incomplete_eof_policy() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(vec![0xE4, 0xB8], 1, true);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::replace('!'));
     let mut text = String::new();
@@ -618,7 +618,7 @@ fn async_charset_reader_applies_incomplete_eof_policy() -> io::Result<()> {
 }
 
 #[test]
-fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state() -> io::Result<()> {
+fn test_async_charset_reader_accessors_and_bulk_reads_cover_buffered_state() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"ab".to_vec(), 2, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut chars = Vec::new();
@@ -637,7 +637,7 @@ fn async_charset_reader_accessors_and_bulk_reads_cover_buffered_state() -> io::R
 }
 
 #[test]
-fn async_charset_reader_into_parts_preserves_unreturned_characters() -> io::Result<()> {
+fn test_async_charset_reader_into_parts_preserves_unreturned_characters() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"abc".to_vec(), 3, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
 
@@ -651,7 +651,7 @@ fn async_charset_reader_into_parts_preserves_unreturned_characters() -> io::Resu
 }
 
 #[test]
-fn async_charset_reader_compacts_partial_tail_across_pending_reads() -> io::Result<()> {
+fn test_async_charset_reader_compacts_partial_tail_across_pending_reads() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 3, true);
     let mut reader =
         AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 1);
@@ -663,7 +663,7 @@ fn async_charset_reader_compacts_partial_tail_across_pending_reads() -> io::Resu
 }
 
 #[test]
-fn async_charset_reader_read_line_limited_restores_output_on_overflow() -> io::Result<()> {
+fn test_async_charset_reader_read_line_limited_restores_output_on_overflow() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("a中\nnext".as_bytes().to_vec(), 2, true);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut output = String::from("prefix-");
@@ -679,7 +679,7 @@ fn async_charset_reader_read_line_limited_restores_output_on_overflow() -> io::R
 }
 
 #[test]
-fn async_charset_reader_propagates_input_and_decode_errors() {
+fn test_async_charset_reader_propagates_input_and_decode_errors() {
     let input = ChunkedAsyncInput::new(Vec::new(), 1, false).with_error(io::ErrorKind::BrokenPipe);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let error = complete(reader.read_char_async()).expect_err("scripted input failure should propagate");
@@ -709,7 +709,7 @@ fn async_charset_reader_propagates_input_and_decode_errors() {
 }
 
 #[test]
-fn async_charset_reader_grows_lifecycle_and_incomplete_buffers() -> io::Result<()> {
+fn test_async_charset_reader_grows_lifecycle_and_incomplete_buffers() -> io::Result<()> {
     let mut encoded = vec![0xF0];
     encoded.extend_from_slice(&[0; 7]);
     let input = ChunkedAsyncInput::new(encoded, 4, false);
@@ -728,7 +728,7 @@ fn async_charset_reader_grows_lifecycle_and_incomplete_buffers() -> io::Result<(
 }
 
 #[test]
-fn async_charset_reader_propagates_lifecycle_errors() -> io::Result<()> {
+fn test_async_charset_reader_propagates_lifecycle_errors() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(Vec::new(), 4, false);
     let mut reader = AsyncCharsetTextReader::new(
         input,
@@ -751,7 +751,7 @@ fn async_charset_reader_propagates_lifecycle_errors() -> io::Result<()> {
 }
 
 #[test]
-fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()> {
+fn test_async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(2, true);
     let mut writer =
         AsyncCharsetTextWriter::new_with_buffer_capacity(output, Utf8Codec, CharsetEncodePolicy::report(), 3)
@@ -770,7 +770,7 @@ fn async_charset_writer_encodes_and_flushes_async_only_output() -> io::Result<()
 }
 
 #[test]
-fn async_charset_reader_trait_methods_forward_to_reader() -> io::Result<()> {
+fn test_async_charset_reader_trait_methods_forward_to_reader() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"A\nB".to_vec(), 4, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
 
@@ -799,7 +799,7 @@ fn async_charset_reader_trait_methods_forward_to_reader() -> io::Result<()> {
 }
 
 #[test]
-fn async_charset_writer_trait_methods_forward_to_writer() -> io::Result<()> {
+fn test_async_charset_writer_trait_methods_forward_to_writer() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(64, false);
     let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report())
         .with_line_ending(LineEnding::CrLf);
@@ -823,7 +823,7 @@ fn async_charset_writer_trait_methods_forward_to_writer() -> io::Result<()> {
 }
 
 #[test]
-fn async_charset_writer_commits_source_before_later_delivery_can_pend() -> io::Result<()> {
+fn test_async_charset_writer_commits_source_before_later_delivery_can_pend() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(2, false);
     let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
     let mut context = test_context();
@@ -840,7 +840,7 @@ fn async_charset_writer_commits_source_before_later_delivery_can_pend() -> io::R
 }
 
 #[test]
-fn async_charset_writer_accessors_empty_chunks_and_finished_state() -> io::Result<()> {
+fn test_async_charset_writer_accessors_empty_chunks_and_finished_state() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(4, false);
     let mut writer =
         AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report()).with_line_ending(LineEnding::Cr);
@@ -866,7 +866,7 @@ fn async_charset_writer_accessors_empty_chunks_and_finished_state() -> io::Resul
 }
 
 #[test]
-fn async_charset_writer_grows_across_need_output_and_pending_writes() -> io::Result<()> {
+fn test_async_charset_writer_grows_across_need_output_and_pending_writes() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(1, true);
     let mut writer =
         AsyncCharsetTextWriter::new_with_buffer_capacity(output, Utf8Codec, CharsetEncodePolicy::report(), 1);
@@ -880,7 +880,7 @@ fn async_charset_writer_grows_across_need_output_and_pending_writes() -> io::Res
 }
 
 #[test]
-fn async_charset_writer_retains_bytes_after_zero_and_write_errors() -> io::Result<()> {
+fn test_async_charset_writer_retains_bytes_after_zero_and_write_errors() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(4, false).with_write_zero();
     let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
     complete(writer.write_char_async('A'))?;
@@ -900,7 +900,7 @@ fn async_charset_writer_retains_bytes_after_zero_and_write_errors() -> io::Resul
 }
 
 #[test]
-fn async_charset_writer_propagates_flush_errors() -> io::Result<()> {
+fn test_async_charset_writer_propagates_flush_errors() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(4, false).with_flush_error(io::ErrorKind::BrokenPipe);
     let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
 
@@ -911,7 +911,7 @@ fn async_charset_writer_propagates_flush_errors() -> io::Result<()> {
 }
 
 #[test]
-fn async_charset_writer_finish_error_leaves_writer_available_for_retry() -> io::Result<()> {
+fn test_async_charset_writer_finish_error_leaves_writer_available_for_retry() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(4, false).with_flush_error(io::ErrorKind::BrokenPipe);
     let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
 
@@ -926,7 +926,7 @@ fn async_charset_writer_finish_error_leaves_writer_available_for_retry() -> io::
 }
 
 #[test]
-fn async_charset_writer_grows_and_emits_codec_lifecycle_output() -> io::Result<()> {
+fn test_async_charset_writer_grows_and_emits_codec_lifecycle_output() -> io::Result<()> {
     let output = ChunkedAsyncOutput::new(64, false);
     let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
         output,
@@ -944,7 +944,7 @@ fn async_charset_writer_grows_and_emits_codec_lifecycle_output() -> io::Result<(
 }
 
 #[test]
-fn async_charset_writer_propagates_codec_lifecycle_errors() {
+fn test_async_charset_writer_propagates_codec_lifecycle_errors() {
     let output = ChunkedAsyncOutput::new(64, false);
     let mut writer = AsyncCharsetTextWriter::new(
         output,
@@ -984,7 +984,7 @@ fn async_charset_writer_propagates_codec_lifecycle_errors() {
 }
 
 #[test]
-fn async_charset_reader_limited_read_rolls_back_appended_text() {
+fn test_async_charset_reader_limited_read_rolls_back_appended_text() {
     let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 1, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut output = String::from("prefix:");

@@ -704,12 +704,12 @@ fn test_buffered_reader_propagates_limited_input_errors() -> std::io::Result<()>
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut reader = BufferedReader::new(AlwaysFailInput, decoder);
     let mut output = String::new();
-    assert!(
+    assert_eq!(
+        ErrorKind::Other,
         reader
             .read_to_string_limited(&mut output, 8)
             .expect_err("limited string reads should report input errors")
-            .kind()
-            == ErrorKind::Other
+            .kind(),
     );
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());

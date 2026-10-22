@@ -341,7 +341,12 @@ fn test_charset_string_encoder_encode_str_into_accepts_actual_utf8_capacity() {
 fn test_charset_string_encoder_encode_str_into_handles_empty_and_large_inputs() {
     let mut encoder = CharsetStringEncoder::new(Utf8Codec);
     let mut output = [0_u8; 1];
-    assert_eq!(0, encoder.encode_str_into("", &mut output, 0).unwrap());
+    assert_eq!(
+        0,
+        encoder
+            .encode_str_into("", &mut output, 0)
+            .expect("empty input should encode successfully"),
+    );
 
     let input = "A".repeat(300);
     let mut output = vec![0_u8; input.len()];
