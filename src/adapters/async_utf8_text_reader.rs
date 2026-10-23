@@ -10,11 +10,11 @@ use std::ops::DerefMut;
 
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::Utf8Codec;
-use qubit_io::AsyncInput;
+use qubit_io::AsyncByteInput;
 
 use crate::AsyncCharsetTextReader;
-use crate::AsyncTextLineRead;
-use crate::AsyncTextRead;
+use crate::AsyncTextLineReader;
+use crate::AsyncTextReader;
 use crate::LineEndingSet;
 
 /// Asynchronous UTF-8 reader over a Qubit byte input.
@@ -31,12 +31,12 @@ use crate::LineEndingSet;
 /// # Examples
 ///
 /// ```no_run
-/// use qubit_io::AsyncInput;
+/// use qubit_io::AsyncByteInput;
 /// use qubit_io_text::AsyncUtf8TextReader;
 ///
 /// async fn read_all<I>(input: I) -> std::io::Result<String>
 /// where
-///     I: AsyncInput<Item = u8> + Unpin,
+///     I: AsyncByteInput + Unpin,
 /// {
 ///     let mut reader = AsyncUtf8TextReader::new(input);
 ///     let mut text = String::new();
@@ -47,11 +47,11 @@ use crate::LineEndingSet;
 #[derive(Debug)]
 pub struct AsyncUtf8TextReader<I>(AsyncCharsetTextReader<I, Utf8Codec>)
 where
-    I: AsyncInput<Item = u8>;
+    I: AsyncByteInput;
 
 impl<I> AsyncUtf8TextReader<I>
 where
-    I: AsyncInput<Item = u8>,
+    I: AsyncByteInput,
 {
     /// Creates a strict UTF-8 reader with the default buffer capacity.
     ///
@@ -140,7 +140,7 @@ where
 
 impl<I> Deref for AsyncUtf8TextReader<I>
 where
-    I: AsyncInput<Item = u8>,
+    I: AsyncByteInput,
 {
     type Target = AsyncCharsetTextReader<I, Utf8Codec>;
 
@@ -152,7 +152,7 @@ where
 
 impl<I> DerefMut for AsyncUtf8TextReader<I>
 where
-    I: AsyncInput<Item = u8>,
+    I: AsyncByteInput,
 {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
@@ -160,9 +160,9 @@ where
     }
 }
 
-impl<I> AsyncTextRead for AsyncUtf8TextReader<I>
+impl<I> AsyncTextReader for AsyncUtf8TextReader<I>
 where
-    I: AsyncInput<Item = u8> + Unpin,
+    I: AsyncByteInput + Unpin,
 {
     type Error = std::io::Error;
 
@@ -179,9 +179,9 @@ where
     }
 }
 
-impl<I> AsyncTextLineRead for AsyncUtf8TextReader<I>
+impl<I> AsyncTextLineReader for AsyncUtf8TextReader<I>
 where
-    I: AsyncInput<Item = u8> + Unpin,
+    I: AsyncByteInput + Unpin,
 {
     async fn read_line_async(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         self.0.read_line_async(output).await

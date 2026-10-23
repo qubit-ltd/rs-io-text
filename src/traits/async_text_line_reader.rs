@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use super::AsyncTextRead;
+use super::AsyncTextReader;
 
 /// Asynchronously reads text by line while preserving line terminators.
 ///
@@ -14,7 +14,7 @@ use super::AsyncTextRead;
 /// Cancellation behavior is implementation-specific; callers must consult the
 /// concrete reader before retrying a cancelled operation.
 #[allow(async_fn_in_trait)]
-pub trait AsyncTextLineRead: AsyncTextRead {
+pub trait AsyncTextLineReader: AsyncTextReader {
     /// Reads one line into `output`.
     ///
     /// The line is appended to `output`; its existing contents are preserved.

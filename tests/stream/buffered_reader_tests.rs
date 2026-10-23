@@ -22,12 +22,12 @@ use qubit_codec::Transcoder;
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetDecoder;
 use qubit_codec_text::Utf8Codec;
-use qubit_io_text::BufferedReader;
+use qubit_io_text::BufferedTextReader;
 #[cfg(coverage)]
 use qubit_io_text::LineEnding;
 use qubit_io_text::LineEndingSet;
-use qubit_io_text::TextLineRead;
-use qubit_io_text::TextRead;
+use qubit_io_text::TextLineReader;
+use qubit_io_text::TextReader;
 
 #[derive(Debug, Default)]
 struct ExpandingDecoder;
@@ -80,7 +80,7 @@ impl Transcoder for ExpandingDecoder {
 fn test_buffered_reader_accepts_crlf_across_decode_windows() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
     let mut reader =
-        BufferedReader::with_capacity(Cursor::new("first\r\nsecond\rthird".as_bytes().to_vec()), decoder, 1);
+        BufferedTextReader::with_capacity(Cursor::new("first\r\nsecond\rthird".as_bytes().to_vec()), decoder, 1);
     let mut line = String::new();
 
     assert_eq!(LineEndingSet::ALL, reader.line_endings());
@@ -98,20 +98,20 @@ fn test_buffered_reader_accepts_crlf_across_decode_windows() -> std::io::Result<
 #[test]
 fn test_buffered_reader_pending_character_is_returned_by_other_read_methods() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
     assert_eq!(Some('s'), reader.read_char()?);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
     assert!(reader.read_line(&mut line)?);
     let mut chars = Vec::new();
     assert_eq!(1, reader.read_chars(&mut chars, 1)?);
     assert_eq!(vec!['s'], chars);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
     let mut output = String::new();
@@ -123,7 +123,7 @@ fn test_buffered_reader_pending_character_is_returned_by_other_read_methods() ->
 #[test]
 fn test_buffered_reader_line_ending_configuration_and_parts() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1)
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1)
         .with_line_endings(LineEndingSet::CR);
     assert_eq!(LineEndingSet::CR, reader.line_endings());
     let mut line = String::new();
@@ -132,7 +132,7 @@ fn test_buffered_reader_line_ending_configuration_and_parts() -> std::io::Result
     assert_eq!(&['s', 'e'], &parts.pending_chars[..2]);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let reader = BufferedReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
+    let reader = BufferedTextReader::with_capacity(Cursor::new(b"first\rsecond".to_vec()), decoder, 1);
     let mut reader = reader;
     line.clear();
     assert!(reader.read_line(&mut line)?);
@@ -144,14 +144,14 @@ fn test_buffered_reader_line_ending_configuration_and_parts() -> std::io::Result
 #[test]
 fn test_buffered_reader_read_line_limited_returns_unterminated_tail() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"tail".to_vec()), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"tail".to_vec()), decoder, 1);
     let mut line = String::new();
     assert!(reader.read_line_limited(&mut line, 16)?);
     assert_eq!("tail", line);
     assert!(!reader.read_line_limited(&mut line, 16)?);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut empty = BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    let mut empty = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), decoder);
     let mut output = String::new();
     assert!(!empty.read_line_limited(&mut output, 16)?);
     Ok(())
@@ -160,18 +160,18 @@ fn test_buffered_reader_read_line_limited_returns_unterminated_tail() -> std::io
 #[test]
 fn test_buffered_reader_read_to_string_limited_enforces_utf8_limit() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new("A中".as_bytes().to_vec()), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new("A中".as_bytes().to_vec()), decoder, 1);
     let mut output = String::from("prefix:");
     assert_eq!(2, reader.read_to_string_limited(&mut output, 4)?);
     assert_eq!("prefix:A中", output);
     assert_eq!(0, reader.read_to_string_limited(&mut output, 4)?);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut empty = BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    let mut empty = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), decoder);
     assert_eq!(0, empty.read_to_string_limited(&mut output, 4)?);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new("A中".as_bytes().to_vec()), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new("A中".as_bytes().to_vec()), decoder, 1);
     let mut output = String::from("prefix:");
     let error = reader
         .read_to_string_limited(&mut output, 1)
@@ -184,7 +184,7 @@ fn test_buffered_reader_read_to_string_limited_enforces_utf8_limit() -> std::io:
 #[test]
 fn test_buffered_reader_limited_reads_preserve_pending_order_and_endings() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"first\rbc".to_vec()), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"first\rbc".to_vec()), decoder, 1);
     let mut line = String::new();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("first\r", line);
@@ -193,7 +193,7 @@ fn test_buffered_reader_limited_reads_preserve_pending_order_and_endings() -> st
     assert_eq!("bc", output);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"first\rsecond\nthird".to_vec()), decoder, 1)
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"first\rsecond\nthird".to_vec()), decoder, 1)
         .with_line_endings(LineEndingSet::CR);
     line.clear();
     assert!(reader.read_line_limited(&mut line, 32)?);
@@ -208,13 +208,13 @@ fn test_buffered_reader_limited_reads_preserve_pending_order_and_endings() -> st
 #[test]
 fn test_buffered_reader_covers_limited_line_ending_branches() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new(b"a\r\nb".to_vec()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(b"a\r\nb".to_vec()), decoder);
     let mut line = String::new();
     assert!(reader.read_line_limited(&mut line, 8)?);
     assert_eq!("a\r\n", line);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new(b"\r\n".to_vec()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(b"\r\n".to_vec()), decoder);
     let error = reader
         .read_line_limited(&mut String::new(), 1)
         .expect_err("the LF in CRLF should exceed the limit");
@@ -232,7 +232,7 @@ fn test_buffered_reader_covers_limited_line_ending_branches() -> std::io::Result
         (b"a\r".as_slice(), LineEndingSet::CRLF, "a\r"),
     ] {
         let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-        let mut reader = BufferedReader::new(Cursor::new(input.to_vec()), decoder).with_line_endings(endings);
+        let mut reader = BufferedTextReader::new(Cursor::new(input.to_vec()), decoder).with_line_endings(endings);
         let mut line = String::new();
         assert!(reader.read_line_limited(&mut line, 8)?);
         assert_eq!(expected, line);
@@ -253,7 +253,7 @@ fn test_buffered_reader_covers_discard_line_branches() -> std::io::Result<()> {
         (b"aX\r".as_slice(), LineEndingSet::CR),
     ] {
         let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-        let mut reader = BufferedReader::new(Cursor::new(input.to_vec()), decoder).with_line_endings(endings);
+        let mut reader = BufferedTextReader::new(Cursor::new(input.to_vec()), decoder).with_line_endings(endings);
         let error = reader
             .read_line_limited(&mut String::new(), 1)
             .expect_err("the second character should exceed the limit");
@@ -266,39 +266,39 @@ fn test_buffered_reader_covers_discard_line_branches() -> std::io::Result<()> {
 #[test]
 fn test_buffered_reader_covers_decoder_status_recovery_branches() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
-    BufferedReader::<Cursor<Vec<u8>>, CharsetDecoder<Utf8Codec>>::coverage_force_next_status(1);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    BufferedTextReader::<Cursor<Vec<u8>>, CharsetDecoder<Utf8Codec>>::coverage_force_next_status(1);
     let error = reader
         .read_char()
         .expect_err("forced EOF input request should be rejected");
     assert_eq!(ErrorKind::InvalidData, error.kind());
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
-    BufferedReader::<Cursor<Vec<u8>>, CharsetDecoder<Utf8Codec>>::coverage_force_next_status(2);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    BufferedTextReader::<Cursor<Vec<u8>>, CharsetDecoder<Utf8Codec>>::coverage_force_next_status(2);
     assert_eq!(None, reader.read_char()?);
 
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
-    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(3);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
+    BufferedTextReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(3);
     assert_eq!(None, reader.read_char()?);
 
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
-    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(4);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
+    BufferedTextReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(4);
     assert_eq!(None, reader.read_char()?);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), decoder);
     assert!(!reader.coverage_finish_again()?);
 
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), ErrorResetDecoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), ErrorResetDecoder);
     reader.coverage_touch_buffer_state();
 
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), OverflowResetDecoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), OverflowResetDecoder);
     reader.coverage_touch_buffer_state();
 
-    let mut reader = BufferedReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
-    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(3);
-    BufferedReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_fill_error();
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), ExpandingDecoder);
+    BufferedTextReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_status(3);
+    BufferedTextReader::<Cursor<Vec<u8>>, ExpandingDecoder>::coverage_force_next_fill_error();
     let error = reader.read_char().expect_err("forced refill errors should propagate");
     assert_eq!(ErrorKind::Other, error.kind());
 
@@ -672,7 +672,7 @@ impl TranscodeDecoder for OverflowResetDecoder {
 fn test_buffered_reader_decodes_utf8_across_single_byte_refills() -> std::io::Result<()> {
     let bytes = "Aé🙂".as_bytes().to_vec();
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(bytes), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(bytes), decoder, 1);
 
     let mut output = String::new();
     let count = reader.read_to_string(&mut output)?;
@@ -684,7 +684,7 @@ fn test_buffered_reader_decodes_utf8_across_single_byte_refills() -> std::io::Re
 
 #[test]
 fn test_buffered_reader_preserves_need_output_for_expanding_decoder() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(Cursor::new(vec![1]), ExpandingDecoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![1]), ExpandingDecoder, 1);
     let mut output = String::new();
     assert_eq!(5, reader.read_to_string(&mut output)?);
     assert_eq!("xxxxx", output);
@@ -693,7 +693,7 @@ fn test_buffered_reader_preserves_need_output_for_expanding_decoder() -> std::io
 
 #[test]
 fn test_buffered_reader_refills_when_decoder_needs_more_input() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(Cursor::new(vec![1, 2, 3, 4, 5]), NeedInputDecoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![1, 2, 3, 4, 5]), NeedInputDecoder, 1);
     assert_eq!(Some('n'), reader.read_char()?);
     assert_eq!(None, reader.read_char()?);
     Ok(())
@@ -702,7 +702,7 @@ fn test_buffered_reader_refills_when_decoder_needs_more_input() -> std::io::Resu
 #[test]
 fn test_buffered_reader_propagates_limited_input_errors() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(AlwaysFailInput, decoder);
+    let mut reader = BufferedTextReader::new(AlwaysFailInput, decoder);
     let mut output = String::new();
     assert_eq!(
         ErrorKind::Other,
@@ -713,7 +713,7 @@ fn test_buffered_reader_propagates_limited_input_errors() -> std::io::Result<()>
     );
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(AlwaysFailInput, decoder);
+    let mut reader = BufferedTextReader::new(AlwaysFailInput, decoder);
     assert_eq!(
         ErrorKind::Other,
         reader
@@ -726,7 +726,7 @@ fn test_buffered_reader_propagates_limited_input_errors() -> std::io::Result<()>
 
 #[test]
 fn test_buffered_reader_propagates_refill_errors_after_need_input() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(FirstChunkThenError { first: true }, NeedInputDecoder, 4);
+    let mut reader = BufferedTextReader::with_capacity(FirstChunkThenError { first: true }, NeedInputDecoder, 4);
     let error = reader
         .read_char()
         .expect_err("a refill error after NeedInput should propagate");
@@ -737,7 +737,7 @@ fn test_buffered_reader_propagates_refill_errors_after_need_input() -> std::io::
 #[test]
 fn test_buffered_reader_accessors() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new("abc\n".as_bytes().to_vec()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new("abc\n".as_bytes().to_vec()), decoder);
 
     assert_eq!(0, reader.inner().position());
     let mut line = String::new();
@@ -754,7 +754,7 @@ fn test_buffered_reader_accessors() -> std::io::Result<()> {
 #[test]
 fn test_buffered_reader_into_parts_preserves_unreturned_characters() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"abc".to_vec()), decoder, 4);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"abc".to_vec()), decoder, 4);
 
     assert_eq!(Some('a'), reader.read_char()?);
 
@@ -768,7 +768,7 @@ fn test_buffered_reader_into_parts_preserves_unreturned_characters() -> std::io:
 #[test]
 fn test_buffered_reader_read_chars_with_zero_limit_does_not_read() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new("abc".as_bytes().to_vec()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new("abc".as_bytes().to_vec()), decoder);
     let mut chars = Vec::new();
 
     assert_eq!(0, reader.read_chars(&mut chars, 0)?);
@@ -780,7 +780,7 @@ fn test_buffered_reader_read_chars_with_zero_limit_does_not_read() -> std::io::R
 #[test]
 fn test_buffered_reader_read_line_limited_restores_output_on_overflow() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new("a中\nnext".as_bytes().to_vec()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new("a中\nnext".as_bytes().to_vec()), decoder);
     let mut output = String::from("prefix-");
 
     let error = reader
@@ -798,7 +798,7 @@ fn test_buffered_reader_read_line_limited_restores_output_on_overflow() -> std::
 #[test]
 fn test_buffered_reader_read_line_limited_accepts_exact_utf8_limit() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new("hello 世界\nnext".as_bytes().to_vec()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new("hello 世界\nnext".as_bytes().to_vec()), decoder);
     let mut output = String::new();
 
     assert!(reader.read_line_limited(&mut output, "hello 世界\n".len())?);
@@ -808,7 +808,7 @@ fn test_buffered_reader_read_line_limited_accepts_exact_utf8_limit() -> std::io:
 
 #[test]
 fn test_buffered_reader_emits_decoder_finish_output() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(Cursor::new(Vec::new()), FinishCharDecoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(Vec::new()), FinishCharDecoder, 1);
 
     assert_eq!(Some('!'), reader.read_char()?);
     assert_eq!(None, reader.read_char()?);
@@ -818,7 +818,7 @@ fn test_buffered_reader_emits_decoder_finish_output() -> std::io::Result<()> {
 
 #[test]
 fn test_buffered_reader_runs_complete_lifecycle_on_first_read() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(Cursor::new(b"A".to_vec()), LifecycleDecoder::default(), 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"A".to_vec()), LifecycleDecoder::default(), 1);
 
     let mut output = String::new();
     reader.read_to_string(&mut output)?;
@@ -829,7 +829,7 @@ fn test_buffered_reader_runs_complete_lifecycle_on_first_read() -> std::io::Resu
 
 #[test]
 fn test_buffered_reader_runs_complete_lifecycle_for_empty_stream() -> std::io::Result<()> {
-    let mut reader = BufferedReader::with_capacity(Cursor::new(Vec::new()), LifecycleDecoder::default(), 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(Vec::new()), LifecycleDecoder::default(), 1);
 
     let mut output = String::new();
     reader.read_to_string(&mut output)?;
@@ -840,7 +840,7 @@ fn test_buffered_reader_runs_complete_lifecycle_for_empty_stream() -> std::io::R
 
 #[test]
 fn test_buffered_reader_reports_finish_capacity_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), OverflowFinishDecoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::new()), OverflowFinishDecoder);
 
     let error = reader
         .read_char()
@@ -851,7 +851,7 @@ fn test_buffered_reader_reports_finish_capacity_errors() {
 
 #[test]
 fn test_buffered_reader_propagates_finish_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), ErrorFinishDecoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::new()), ErrorFinishDecoder);
 
     let error = reader
         .read_char()
@@ -862,7 +862,7 @@ fn test_buffered_reader_propagates_finish_errors() {
 
 #[test]
 fn test_buffered_reader_propagates_reset_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
 
     let error = reader
         .read_char()
@@ -870,7 +870,7 @@ fn test_buffered_reader_propagates_reset_errors() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
 
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::new()), ErrorResetDecoder);
     let mut output = Vec::new();
     let error = reader
         .read_chars(&mut output, 1)
@@ -880,7 +880,7 @@ fn test_buffered_reader_propagates_reset_errors() {
 
 #[test]
 fn test_buffered_reader_reports_reset_capacity_errors() {
-    let mut reader = BufferedReader::new(Cursor::new(Vec::new()), OverflowResetDecoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(Vec::new()), OverflowResetDecoder);
 
     let error = reader
         .read_char()
@@ -892,7 +892,7 @@ fn test_buffered_reader_reports_reset_capacity_errors() {
 #[test]
 fn test_buffered_reader_replaces_incomplete_eof_tail() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::replace('\u{FFFD}'));
-    let mut reader = BufferedReader::with_capacity(Cursor::new(vec![0xE2, 0x82]), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![0xE2, 0x82]), decoder, 1);
 
     let mut output = String::new();
     let count = reader.read_to_string(&mut output)?;
@@ -905,7 +905,7 @@ fn test_buffered_reader_replaces_incomplete_eof_tail() -> std::io::Result<()> {
 #[test]
 fn test_buffered_reader_reports_strict_incomplete_eof_tail() {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(Cursor::new(vec![0xE2, 0x82]), decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![0xE2, 0x82]), decoder, 1);
 
     let error = reader
         .read_char()
@@ -917,7 +917,7 @@ fn test_buffered_reader_reports_strict_incomplete_eof_tail() {
 #[test]
 fn test_buffered_reader_preserves_cr_when_crlf_lookahead_fails() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::with_capacity(CrThenErrorThenByte { state: 0 }, decoder, 1);
+    let mut reader = BufferedTextReader::with_capacity(CrThenErrorThenByte { state: 0 }, decoder, 1);
     let mut line = String::new();
 
     let error = reader.read_line(&mut line).expect_err("lookahead fails");

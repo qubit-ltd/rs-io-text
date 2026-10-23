@@ -14,7 +14,7 @@
 //! also provides adapters for in-memory text, UTF-8 byte streams, and
 //! byte-oriented [`qubit_codec_text`] charsets. [`AsyncCharsetTextReader`] and
 //! [`AsyncCharsetTextWriter`] drive the same charset state machines through
-//! runtime-neutral [`qubit_io::AsyncInput`] and [`qubit_io::AsyncOutput`].
+//! runtime-neutral [`qubit_io::AsyncByteInput`] and [`qubit_io::AsyncByteOutput`].
 #![deny(missing_docs)]
 
 mod adapters;
@@ -49,12 +49,12 @@ pub use ext::CharsetReadExt;
 pub use ext::CharsetWriteExt;
 pub use line_ending::LineEnding;
 pub use line_ending_set::LineEndingSet;
-pub use stream::BufferedReader;
-pub use stream::BufferedWriter;
+pub use stream::BufferedTextReader;
+pub use stream::BufferedTextWriter;
 pub use text_reader_parts::TextReaderParts;
-pub use traits::AsyncTextLineRead;
-pub use traits::AsyncTextRead;
-pub use traits::AsyncTextWrite;
-pub use traits::TextLineRead;
-pub use traits::TextRead;
-pub use traits::TextWrite;
+pub use traits::AsyncTextLineReader;
+pub use traits::AsyncTextReader;
+pub use traits::AsyncTextWriter;
+pub use traits::TextLineReader;
+pub use traits::TextReader;
+pub use traits::TextWriter;

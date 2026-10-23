@@ -10,15 +10,15 @@
 `qubit-io-text` 让 Rust 应用处理 Unicode 文本和文本行，并在流边界明确指定字节编码。
 它提供：
 
-- 面向同步 Unicode 文本的 `TextRead`、`TextLineRead` 和 `TextWrite`；
-- 面向运行时无关异步文本操作的 `AsyncTextRead`、`AsyncTextLineRead` 和
-  `AsyncTextWrite`；
+- 面向同步 Unicode 文本的 `TextReader`、`TextLineReader` 和 `TextWriter`；
+- 面向运行时无关异步文本操作的 `AsyncTextReader`、`AsyncTextLineReader` 和
+  `AsyncTextWriter`；
 - `StrTextReader`、`StringCharInput`、`StringCharOutput`、
   `InputTextReader`、`OutputTextWriter` 等字符串与字符流 adapter；
 - 基于 Qubit 字节输入与输出的严格 UTF-8 便利 adapter；
-- 基于 `qubit_io::Input<Item = u8>` / `Output<Item = u8>` 的同步 charset
+- 基于 `qubit_io::ByteInput` / `ByteOutput` 的同步 charset
   adapter；
-- 基于 `AsyncInput<Item = u8>` / `AsyncOutput<Item = u8>`、运行时无关的
+- 基于 `AsyncByteInput` / `AsyncByteOutput`、运行时无关的
   `AsyncCharsetTextReader` 与 `AsyncCharsetTextWriter`；
 - 来自 `qubit-codec-text` 的 charset policy、写入器 `LineEnding` 配置，以及读取器
   `LineEndingSet` 配置（默认识别 LF、CRLF 和 CR）。
@@ -38,7 +38,7 @@ qubit-io-text = "0.7"
 ```rust
 use qubit_io_text::{
     LineEnding,
-    TextWrite,
+    TextWriter,
     Utf8TextWriter,
 };
 
@@ -73,7 +73,7 @@ qubit-io = "0.17"
 ## 运行时无关的异步 API
 
 ```rust
-use qubit_io::AsyncOutput;
+use qubit_io::AsyncByteOutput;
 use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io_text::{
     AsyncCharsetTextWriter,
@@ -81,7 +81,7 @@ use qubit_io_text::{
 
 async fn write_message<O>(output: O) -> std::io::Result<O>
 where
-    O: AsyncOutput<Item = u8> + Unpin,
+    O: AsyncByteOutput + Unpin,
 {
     let mut writer = AsyncCharsetTextWriter::new(
         output,
@@ -105,12 +105,12 @@ where
 
 | 领域 | API |
 | --- | --- |
-| Unicode 文本 trait | `TextRead`、`TextLineRead`、`TextWrite` |
+| Unicode 文本 trait | `TextReader`、`TextLineReader`、`TextWriter` |
 | 内存文本 | `StrTextReader`、`StringTextReader`、`StringTextWriter` |
 | 字符流 | `StringCharInput`、`StringCharOutput`、`InputTextReader`、`OutputTextWriter` |
 | UTF-8 字节流 | 基于 `Input`/`Output` 的 `Utf8TextReader`、`Utf8TextWriter` |
 | 同步 charset | `CharsetTextReader`、`CharsetTextWriter`、`CharsetReadExt`、`CharsetWriteExt` |
-| 异步文本 | `AsyncTextRead`、`AsyncTextLineRead`、`AsyncTextWrite` |
+| 异步文本 | `AsyncTextReader`、`AsyncTextLineReader`、`AsyncTextWriter` |
 | 异步 charset | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` |
 | 策略 | `CharsetDecodePolicy`、`CharsetEncodePolicy`、`LineEnding`、`LineEndingSet` |
 

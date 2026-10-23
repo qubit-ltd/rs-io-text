@@ -14,9 +14,9 @@ use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
-use qubit_io::AsyncOutput;
+use qubit_io::AsyncByteOutput;
 
-use crate::AsyncTextWrite;
+use crate::AsyncTextWriter;
 use crate::LineEnding;
 use crate::io_error::encode_error_to_io;
 
@@ -43,12 +43,12 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 ///
 /// ```no_run
 /// use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
-/// use qubit_io::AsyncOutput;
+/// use qubit_io::AsyncByteOutput;
 /// use qubit_io_text::AsyncCharsetTextWriter;
 ///
 /// async fn write_all<O>(output: O) -> std::io::Result<O>
 /// where
-///     O: AsyncOutput<Item = u8> + Unpin,
+///     O: AsyncByteOutput + Unpin,
 /// {
 ///     let mut writer = AsyncCharsetTextWriter::new(
 ///         output,
@@ -65,7 +65,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 #[derive(Debug)]
 pub struct AsyncCharsetTextWriter<O, C>
 where
-    O: AsyncOutput<Item = u8>,
+    O: AsyncByteOutput,
     C: CharsetCodec<Unit = u8>,
 {
     /// Holds encoded bytes until the wrapped output accepts them.
@@ -82,7 +82,7 @@ where
 
 impl<O, C> AsyncCharsetTextWriter<O, C>
 where
-    O: AsyncOutput<Item = u8>,
+    O: AsyncByteOutput,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates an asynchronous charset writer with the default buffer size.
@@ -272,9 +272,9 @@ where
     }
 }
 
-impl<O, C> AsyncTextWrite for AsyncCharsetTextWriter<O, C>
+impl<O, C> AsyncTextWriter for AsyncCharsetTextWriter<O, C>
 where
-    O: AsyncOutput<Item = u8> + Unpin,
+    O: AsyncByteOutput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
@@ -310,7 +310,7 @@ where
 
 impl<O, C> AsyncCharsetTextWriter<O, C>
 where
-    O: AsyncOutput<Item = u8> + Unpin,
+    O: AsyncByteOutput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
     /// Asynchronously writes one character.

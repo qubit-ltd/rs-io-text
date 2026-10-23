@@ -9,11 +9,11 @@ use std::io;
 
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetDecodePolicy;
-use qubit_io::Input;
+use qubit_io::ByteInput;
 use qubit_io::InputRef;
 
 use crate::CharsetTextReader;
-use crate::TextRead;
+use crate::TextReader;
 
 /// Extension methods for reading charset-encoded text from byte streams.
 ///
@@ -23,7 +23,7 @@ use crate::TextRead;
 /// use std::io::Cursor;
 ///
 /// use qubit_codec_text::{CharsetDecodePolicy, Utf8Codec};
-/// use qubit_io_text::{CharsetReadExt, TextRead};
+/// use qubit_io_text::{CharsetReadExt, TextReader};
 ///
 /// let input = Cursor::new("中文".as_bytes().to_vec());
 /// let mut reader = input.charset_text_reader(Utf8Codec, CharsetDecodePolicy::report());
@@ -32,7 +32,7 @@ use crate::TextRead;
 /// assert_eq!("中文", text);
 /// # Ok::<(), std::io::Error>(())
 /// ```
-pub trait CharsetReadExt: Input<Item = u8> + Sized {
+pub trait CharsetReadExt: ByteInput + Sized {
     /// Wraps this byte reader as a charset text reader.
     ///
     /// # Parameters
@@ -136,4 +136,4 @@ pub trait CharsetReadExt: Input<Item = u8> + Sized {
     }
 }
 
-impl<R> CharsetReadExt for R where R: Input<Item = u8> + Sized {}
+impl<R> CharsetReadExt for R where R: ByteInput + Sized {}

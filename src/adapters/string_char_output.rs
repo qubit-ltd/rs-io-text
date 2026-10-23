@@ -14,7 +14,7 @@ use qubit_utils::try_reserve_string;
 /// Character output over a borrowed [`String`].
 ///
 /// `StringCharOutput` exposes a mutable string as a
-/// `qubit_io::Output<Item = char>`. Writes append Unicode scalar values to the
+/// `qubit_io::CharOutput`. Writes append Unicode scalar values to the
 /// wrapped string, and flushing is a no-op.
 ///
 /// # Examples

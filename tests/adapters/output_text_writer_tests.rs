@@ -10,11 +10,12 @@ use std::io::Error;
 use std::io::ErrorKind;
 
 use qubit_io::BufferedOutput;
+use qubit_io::CharOutput;
 use qubit_io::Output;
 use qubit_io_text::LineEnding;
 use qubit_io_text::OutputTextWriter;
 use qubit_io_text::StringCharOutput;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextWriter;
 
 #[derive(Debug)]
 struct FailingCharOutput;
@@ -96,7 +97,7 @@ fn test_new_accepts_already_buffered_output() -> std::io::Result<()> {
 fn test_from_boxed_wraps_unbuffered_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
-        let output: Box<dyn Output<Item = char> + '_> = Box::new(StringCharOutput::new(&mut text));
+        let output: Box<dyn CharOutput + '_> = Box::new(StringCharOutput::new(&mut text));
         let mut writer = OutputTextWriter::from_boxed(output);
 
         assert!(writer.get_ref().is_buffered());
@@ -112,7 +113,7 @@ fn test_from_boxed_wraps_unbuffered_output() -> std::io::Result<()> {
 fn test_from_boxed_keeps_buffered_output() -> std::io::Result<()> {
     let mut text = String::new();
     {
-        let output: Box<dyn Output<Item = char> + '_> = Box::new(BufferedOutput::new(StringCharOutput::new(&mut text)));
+        let output: Box<dyn CharOutput + '_> = Box::new(BufferedOutput::new(StringCharOutput::new(&mut text)));
         let mut writer = OutputTextWriter::from_boxed(output).with_line_ending(LineEnding::Cr);
 
         assert!(writer.get_ref().is_buffered());

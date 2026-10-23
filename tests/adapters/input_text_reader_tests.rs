@@ -10,13 +10,14 @@ use std::io::Error;
 use std::io::ErrorKind;
 
 use qubit_io::BufferedInput;
+use qubit_io::CharInput;
 use qubit_io::Input;
 use qubit_io_text::InputTextReader;
 use qubit_io_text::LineEnding;
 use qubit_io_text::LineEndingSet;
 use qubit_io_text::StringCharInput;
-use qubit_io_text::TextLineRead;
-use qubit_io_text::TextRead;
+use qubit_io_text::TextLineReader;
+use qubit_io_text::TextReader;
 
 #[derive(Debug)]
 struct FailingCharInput;
@@ -205,7 +206,7 @@ fn test_new_accepts_already_buffered_input() -> std::io::Result<()> {
 
 #[test]
 fn test_from_boxed_wraps_unbuffered_input() -> std::io::Result<()> {
-    let input: Box<dyn Input<Item = char>> = Box::new(StringCharInput::new("boxed".to_owned()));
+    let input: Box<dyn CharInput> = Box::new(StringCharInput::new("boxed".to_owned()));
     let mut reader = InputTextReader::from_boxed(input);
     let mut output = String::new();
 
@@ -217,7 +218,7 @@ fn test_from_boxed_wraps_unbuffered_input() -> std::io::Result<()> {
 
 #[test]
 fn test_from_boxed_keeps_buffered_input() -> std::io::Result<()> {
-    let input: Box<dyn Input<Item = char>> = Box::new(BufferedInput::new(StringCharInput::new("buf".to_owned())));
+    let input: Box<dyn CharInput> = Box::new(BufferedInput::new(StringCharInput::new("buf".to_owned())));
     let mut reader = InputTextReader::from_boxed(input);
     let debug = format!("{reader:?}");
 

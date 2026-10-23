@@ -9,14 +9,14 @@ use crate::LineEnding;
 
 /// Writes Unicode text to a text sink.
 ///
-/// `TextWrite` accepts Rust Unicode text and delegates byte encoding, storage,
+/// `TextWriter` accepts Rust Unicode text and delegates byte encoding, storage,
 /// logging, or other sink-specific behavior to the concrete implementation.
 ///
 /// # Examples
 ///
 /// ```
 /// use qubit_io_text::StringTextWriter;
-/// use qubit_io_text::TextWrite;
+/// use qubit_io_text::TextWriter;
 ///
 /// let mut output = String::new();
 /// let mut writer = StringTextWriter::new(&mut output);
@@ -24,11 +24,11 @@ use crate::LineEnding;
 ///
 /// assert_eq!(output, "hello\n");
 /// ```
-pub trait TextWrite {
+pub trait TextWriter {
     /// Error returned by this text sink.
     type Error;
 
-    /// Returns the configured line ending for [`TextWrite::write_line`].
+    /// Returns the configured line ending for [`TextWriter::write_line`].
     ///
     /// # Returns
     /// The configured line ending. Implementations default to

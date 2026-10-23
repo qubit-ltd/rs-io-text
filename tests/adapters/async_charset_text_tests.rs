@@ -32,9 +32,9 @@ use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 use qubit_io_text::AsyncCharsetTextReader;
 use qubit_io_text::AsyncCharsetTextWriter;
-use qubit_io_text::AsyncTextLineRead;
-use qubit_io_text::AsyncTextRead;
-use qubit_io_text::AsyncTextWrite;
+use qubit_io_text::AsyncTextLineReader;
+use qubit_io_text::AsyncTextReader;
+use qubit_io_text::AsyncTextWriter;
 use qubit_io_text::AsyncUtf8TextReader;
 use qubit_io_text::AsyncUtf8TextWriter;
 use qubit_io_text::LineEnding;
@@ -42,7 +42,7 @@ use qubit_io_text::LineEndingSet;
 
 fn assert_async_reader<T>()
 where
-    T: AsyncTextRead + AsyncTextLineRead,
+    T: AsyncTextReader + AsyncTextLineReader,
 {
 }
 
@@ -58,7 +58,7 @@ fn test_async_charset_writer_try_new_reports_unencodable_replacement() {
 
 fn assert_async_writer<T>()
 where
-    T: AsyncTextWrite,
+    T: AsyncTextWriter,
 {
 }
 
@@ -774,26 +774,26 @@ fn test_async_charset_reader_trait_methods_forward_to_reader() -> io::Result<()>
     let input = ChunkedAsyncInput::new(b"A\nB".to_vec(), 4, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
 
-    assert_eq!(Some('A'), complete(AsyncTextRead::read_char_async(&mut reader))?);
+    assert_eq!(Some('A'), complete(AsyncTextReader::read_char_async(&mut reader))?);
 
     let mut chars = Vec::new();
     assert_eq!(
         1,
-        complete(AsyncTextRead::read_chars_async(&mut reader, &mut chars, 1))?
+        complete(AsyncTextReader::read_chars_async(&mut reader, &mut chars, 1))?
     );
     assert_eq!(vec!['\n'], chars);
 
     let mut text = String::new();
     assert_eq!(
         1,
-        complete(AsyncTextRead::read_to_string_async(&mut reader, &mut text))?
+        complete(AsyncTextReader::read_to_string_async(&mut reader, &mut text))?
     );
     assert_eq!("B", text);
 
     let input = ChunkedAsyncInput::new(b"line\n".to_vec(), 4, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
     let mut line = String::new();
-    assert!(complete(AsyncTextLineRead::read_line_async(&mut reader, &mut line))?);
+    assert!(complete(AsyncTextLineReader::read_line_async(&mut reader, &mut line))?);
     assert_eq!("line\n", line);
     Ok(())
 }
@@ -804,16 +804,16 @@ fn test_async_charset_writer_trait_methods_forward_to_writer() -> io::Result<()>
     let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report())
         .with_line_ending(LineEnding::CrLf);
 
-    assert_eq!(LineEnding::CrLf, AsyncTextWrite::line_ending(&writer));
-    complete(AsyncTextWrite::write_char_async(&mut writer, 'A'))?;
+    assert_eq!(LineEnding::CrLf, AsyncTextWriter::line_ending(&writer));
+    complete(AsyncTextWriter::write_char_async(&mut writer, 'A'))?;
     assert_eq!(
         2,
-        complete(AsyncTextWrite::write_chars_async(&mut writer, &['B', 'C']))?
+        complete(AsyncTextWriter::write_chars_async(&mut writer, &['B', 'C']))?
     );
-    assert_eq!(1, complete(AsyncTextWrite::write_str_async(&mut writer, "D"))?);
-    complete(AsyncTextWrite::write_line_fully_async(&mut writer, "E"))?;
-    complete(AsyncTextWrite::flush_async(&mut writer))?;
-    complete(AsyncTextWrite::finish_async(&mut writer))?;
+    assert_eq!(1, complete(AsyncTextWriter::write_str_async(&mut writer, "D"))?);
+    complete(AsyncTextWriter::write_line_fully_async(&mut writer, "E"))?;
+    complete(AsyncTextWriter::flush_async(&mut writer))?;
+    complete(AsyncTextWriter::finish_async(&mut writer))?;
 
     let (output, pending) = writer.into_parts();
     assert!(pending.is_empty());

@@ -10,12 +10,12 @@ use std::io;
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetDecoder;
 use qubit_codec_text::Utf8Codec;
-use qubit_io::Input;
+use qubit_io::ByteInput;
 
 use crate::CharsetTextReader;
 use crate::LineEndingSet;
-use crate::TextLineRead;
-use crate::TextRead;
+use crate::TextLineReader;
+use crate::TextReader;
 use crate::TextReaderParts;
 
 /// Streaming UTF-8 text reader over a Qubit byte input.
@@ -29,7 +29,7 @@ use crate::TextReaderParts;
 /// ```
 /// use std::io::Cursor;
 ///
-/// use qubit_io_text::{TextRead, Utf8TextReader};
+/// use qubit_io_text::{TextReader, Utf8TextReader};
 ///
 /// let mut reader = Utf8TextReader::new(Cursor::new("hello".as_bytes().to_vec()));
 /// let mut text = String::new();
@@ -40,14 +40,14 @@ use crate::TextReaderParts;
 #[derive(Debug)]
 pub struct Utf8TextReader<I>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
 {
     reader: CharsetTextReader<I, Utf8Codec>,
 }
 
 impl<I> Utf8TextReader<I>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
 {
     /// Creates a strict UTF-8 text reader with the default buffer capacity.
     ///
@@ -90,7 +90,7 @@ where
         }
     }
 
-    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    /// Sets the line endings recognized by [`TextLineReader::read_line`].
     ///
     /// # Parameters
     /// - `line_endings`: Accepted line-ending sequences.
@@ -189,9 +189,9 @@ where
     }
 }
 
-impl<I> TextRead for Utf8TextReader<I>
+impl<I> TextReader for Utf8TextReader<I>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
 {
     type Error = io::Error;
 
@@ -211,9 +211,9 @@ where
     }
 }
 
-impl<I> TextLineRead for Utf8TextReader<I>
+impl<I> TextLineReader for Utf8TextReader<I>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
 {
     #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {

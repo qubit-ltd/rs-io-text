@@ -11,7 +11,7 @@ use std::io;
 use qubit_utils::try_reserve_string;
 
 use crate::LineEnding;
-use crate::TextWrite;
+use crate::TextWriter;
 
 /// Text writer over a borrowed [`String`] with configurable line endings.
 ///
@@ -19,7 +19,7 @@ use crate::TextWrite;
 ///
 /// ```
 /// use qubit_io_text::StringTextWriter;
-/// use qubit_io_text::TextWrite;
+/// use qubit_io_text::TextWriter;
 ///
 /// let mut output = String::new();
 /// let mut writer = StringTextWriter::new(&mut output);
@@ -31,7 +31,7 @@ use crate::TextWrite;
 pub struct StringTextWriter<'a> {
     /// Destination string that receives each written character.
     output: &'a mut String,
-    /// Terminator appended by [`TextWrite::write_line`].
+    /// Terminator appended by [`TextWriter::write_line`].
     line_ending: LineEnding,
 }
 
@@ -87,7 +87,7 @@ impl<'a> StringTextWriter<'a> {
     }
 }
 
-impl TextWrite for StringTextWriter<'_> {
+impl TextWriter for StringTextWriter<'_> {
     type Error = io::Error;
 
     #[inline]
@@ -129,7 +129,7 @@ impl TextWrite for StringTextWriter<'_> {
     }
 }
 
-impl TextWrite for String {
+impl TextWriter for String {
     type Error = Infallible;
 
     #[inline]

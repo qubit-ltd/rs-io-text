@@ -7,8 +7,8 @@
 // =============================================================================
 use std::convert::Infallible;
 
-use crate::TextLineRead;
-use crate::TextRead;
+use crate::TextLineReader;
+use crate::TextReader;
 use crate::adapters::text_cursor::read_char_at;
 use crate::adapters::text_cursor::read_chars_at;
 use crate::adapters::text_cursor::read_to_string_at;
@@ -28,7 +28,7 @@ use crate::line_ending_set::read_line_with;
 ///
 /// ```
 /// use qubit_io_text::StrTextReader;
-/// use qubit_io_text::TextRead;
+/// use qubit_io_text::TextReader;
 ///
 /// let mut reader = StrTextReader::new("hello");
 /// let mut output = String::new();
@@ -43,7 +43,7 @@ pub struct StrTextReader<'a> {
     text: &'a str,
     /// UTF-8 byte offset of the next unread character.
     position: usize,
-    /// Line terminators recognized by [`TextLineRead::read_line`].
+    /// Line terminators recognized by [`TextLineReader::read_line`].
     line_endings: LineEndingSet,
     /// Character retained after line-ending lookahead for the next read.
     pending_char: Option<char>,
@@ -85,7 +85,7 @@ impl<'a> StrTextReader<'a> {
         self.line_endings
     }
 
-    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    /// Sets the line endings recognized by [`TextLineReader::read_line`].
     ///
     /// # Parameters
     /// - `line_endings`: Accepted line-ending sequences.
@@ -100,7 +100,7 @@ impl<'a> StrTextReader<'a> {
     }
 }
 
-impl TextRead for StrTextReader<'_> {
+impl TextReader for StrTextReader<'_> {
     type Error = Infallible;
 
     #[inline]
@@ -134,7 +134,7 @@ impl TextRead for StrTextReader<'_> {
     }
 }
 
-impl TextLineRead for StrTextReader<'_> {
+impl TextLineReader for StrTextReader<'_> {
     #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let text = self.text;

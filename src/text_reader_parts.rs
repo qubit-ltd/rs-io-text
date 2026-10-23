@@ -27,10 +27,10 @@ use qubit_io::Buffer;
 /// use std::io::Cursor;
 ///
 /// use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
-/// use qubit_io_text::{BufferedReader, TextReaderParts};
+/// use qubit_io_text::{BufferedTextReader, TextReaderParts};
 ///
 /// let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-/// let reader = BufferedReader::new(Cursor::new(b"hello".to_vec()), decoder);
+/// let reader = BufferedTextReader::new(Cursor::new(b"hello".to_vec()), decoder);
 /// let parts: TextReaderParts<_, _> = reader.into_parts();
 /// assert!(parts.unread_bytes.is_empty());
 /// assert!(parts.pending_chars.is_empty());

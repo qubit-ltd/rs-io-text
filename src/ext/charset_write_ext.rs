@@ -10,11 +10,11 @@ use std::io;
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodePolicy;
-use qubit_io::Output;
+use qubit_io::ByteOutput;
 use qubit_io::OutputRef;
 
 use crate::CharsetTextWriter;
-use crate::TextWrite;
+use crate::TextWriter;
 
 /// Extension methods for writing charset-encoded text to byte streams.
 ///
@@ -22,7 +22,7 @@ use crate::TextWrite;
 ///
 /// ```
 /// use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
-/// use qubit_io_text::{CharsetWriteExt, TextWrite};
+/// use qubit_io_text::{CharsetWriteExt, TextWriter};
 ///
 /// let mut bytes = Vec::new();
 /// let mut writer = (&mut bytes).charset_text_writer(Utf8Codec, CharsetEncodePolicy::report());
@@ -32,7 +32,7 @@ use crate::TextWrite;
 /// assert_eq!("中文".as_bytes(), bytes.as_slice());
 /// # Ok::<(), std::io::Error>(())
 /// ```
-pub trait CharsetWriteExt: Output<Item = u8> + Sized {
+pub trait CharsetWriteExt: ByteOutput + Sized {
     /// Wraps this byte writer as a charset text writer.
     ///
     /// # Parameters
@@ -156,4 +156,4 @@ pub trait CharsetWriteExt: Output<Item = u8> + Sized {
     }
 }
 
-impl<W> CharsetWriteExt for W where W: Output<Item = u8> + Sized {}
+impl<W> CharsetWriteExt for W where W: ByteOutput + Sized {}

@@ -18,10 +18,10 @@ use qubit_codec::Transcoder;
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetDecoder;
-use qubit_io::AsyncInput;
+use qubit_io::AsyncByteInput;
 
-use crate::AsyncTextLineRead;
-use crate::AsyncTextRead;
+use crate::AsyncTextLineReader;
+use crate::AsyncTextReader;
 use crate::LineEnding;
 use crate::TextReaderParts;
 use crate::io_error::capacity_error_to_io;
@@ -46,12 +46,12 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 ///
 /// ```no_run
 /// use qubit_codec_text::{CharsetDecodePolicy, Utf8Codec};
-/// use qubit_io::AsyncInput;
+/// use qubit_io::AsyncByteInput;
 /// use qubit_io_text::AsyncCharsetTextReader;
 ///
 /// async fn read_all<I>(input: I) -> std::io::Result<String>
 /// where
-///     I: AsyncInput<Item = u8> + Unpin,
+///     I: AsyncByteInput + Unpin,
 /// {
 ///     let mut reader = AsyncCharsetTextReader::new(
 ///         input,
@@ -66,7 +66,7 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 #[derive(Debug)]
 pub struct AsyncCharsetTextReader<I, C>
 where
-    I: AsyncInput<Item = u8>,
+    I: AsyncByteInput,
     C: CharsetCodec<Unit = u8>,
 {
     input: AsyncTranscodeDecodeInput<I>,
@@ -82,7 +82,7 @@ where
 
 impl<I, C> AsyncCharsetTextReader<I, C>
 where
-    I: AsyncInput<Item = u8>,
+    I: AsyncByteInput,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates an asynchronous charset reader with the default buffer size.
@@ -357,9 +357,9 @@ where
     }
 }
 
-impl<I, C> AsyncTextRead for AsyncCharsetTextReader<I, C>
+impl<I, C> AsyncTextReader for AsyncCharsetTextReader<I, C>
 where
-    I: AsyncInput<Item = u8> + Unpin,
+    I: AsyncByteInput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
@@ -377,9 +377,9 @@ where
     }
 }
 
-impl<I, C> AsyncTextLineRead for AsyncCharsetTextReader<I, C>
+impl<I, C> AsyncTextLineReader for AsyncCharsetTextReader<I, C>
 where
-    I: AsyncInput<Item = u8> + Unpin,
+    I: AsyncByteInput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
     async fn read_line_async(&mut self, output: &mut String) -> Result<bool, Self::Error> {
@@ -414,7 +414,7 @@ fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
 
 impl<I, C> AsyncCharsetTextReader<I, C>
 where
-    I: AsyncInput<Item = u8> + Unpin,
+    I: AsyncByteInput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
     /// Asynchronously reads the next decoded character.

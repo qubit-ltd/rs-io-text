@@ -11,7 +11,7 @@ use std::io::Write;
 
 use qubit_io::Output;
 use qubit_io_text::LineEnding;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextWriter;
 use qubit_io_text::Utf8TextWriter;
 
 #[derive(Debug, Default)]
@@ -162,7 +162,7 @@ fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
     let mut writer = Utf8TextWriter::new(PanicOutput::default());
     writer.write_str("text").expect("the encoded value should be buffered");
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        TextWrite::flush(&mut writer)
+        TextWriter::flush(&mut writer)
     }));
     assert!(result.is_err());
 

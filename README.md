@@ -10,17 +10,17 @@
 `qubit-io-text` lets Rust applications handle Unicode text and lines while
 making byte encodings explicit at the stream boundary. It provides:
 
-- `TextRead`, `TextLineRead`, and `TextWrite` for synchronous Unicode text;
-- `AsyncTextRead`, `AsyncTextLineRead`, and `AsyncTextWrite` for runtime-neutral
+- `TextReader`, `TextLineReader`, and `TextWriter` for synchronous Unicode text;
+- `AsyncTextReader`, `AsyncTextLineReader`, and `AsyncTextWriter` for runtime-neutral
   asynchronous text operations;
 - string and character-stream adapters such as `StrTextReader`,
   `StringCharInput`, `StringCharOutput`, `InputTextReader`, and
   `OutputTextWriter`;
 - strict UTF-8 convenience adapters over Qubit byte inputs and outputs;
-- synchronous charset adapters over `qubit_io::Input<Item = u8>` and
-  `qubit_io::Output<Item = u8>`;
+- synchronous charset adapters over `qubit_io::ByteInput` and
+  `qubit_io::ByteOutput`;
 - runtime-neutral `AsyncCharsetTextReader` and `AsyncCharsetTextWriter` over
-  `AsyncInput<Item = u8>` and `AsyncOutput<Item = u8>`;
+  `AsyncByteInput` and `AsyncByteOutput`;
 - charset policies from `qubit-codec-text`, `LineEnding` writer configuration,
   and `LineEndingSet` reader configuration (LF, CRLF, and CR by default).
 
@@ -39,7 +39,7 @@ qubit-io-text = "0.7"
 ```rust
 use qubit_io_text::{
     LineEnding,
-    TextWrite,
+    TextWriter,
     Utf8TextWriter,
 };
 
@@ -75,7 +75,7 @@ qubit-io = "0.17"
 ## Runtime-Neutral Async
 
 ```rust
-use qubit_io::AsyncOutput;
+use qubit_io::AsyncByteOutput;
 use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io_text::{
     AsyncCharsetTextWriter,
@@ -83,7 +83,7 @@ use qubit_io_text::{
 
 async fn write_message<O>(output: O) -> std::io::Result<O>
 where
-    O: AsyncOutput<Item = u8> + Unpin,
+    O: AsyncByteOutput + Unpin,
 {
     let mut writer = AsyncCharsetTextWriter::new(
         output,
@@ -112,12 +112,12 @@ encoder lifecycle output not yet emitted may be absent from the returned buffer.
 
 | Area | API |
 | --- | --- |
-| Unicode text traits | `TextRead`, `TextLineRead`, `TextWrite` |
+| Unicode text traits | `TextReader`, `TextLineReader`, `TextWriter` |
 | In-memory text | `StrTextReader`, `StringTextReader`, `StringTextWriter` |
 | Character streams | `StringCharInput`, `StringCharOutput`, `InputTextReader`, `OutputTextWriter` |
 | UTF-8 byte streams | `Utf8TextReader`, `Utf8TextWriter` over `Input`/`Output` |
 | Synchronous charsets | `CharsetTextReader`, `CharsetTextWriter`, `CharsetReadExt`, `CharsetWriteExt` |
-| Asynchronous text | `AsyncTextRead`, `AsyncTextLineRead`, `AsyncTextWrite` |
+| Asynchronous text | `AsyncTextReader`, `AsyncTextLineReader`, `AsyncTextWriter` |
 | Asynchronous charsets | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` |
 | Policy | `CharsetDecodePolicy`, `CharsetEncodePolicy`, `LineEnding`, `LineEndingSet` |
 

@@ -30,8 +30,8 @@ use qubit_io_text::CharsetStringDecoder;
 use qubit_io_text::CharsetStringEncoder;
 use qubit_io_text::CharsetTextReader;
 use qubit_io_text::CharsetTextWriter;
-use qubit_io_text::TextRead;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextReader;
+use qubit_io_text::TextWriter;
 use qubit_io_text::Utf8TextWriter;
 
 use crate::tracking_allocator::measure_peak;

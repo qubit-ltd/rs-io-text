@@ -15,8 +15,8 @@ use qubit_codec_text::CharsetDecoder;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_codec_text::Utf8Codec;
-use qubit_io_text::prelude::BufferedReader;
-use qubit_io_text::prelude::BufferedWriter;
+use qubit_io_text::prelude::BufferedTextReader;
+use qubit_io_text::prelude::BufferedTextWriter;
 use qubit_io_text::prelude::CharsetReadExt;
 use qubit_io_text::prelude::CharsetStringDecoder;
 use qubit_io_text::prelude::CharsetStringEncoder;
@@ -27,8 +27,8 @@ use qubit_io_text::prelude::StrCharInput;
 use qubit_io_text::prelude::StrTextReader;
 use qubit_io_text::prelude::StringCharInput;
 use qubit_io_text::prelude::StringCharOutput;
-use qubit_io_text::prelude::TextRead;
-use qubit_io_text::prelude::TextWrite;
+use qubit_io_text::prelude::TextReader;
+use qubit_io_text::prelude::TextWriter;
 
 #[test]
 fn test_prelude_exports_text_traits_and_adapters() -> Result<(), Infallible> {
@@ -84,12 +84,12 @@ fn test_prelude_exports_charset_ext_traits() -> std::io::Result<()> {
     assert_eq!("D", decoded);
 
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedReader::new(Cursor::new(b"B".to_vec()), decoder);
+    let mut reader = BufferedTextReader::new(Cursor::new(b"B".to_vec()), decoder);
     assert_eq!(Some('B'), reader.read_char()?);
 
     let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
         .expect("UTF-8 strict encoder should be constructible");
-    let mut writer = BufferedWriter::new(Vec::new(), encoder);
+    let mut writer = BufferedTextWriter::new(Vec::new(), encoder);
     writer.write_str("C")?;
     writer.finish()?;
     let (output, pending) = writer.into_parts();

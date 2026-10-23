@@ -7,7 +7,7 @@
 // =============================================================================
 /// Reads Unicode scalar values and strings from a text source.
 ///
-/// `TextRead` operates on Rust [`char`] and [`str`] values. Implementations are
+/// `TextReader` operates on Rust [`char`] and [`str`] values. Implementations are
 /// responsible for decoding any external byte encoding before exposing text to
 /// callers.
 ///
@@ -15,7 +15,7 @@
 ///
 /// ```
 /// use qubit_io_text::StringTextReader;
-/// use qubit_io_text::TextRead;
+/// use qubit_io_text::TextReader;
 ///
 /// let mut reader = StringTextReader::new("hello".to_owned());
 /// let mut text = String::new();
@@ -24,7 +24,7 @@
 /// assert_eq!(count, 5);
 /// assert_eq!(text, "hello");
 /// ```
-pub trait TextRead {
+pub trait TextReader {
     /// Error returned by this text source.
     type Error;
 

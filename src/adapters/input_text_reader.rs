@@ -11,17 +11,17 @@ use std::io;
 
 use qubit_io::BoxInput;
 use qubit_io::BufferedInput;
-use qubit_io::Input;
+use qubit_io::CharInput;
 
 use crate::LineEnding;
-use crate::TextLineRead;
-use crate::TextRead;
+use crate::TextLineReader;
+use crate::TextReader;
 use crate::line_ending_set::LineEndingSet;
 
 /// Default character chunk capacity for text reads.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 
-/// Text reader over a boxed `qubit_io::Input<Item = char>`.
+/// Text reader over a boxed `qubit_io::CharInput`.
 ///
 /// The reader buffers characters internally so line reads can preserve text
 /// fetched beyond a line ending. Use [`into_parts`](Self::into_parts) when
@@ -30,7 +30,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Examples
 ///
 /// ```
-/// use qubit_io_text::{InputTextReader, StringCharInput, TextRead};
+/// use qubit_io_text::{InputTextReader, StringCharInput, TextReader};
 ///
 /// let input = StringCharInput::new("hello".to_owned());
 /// let mut reader = InputTextReader::new(input);
@@ -40,7 +40,7 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Ok::<(), std::io::Error>(())
 /// ```
 pub struct InputTextReader<'a> {
-    input: Box<dyn Input<Item = char> + 'a>,
+    input: Box<dyn CharInput + 'a>,
     pending: VecDeque<char>,
     line_endings: LineEndingSet,
 }
@@ -59,10 +59,15 @@ impl<'a> InputTextReader<'a> {
     #[inline]
     pub fn new<I>(input: I) -> Self
     where
-        I: Input<Item = char> + 'a,
+        I: CharInput + 'a,
     {
+        let input: Box<dyn CharInput + 'a> = if input.is_buffered() {
+            Box::new(input)
+        } else {
+            Box::new(BufferedInput::new(input))
+        };
         Self {
-            input: BufferedInput::ensure_boxed(input),
+            input,
             pending: VecDeque::new(),
             line_endings: LineEndingSet::ALL,
         }
@@ -79,7 +84,7 @@ impl<'a> InputTextReader<'a> {
     /// A text reader wrapping `input`.
     #[must_use]
     #[inline]
-    pub fn from_boxed(input: Box<dyn Input<Item = char> + 'a>) -> Self {
+    pub fn from_boxed(input: Box<dyn CharInput + 'a>) -> Self {
         let input = if input.is_buffered() {
             input
         } else {
@@ -98,7 +103,7 @@ impl<'a> InputTextReader<'a> {
     /// The wrapped input trait object.
     #[must_use]
     #[inline]
-    pub fn get_ref(&self) -> &(dyn Input<Item = char> + 'a) {
+    pub fn get_ref(&self) -> &(dyn CharInput + 'a) {
         self.input.as_ref()
     }
 
@@ -112,7 +117,7 @@ impl<'a> InputTextReader<'a> {
     /// # Returns
     /// The wrapped input trait object.
     #[inline(always)]
-    pub fn get_mut(&mut self) -> &mut (dyn Input<Item = char> + 'a) {
+    pub fn get_mut(&mut self) -> &mut (dyn CharInput + 'a) {
         self.input.as_mut()
     }
 
@@ -124,7 +129,7 @@ impl<'a> InputTextReader<'a> {
     /// logical read order.
     #[must_use = "the returned input and pending characters must be handled"]
     #[inline]
-    pub fn into_parts(self) -> (Box<dyn Input<Item = char> + 'a>, Vec<char>) {
+    pub fn into_parts(self) -> (Box<dyn CharInput + 'a>, Vec<char>) {
         (self.input, self.pending.into_iter().collect())
     }
 
@@ -138,11 +143,11 @@ impl<'a> InputTextReader<'a> {
     /// The underlying boxed character input.
     #[must_use]
     #[inline]
-    pub fn into_inner(self) -> Box<dyn Input<Item = char> + 'a> {
+    pub fn into_inner(self) -> Box<dyn CharInput + 'a> {
         self.input
     }
 
-    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    /// Sets the line endings recognized by [`TextLineReader::read_line`].
     ///
     /// # Parameters
     /// - `line_endings`: Accepted line-ending sequences.
@@ -187,7 +192,7 @@ impl<'a> InputTextReader<'a> {
     }
 }
 
-impl TextRead for InputTextReader<'_> {
+impl TextReader for InputTextReader<'_> {
     type Error = io::Error;
 
     #[inline]
@@ -232,7 +237,7 @@ impl TextRead for InputTextReader<'_> {
     }
 }
 
-impl TextLineRead for InputTextReader<'_> {
+impl TextLineReader for InputTextReader<'_> {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let line_endings = self.line_endings;
         let mut pending = std::mem::take(&mut self.pending);

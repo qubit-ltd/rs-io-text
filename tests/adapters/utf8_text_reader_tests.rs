@@ -13,8 +13,8 @@ use std::io::Read;
 use qubit_io::Input;
 use qubit_io_text::LineEnding;
 use qubit_io_text::LineEndingSet;
-use qubit_io_text::TextLineRead;
-use qubit_io_text::TextRead;
+use qubit_io_text::TextLineReader;
+use qubit_io_text::TextReader;
 use qubit_io_text::Utf8TextReader;
 
 struct InputOnlyReader {

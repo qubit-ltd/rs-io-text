@@ -10,11 +10,11 @@ use std::io;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::BufferedOutputRecovery;
-use qubit_io::Output;
+use qubit_io::ByteOutput;
 
 use crate::CharsetTextWriter;
 use crate::LineEnding;
-use crate::TextWrite;
+use crate::TextWriter;
 
 /// Streaming UTF-8 text writer over a Qubit byte output.
 ///
@@ -25,7 +25,7 @@ use crate::TextWrite;
 /// # Examples
 ///
 /// ```
-/// use qubit_io_text::{TextWrite, Utf8TextWriter};
+/// use qubit_io_text::{TextWriter, Utf8TextWriter};
 ///
 /// let mut bytes = Vec::new();
 /// let mut writer = Utf8TextWriter::new(&mut bytes);
@@ -42,14 +42,14 @@ use crate::TextWrite;
 #[derive(Debug)]
 pub struct Utf8TextWriter<O>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
 {
     writer: CharsetTextWriter<O, Utf8Codec>,
 }
 
 impl<O> Utf8TextWriter<O>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
 {
     /// Creates a strict UTF-8 text writer with the default buffer capacity.
     ///
@@ -95,7 +95,7 @@ where
     ///
     /// # Parameters
     ///
-    /// - `line_ending`: Line ending to append from [`TextWrite::write_line`].
+    /// - `line_ending`: Line ending to append from [`TextWriter::write_line`].
     ///
     /// # Returns
     ///
@@ -148,9 +148,9 @@ where
     }
 }
 
-impl<O> TextWrite for Utf8TextWriter<O>
+impl<O> TextWriter for Utf8TextWriter<O>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
 {
     type Error = io::Error;
 

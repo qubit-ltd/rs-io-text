@@ -14,7 +14,7 @@ use std::task::Poll;
 use std::task::Waker;
 
 use qubit_io::AsyncOutput;
-use qubit_io_text::AsyncTextWrite;
+use qubit_io_text::AsyncTextWriter;
 use qubit_io_text::AsyncUtf8TextWriter;
 use qubit_io_text::LineEnding;
 

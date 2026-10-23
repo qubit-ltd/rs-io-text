@@ -13,7 +13,7 @@ use qubit_utils::UncheckedSlice;
 
 /// Character input over a borrowed string slice.
 ///
-/// `StrCharInput` exposes borrowed text as a `qubit_io::Input<Item = char>`.
+/// `StrCharInput` exposes borrowed text as a `qubit_io::CharInput`.
 /// The current position is stored as a UTF-8 byte offset and is always advanced
 /// on character boundaries.
 ///

@@ -10,17 +10,17 @@ use std::io;
 
 use qubit_io::BoxOutput;
 use qubit_io::BufferedOutput;
-use qubit_io::Output;
+use qubit_io::CharOutput;
 
 use crate::LineEnding;
-use crate::TextWrite;
+use crate::TextWriter;
 
 /// Default character chunk capacity for string writes.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 
-/// Text writer over a boxed `qubit_io::Output<Item = char>`.
+/// Text writer over a boxed `qubit_io::CharOutput`.
 pub struct OutputTextWriter<'a> {
-    output: Box<dyn Output<Item = char> + 'a>,
+    output: Box<dyn CharOutput + 'a>,
     line_ending: LineEnding,
 }
 
@@ -37,10 +37,15 @@ impl<'a> OutputTextWriter<'a> {
     #[must_use]
     pub fn new<O>(output: O) -> Self
     where
-        O: Output<Item = char> + 'a,
+        O: CharOutput + 'a,
     {
+        let output: Box<dyn CharOutput + 'a> = if output.is_buffered() {
+            Box::new(output)
+        } else {
+            Box::new(BufferedOutput::new(output))
+        };
         Self {
-            output: BufferedOutput::ensure_boxed(output),
+            output,
             line_ending: LineEnding::Lf,
         }
     }
@@ -56,7 +61,7 @@ impl<'a> OutputTextWriter<'a> {
     /// # Returns
     /// A text writer using LF line endings.
     #[must_use]
-    pub fn from_boxed(output: Box<dyn Output<Item = char> + 'a>) -> Self {
+    pub fn from_boxed(output: Box<dyn CharOutput + 'a>) -> Self {
         let output = if output.is_buffered() {
             output
         } else {
@@ -87,7 +92,7 @@ impl<'a> OutputTextWriter<'a> {
     /// The wrapped output trait object.
     #[must_use]
     #[inline]
-    pub fn get_ref(&self) -> &(dyn Output<Item = char> + 'a) {
+    pub fn get_ref(&self) -> &(dyn CharOutput + 'a) {
         self.output.as_ref()
     }
 
@@ -95,19 +100,19 @@ impl<'a> OutputTextWriter<'a> {
     ///
     /// The wrapped output may contain characters buffered by this writer.
     /// Direct writes can be ordered before that pending text. Call
-    /// [`TextWrite::flush`] first when ordering matters.
+    /// [`TextWriter::flush`] first when ordering matters.
     ///
     /// # Returns
     /// The wrapped output trait object.
     #[must_use]
     #[inline(always)]
-    pub fn get_mut(&mut self) -> &mut (dyn Output<Item = char> + 'a) {
+    pub fn get_mut(&mut self) -> &mut (dyn CharOutput + 'a) {
         self.output.as_mut()
     }
 
     /// Returns the wrapped output without flushing it.
     ///
-    /// Call [`TextWrite::flush`] before this method when pending characters
+    /// Call [`TextWriter::flush`] before this method when pending characters
     /// must reach the returned output before ownership is transferred.
     ///
     /// # Returns
@@ -115,12 +120,12 @@ impl<'a> OutputTextWriter<'a> {
     /// Returns the underlying boxed character output.
     #[must_use]
     #[inline(always)]
-    pub fn into_inner(self) -> Box<dyn Output<Item = char> + 'a> {
+    pub fn into_inner(self) -> Box<dyn CharOutput + 'a> {
         self.output
     }
 }
 
-impl TextWrite for OutputTextWriter<'_> {
+impl TextWriter for OutputTextWriter<'_> {
     type Error = io::Error;
 
     #[inline]

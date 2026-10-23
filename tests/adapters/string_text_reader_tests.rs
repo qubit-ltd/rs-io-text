@@ -10,8 +10,8 @@ use std::convert::Infallible;
 
 use qubit_io_text::LineEndingSet;
 use qubit_io_text::StringTextReader;
-use qubit_io_text::TextLineRead;
-use qubit_io_text::TextRead;
+use qubit_io_text::TextLineReader;
+use qubit_io_text::TextReader;
 
 #[test]
 fn test_from_string_reads_owned_text() -> Result<(), Infallible> {
@@ -139,7 +139,7 @@ fn test_into_inner_returns_original_text() {
 fn test_string_text_reader_is_infallible() {
     fn assert_infallible<T>(_: &T)
     where
-        T: TextRead<Error = Infallible>,
+        T: TextReader<Error = Infallible>,
     {
     }
 

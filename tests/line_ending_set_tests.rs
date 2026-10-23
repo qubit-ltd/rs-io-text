@@ -11,7 +11,7 @@ use qubit_io_text::LineEndingSet;
 #[cfg(coverage)]
 use qubit_io_text::StrTextReader;
 #[cfg(coverage)]
-use qubit_io_text::TextLineRead;
+use qubit_io_text::TextLineReader;
 
 #[test]
 fn test_line_ending_set_defaults_to_all_common_endings() {

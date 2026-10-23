@@ -11,12 +11,12 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
-use qubit_io_text::AsyncTextRead;
-use qubit_io_text::AsyncTextWrite;
+use qubit_io_text::AsyncTextReader;
+use qubit_io_text::AsyncTextWriter;
 use qubit_io_text::LineEnding;
-use qubit_io_text::TextLineRead;
-use qubit_io_text::TextRead;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextLineReader;
+use qubit_io_text::TextReader;
+use qubit_io_text::TextWriter;
 
 fn complete<F: Future>(future: F) -> F::Output {
     let mut future = std::pin::pin!(future);
@@ -29,7 +29,7 @@ fn complete<F: Future>(future: F) -> F::Output {
 
 struct AsyncReader(std::vec::IntoIter<char>);
 
-impl AsyncTextRead for AsyncReader {
+impl AsyncTextReader for AsyncReader {
     type Error = ReadError;
 
     async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
@@ -39,7 +39,7 @@ impl AsyncTextRead for AsyncReader {
 
 struct FailingAsyncReader;
 
-impl AsyncTextRead for FailingAsyncReader {
+impl AsyncTextReader for FailingAsyncReader {
     type Error = ReadError;
 
     async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
@@ -49,7 +49,7 @@ impl AsyncTextRead for FailingAsyncReader {
 
 struct AsyncWriter;
 
-impl AsyncTextWrite for AsyncWriter {
+impl AsyncTextWriter for AsyncWriter {
     type Error = WriteError;
 
     async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
@@ -82,7 +82,7 @@ struct PartialAsyncWriter {
     text: String,
 }
 
-impl AsyncTextWrite for PartialAsyncWriter {
+impl AsyncTextWriter for PartialAsyncWriter {
     type Error = WriteError;
 
     async fn write_char_async(&mut self, ch: char) -> Result<(), Self::Error> {
@@ -121,7 +121,7 @@ impl AsyncTextWrite for PartialAsyncWriter {
 
 struct FailingAsyncWriter;
 
-impl AsyncTextWrite for FailingAsyncWriter {
+impl AsyncTextWriter for FailingAsyncWriter {
     type Error = WriteError;
 
     async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
@@ -151,7 +151,7 @@ impl AsyncTextWrite for FailingAsyncWriter {
 
 struct ZeroProgressAsyncWriter;
 
-impl AsyncTextWrite for ZeroProgressAsyncWriter {
+impl AsyncTextWriter for ZeroProgressAsyncWriter {
     type Error = WriteError;
 
     async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
@@ -181,7 +181,7 @@ impl AsyncTextWrite for ZeroProgressAsyncWriter {
 
 struct OverreportingAsyncWriter;
 
-impl AsyncTextWrite for OverreportingAsyncWriter {
+impl AsyncTextWriter for OverreportingAsyncWriter {
     type Error = WriteError;
 
     async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
@@ -211,7 +211,7 @@ impl AsyncTextWrite for OverreportingAsyncWriter {
 
 struct NonBoundaryAsyncWriter;
 
-impl AsyncTextWrite for NonBoundaryAsyncWriter {
+impl AsyncTextWriter for NonBoundaryAsyncWriter {
     type Error = WriteError;
 
     async fn write_char_async(&mut self, _ch: char) -> Result<(), Self::Error> {
@@ -293,35 +293,35 @@ fn test_async_text_write_defaults_propagate_errors() {
 }
 
 #[test]
-#[should_panic(expected = "AsyncTextWrite::write_chars_async returned zero for nonempty input")]
+#[should_panic(expected = "AsyncTextWriter::write_chars_async returned zero for nonempty input")]
 fn test_async_text_write_default_character_write_rejects_zero_progress() {
     let mut writer = ZeroProgressAsyncWriter;
     let _ = complete(writer.write_chars_fully_async(&['A']));
 }
 
 #[test]
-#[should_panic(expected = "AsyncTextWrite::write_str_async returned zero for nonempty input")]
+#[should_panic(expected = "AsyncTextWriter::write_str_async returned zero for nonempty input")]
 fn test_async_text_write_default_string_write_rejects_zero_progress() {
     let mut writer = ZeroProgressAsyncWriter;
     let _ = complete(writer.write_str_fully_async("A"));
 }
 
 #[test]
-#[should_panic(expected = "AsyncTextWrite::write_chars_async returned more characters than supplied")]
+#[should_panic(expected = "AsyncTextWriter::write_chars_async returned more characters than supplied")]
 fn test_async_text_write_default_character_write_rejects_overreporting() {
     let mut writer = OverreportingAsyncWriter;
     let _ = complete(writer.write_chars_fully_async(&['A']));
 }
 
 #[test]
-#[should_panic(expected = "AsyncTextWrite::write_str_async returned more bytes than supplied")]
+#[should_panic(expected = "AsyncTextWriter::write_str_async returned more bytes than supplied")]
 fn test_async_text_write_default_string_write_rejects_overreporting() {
     let mut writer = OverreportingAsyncWriter;
     let _ = complete(writer.write_str_fully_async("A"));
 }
 
 #[test]
-#[should_panic(expected = "AsyncTextWrite::write_str_async returned a non-character-boundary prefix")]
+#[should_panic(expected = "AsyncTextWriter::write_str_async returned a non-character-boundary prefix")]
 fn test_async_text_write_default_string_write_rejects_non_boundary_progress() {
     let mut writer = NonBoundaryAsyncWriter;
     let _ = complete(writer.write_str_fully_async("é"));
@@ -332,7 +332,7 @@ struct ReadError;
 
 struct FailingTextReader;
 
-impl TextRead for FailingTextReader {
+impl TextReader for FailingTextReader {
     type Error = ReadError;
 
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
@@ -342,7 +342,7 @@ impl TextRead for FailingTextReader {
 
 struct EmptyTextReader;
 
-impl TextRead for EmptyTextReader {
+impl TextReader for EmptyTextReader {
     type Error = ReadError;
 
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
@@ -356,7 +356,7 @@ struct FailAfterCharReader {
     fail_after_first: bool,
 }
 
-impl TextRead for FailAfterCharReader {
+impl TextReader for FailAfterCharReader {
     type Error = ReadError;
 
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
@@ -373,7 +373,7 @@ impl TextRead for FailAfterCharReader {
     }
 }
 
-impl TextLineRead for FailAfterCharReader {}
+impl TextLineReader for FailAfterCharReader {}
 
 struct SequenceTextReader {
     chars: std::vec::IntoIter<char>,
@@ -387,7 +387,7 @@ impl SequenceTextReader {
     }
 }
 
-impl TextRead for SequenceTextReader {
+impl TextReader for SequenceTextReader {
     type Error = ReadError;
 
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
@@ -395,9 +395,9 @@ impl TextRead for SequenceTextReader {
     }
 }
 
-impl TextLineRead for SequenceTextReader {}
+impl TextLineReader for SequenceTextReader {}
 
-impl TextLineRead for FailingTextReader {}
+impl TextLineReader for FailingTextReader {}
 
 #[derive(Debug, Eq, PartialEq)]
 struct WriteError;
@@ -407,7 +407,7 @@ struct FailingTextWriter {
     fail_first: bool,
 }
 
-impl TextWrite for FailingTextWriter {
+impl TextWriter for FailingTextWriter {
     type Error = WriteError;
 
     fn write_str(&mut self, _text: &str) -> Result<(), Self::Error> {
@@ -430,7 +430,7 @@ struct MinimalTextWriter {
     output: String,
 }
 
-impl TextWrite for MinimalTextWriter {
+impl TextWriter for MinimalTextWriter {
     type Error = WriteError;
 
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
@@ -443,7 +443,7 @@ impl TextWrite for MinimalTextWriter {
     }
 }
 
-impl TextWrite for FailOnSecondWrite {
+impl TextWriter for FailOnSecondWrite {
     type Error = WriteError;
 
     fn write_str(&mut self, _text: &str) -> Result<(), Self::Error> {

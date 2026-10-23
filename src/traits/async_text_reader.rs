@@ -16,13 +16,13 @@
 /// # Examples
 ///
 /// ```no_run
-/// use qubit_io::AsyncInput;
-/// use qubit_io_text::AsyncTextRead;
+/// use qubit_io::AsyncByteInput;
+/// use qubit_io_text::AsyncTextReader;
 /// use qubit_io_text::AsyncUtf8TextReader;
 ///
 /// async fn read_text<I>(input: I) -> std::io::Result<String>
 /// where
-///     I: AsyncInput<Item = u8> + Unpin,
+///     I: AsyncByteInput + Unpin,
 /// {
 ///     let mut reader = AsyncUtf8TextReader::new(input);
 ///     let mut text = String::new();
@@ -31,7 +31,8 @@
 /// }
 /// ```
 #[allow(async_fn_in_trait)]
-pub trait AsyncTextRead {
+
+pub trait AsyncTextReader {
     /// Error returned by this text source.
     type Error;
 

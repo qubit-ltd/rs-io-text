@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use crate::TextRead;
+use crate::TextReader;
 
 /// Reads text by line while preserving line terminators.
 ///
@@ -18,14 +18,14 @@ use crate::TextRead;
 ///
 /// ```
 /// use qubit_io_text::StringTextReader;
-/// use qubit_io_text::TextLineRead;
+/// use qubit_io_text::TextLineReader;
 ///
 /// let mut reader = StringTextReader::new("first\nsecond".to_owned());
 /// let mut line = String::new();
 /// assert!(reader.read_line(&mut line).unwrap());
 /// assert_eq!(line, "first\n");
 /// ```
-pub trait TextLineRead: TextRead {
+pub trait TextLineReader: TextReader {
     /// Reads one line into `output`.
     ///
     /// # Parameters

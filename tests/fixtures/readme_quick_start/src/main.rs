@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use qubit_io_text::LineEnding;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextWriter;
 use qubit_io_text::Utf8TextWriter;
 
 /// Compiles the README quick-start example with only its documented dependency.

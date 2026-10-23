@@ -25,7 +25,7 @@ use qubit_io::Output;
 use qubit_io_text::CharsetTextWriter;
 use qubit_io_text::CharsetWriteExt;
 use qubit_io_text::LineEnding;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextWriter;
 
 struct FailingWriter;
 
@@ -421,7 +421,7 @@ fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
     let mut writer = CharsetTextWriter::new(PanicOutput::default(), Utf8Codec, CharsetEncodePolicy::report());
     writer.write_str("text").expect("the encoded value should be buffered");
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        TextWrite::flush(&mut writer)
+        TextWriter::flush(&mut writer)
     }));
     assert!(result.is_err());
 

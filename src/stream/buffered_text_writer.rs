@@ -11,11 +11,11 @@ use std::io;
 use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeEncoder;
 use qubit_io::BufferedOutputRecovery;
-use qubit_io::Output;
+use qubit_io::ByteOutput;
 use qubit_utils::nonzero;
 
 use crate::LineEnding;
-use crate::TextWrite;
+use crate::TextWriter;
 use crate::io_error::encode_error_to_io as shared_encode_error_to_io;
 
 /// Default byte buffer capacity used by buffered text writers.
@@ -37,10 +37,10 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// use std::io::Cursor;
 ///
 /// use qubit_codec_text::{CharsetEncoder, Utf8Codec};
-/// use qubit_io_text::{BufferedWriter, TextWrite};
+/// use qubit_io_text::{BufferedTextWriter, TextWriter};
 ///
 /// let encoder = CharsetEncoder::new(Utf8Codec);
-/// let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder);
+/// let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), encoder);
 /// writer.write_str("hello")?;
 /// writer.finish()?;
 /// let (output, recovery) = writer.into_parts();
@@ -52,9 +52,9 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Ok::<(), std::io::Error>(())
 /// ```
 #[derive(Debug)]
-pub struct BufferedWriter<W, E>
+pub struct BufferedTextWriter<W, E>
 where
-    W: Output<Item = u8>,
+    W: ByteOutput,
 {
     output: TranscodeEncodeOutput<W>,
     encoder: E,
@@ -64,9 +64,9 @@ where
     finished: bool,
 }
 
-impl<W, E> BufferedWriter<W, E>
+impl<W, E> BufferedTextWriter<W, E>
 where
-    W: Output<Item = u8>,
+    W: ByteOutput,
     E: TranscodeEncoder<Input = char, Output = u8>,
 {
     /// Creates a buffered text writer with the default byte buffer capacity.
@@ -115,7 +115,7 @@ where
     ///
     /// # Parameters
     ///
-    /// - `line_ending`: Line ending used by [`TextWrite::write_line`].
+    /// - `line_ending`: Line ending used by [`TextWriter::write_line`].
     ///
     /// # Returns
     ///
@@ -180,9 +180,9 @@ where
     }
 }
 
-impl<W, E> BufferedWriter<W, E>
+impl<W, E> BufferedTextWriter<W, E>
 where
-    W: Output<Item = u8>,
+    W: ByteOutput,
     E: TranscodeEncoder<Input = char, Output = u8>,
     E::Error: StdError + Send + Sync + 'static,
     E::EncodeError: Send + Sync + 'static,
@@ -281,9 +281,9 @@ where
     }
 }
 
-impl<W, E> TextWrite for BufferedWriter<W, E>
+impl<W, E> TextWriter for BufferedTextWriter<W, E>
 where
-    W: Output<Item = u8>,
+    W: ByteOutput,
     E: TranscodeEncoder<Input = char, Output = u8>,
     E::Error: StdError + Send + Sync + 'static,
     E::EncodeError: Send + Sync + 'static,

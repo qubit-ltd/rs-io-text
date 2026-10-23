@@ -10,20 +10,20 @@ come from `qubit-io`.
 
 ## Conceptual Model
 
-The synchronous `TextRead`, `TextLineRead`, and `TextWrite` traits deal in
+The synchronous `TextReader`, `TextLineReader`, and `TextWriter` traits deal in
 Rust `char` and `str`. Adapters then connect those traits to strings, character
 streams, UTF-8 byte streams, or configurable character sets.
 
 | Need | Main API | Input or output |
 | --- | --- | --- |
 | In-memory Unicode text | `StrTextReader`, `StringTextReader`, `StringTextWriter` | strings |
-| Character streams | `InputTextReader`, `OutputTextWriter` | `Input<Item = char>`, `Output<Item = char>` |
-| Strict UTF-8 bytes | `Utf8TextReader`, `Utf8TextWriter` | `Input<Item = u8>`, `Output<Item = u8>` |
-| Synchronous charset conversion | `CharsetTextReader`, `CharsetTextWriter` | `Input<Item = u8>`, `Output<Item = u8>` |
-| Runtime-neutral async conversion | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` | `AsyncInput<Item = u8>`, `AsyncOutput<Item = u8>` |
+| Character streams | `InputTextReader`, `OutputTextWriter` | `CharInput`, `CharOutput` |
+| Strict UTF-8 bytes | `Utf8TextReader`, `Utf8TextWriter` | `ByteInput`, `ByteOutput` |
+| Synchronous charset conversion | `CharsetTextReader`, `CharsetTextWriter` | `ByteInput`, `ByteOutput` |
+| Runtime-neutral async conversion | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` | `AsyncByteInput`, `AsyncByteOutput` |
 
-`TextRead::read_to_string` appends to its destination and returns the number of
-Unicode scalar values appended, not UTF-8 bytes. `TextWrite::write_line` adds
+`TextReader::read_to_string` appends to its destination and returns the number of
+Unicode scalar values appended, not UTF-8 bytes. `TextWriter::write_line` adds
 the configured `LineEnding`.
 
 ## Scenario: Preserve Unicode Text on a Byte Stream
@@ -42,7 +42,7 @@ qubit-codec-text = "0.7"
 qubit-io = "0.17"
 ```
 
-This guide uses `Utf8Codec` and `AsyncOutput`, which are owned by
+This guide uses `Utf8Codec` and `AsyncByteOutput`, which are owned by
 `qubit-codec-text` and `qubit-io`; Rust consumers must declare those crates as
 direct dependencies.
 
@@ -60,8 +60,8 @@ use qubit_io_text::{
     CharsetTextReader,
     CharsetTextWriter,
     LineEnding,
-    TextRead,
-    TextWrite,
+    TextReader,
+    TextWriter,
 };
 
 let mut bytes = Vec::new();
@@ -111,7 +111,7 @@ Async APIs are limited to charset adapters; there is not an async counterpart
 for every synchronous text trait. Construction performs no I/O.
 
 ```rust
-use qubit_io::AsyncOutput;
+use qubit_io::AsyncByteOutput;
 use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io_text::{
     AsyncCharsetTextWriter,
@@ -120,7 +120,7 @@ use qubit_io_text::{
 
 async fn write_document<O>(output: O) -> std::io::Result<O>
 where
-    O: AsyncOutput<Item = u8> + Unpin,
+    O: AsyncByteOutput + Unpin,
 {
     let mut writer = AsyncCharsetTextWriter::new(
         output,

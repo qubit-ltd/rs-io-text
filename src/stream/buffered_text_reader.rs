@@ -18,12 +18,12 @@ use qubit_codec::TranscodeDecoder;
 #[cfg(coverage)]
 use qubit_codec::TranscodeProgress;
 use qubit_codec::TranscodeStatus;
-use qubit_io::Input;
+use qubit_io::ByteInput;
 use qubit_utils::UncheckedSlice;
 use qubit_utils::nonzero;
 
-use crate::TextLineRead;
-use crate::TextRead;
+use crate::TextLineReader;
+use crate::TextReader;
 use crate::TextReaderParts;
 use crate::io_error::capacity_error_to_io as shared_capacity_error_to_io;
 use crate::io_error::decode_error_to_io as shared_decode_error_to_io;
@@ -42,7 +42,7 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 ///
 /// This type owns a byte reader and a streaming decoder. Encoded bytes are
 /// buffered by [`qubit_codec::TranscodeDecodeInput`], while decoded
-/// characters are exposed through [`TextRead`].
+/// characters are exposed through [`TextReader`].
 /// Decoder reset is started lazily on the first read attempt, and any values
 /// emitted by reset are returned before decoded source characters.
 ///
@@ -52,10 +52,10 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// use std::io::Cursor;
 ///
 /// use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
-/// use qubit_io_text::{BufferedReader, TextRead};
+/// use qubit_io_text::{BufferedTextReader, TextReader};
 ///
 /// let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-/// let mut reader = BufferedReader::new(
+/// let mut reader = BufferedTextReader::new(
 ///     Cursor::new("hello".as_bytes().to_vec()),
 ///     decoder,
 /// );
@@ -65,9 +65,9 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// # Ok::<(), std::io::Error>(())
 /// ```
 #[derive(Debug)]
-pub struct BufferedReader<R, D>
+pub struct BufferedTextReader<R, D>
 where
-    R: Input<Item = u8>,
+    R: ByteInput,
 {
     /// Owns the byte reader and preserves encoded bytes not yet consumed by the
     /// decoder.
@@ -91,9 +91,9 @@ where
     finished: bool,
 }
 
-impl<R, D> BufferedReader<R, D>
+impl<R, D> BufferedTextReader<R, D>
 where
-    R: Input<Item = u8>,
+    R: ByteInput,
 {
     /// Creates a buffered text reader with the default byte buffer capacity.
     ///
@@ -151,7 +151,7 @@ where
         self.input.inner()
     }
 
-    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    /// Sets the line endings recognized by [`TextLineReader::read_line`].
     ///
     /// # Parameters
     /// - `line_endings`: Accepted line-ending sequences.
@@ -232,9 +232,9 @@ where
     }
 }
 
-impl<R, D> BufferedReader<R, D>
+impl<R, D> BufferedTextReader<R, D>
 where
-    R: Input<Item = u8>,
+    R: ByteInput,
     D: TranscodeDecoder<Input = u8, Output = char>,
     D::Error: StdError + Send + Sync + 'static,
     D::DecodeError: Send + Sync + 'static,
@@ -558,9 +558,9 @@ fn coverage_status(status: TranscodeStatus, _from_fill: bool) -> TranscodeStatus
     status
 }
 
-impl<R, D> TextRead for BufferedReader<R, D>
+impl<R, D> TextReader for BufferedTextReader<R, D>
 where
-    R: Input<Item = u8>,
+    R: ByteInput,
     D: TranscodeDecoder<Input = u8, Output = char>,
     D::Error: StdError + Send + Sync + 'static,
     D::DecodeError: Send + Sync + 'static,
@@ -614,9 +614,9 @@ where
     }
 }
 
-impl<R, D> TextLineRead for BufferedReader<R, D>
+impl<R, D> TextLineReader for BufferedTextReader<R, D>
 where
-    R: Input<Item = u8>,
+    R: ByteInput,
     D: TranscodeDecoder<Input = u8, Output = char>,
     D::Error: StdError + Send + Sync + 'static,
     D::DecodeError: Send + Sync + 'static,

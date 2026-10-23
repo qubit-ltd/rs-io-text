@@ -9,21 +9,21 @@
 
 ## 概念模型
 
-同步 `TextRead`、`TextLineRead` 与 `TextWrite` 直接处理 Rust 的 `char` 和 `str`；
-异步 `AsyncTextRead`、`AsyncTextLineRead` 与 `AsyncTextWrite` 提供对应的运行时无关
+同步 `TextReader`、`TextLineReader` 与 `TextWriter` 直接处理 Rust 的 `char` 和 `str`；
+异步 `AsyncTextReader`、`AsyncTextLineReader` 与 `AsyncTextWriter` 提供对应的运行时无关
 操作。
 Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或可配置 charset。
 
 | 需求 | 主要 API | 输入或输出 |
 | --- | --- | --- |
 | 内存中的 Unicode 文本 | `StrTextReader`、`StringTextReader`、`StringTextWriter` | 字符串 |
-| 字符流 | `InputTextReader`、`OutputTextWriter` | `Input<Item = char>`、`Output<Item = char>` |
-| 严格 UTF-8 字节 | `Utf8TextReader`、`Utf8TextWriter` | `Input<Item = u8>`、`Output<Item = u8>` |
-| 同步 charset 转换 | `CharsetTextReader`、`CharsetTextWriter` | `Input<Item = u8>`、`Output<Item = u8>` |
-| 运行时无关的异步转换 | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` | `AsyncInput<Item = u8>`、`AsyncOutput<Item = u8>` |
+| 字符流 | `InputTextReader`、`OutputTextWriter` | `CharInput`、`CharOutput` |
+| 严格 UTF-8 字节 | `Utf8TextReader`、`Utf8TextWriter` | `ByteInput`、`ByteOutput` |
+| 同步 charset 转换 | `CharsetTextReader`、`CharsetTextWriter` | `ByteInput`、`ByteOutput` |
+| 运行时无关的异步转换 | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` | `AsyncByteInput`、`AsyncByteOutput` |
 
-`TextRead::read_to_string` 将内容追加到目标并返回追加的 Unicode scalar value 数量，
-而不是 UTF-8 字节数；`TextWrite::write_line` 会追加配置好的 `LineEnding`。
+`TextReader::read_to_string` 将内容追加到目标并返回追加的 Unicode scalar value 数量，
+而不是 UTF-8 字节数；`TextWriter::write_line` 会追加配置好的 `LineEnding`。
 
 ## 实战场景：在字节流上保持 Unicode 文本
 
@@ -41,7 +41,7 @@ qubit-io = "0.17"
 ```
 
 本指南使用由 `qubit-codec-text` 和 `qubit-io` 提供的 `Utf8Codec` 与
-`AsyncOutput`；Rust 消费方必须将这两个 crate 声明为直接依赖。
+`AsyncByteOutput`；Rust 消费方必须将这两个 crate 声明为直接依赖。
 
 ## 核心流程
 
@@ -57,8 +57,8 @@ use qubit_io_text::{
     CharsetTextReader,
     CharsetTextWriter,
     LineEnding,
-    TextRead,
-    TextWrite,
+    TextReader,
+    TextWriter,
 };
 
 let mut bytes = Vec::new();
@@ -105,7 +105,7 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 异步 charset adapter 实现了异步文本 trait。构造过程不执行 I/O。
 
 ```rust
-use qubit_io::AsyncOutput;
+use qubit_io::AsyncByteOutput;
 use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
 use qubit_io_text::{
     AsyncCharsetTextWriter,
@@ -114,7 +114,7 @@ use qubit_io_text::{
 
 async fn write_document<O>(output: O) -> std::io::Result<O>
 where
-    O: AsyncOutput<Item = u8> + Unpin,
+    O: AsyncByteOutput + Unpin,
 {
     let mut writer = AsyncCharsetTextWriter::new(
         output,

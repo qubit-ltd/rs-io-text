@@ -7,8 +7,8 @@
 // =============================================================================
 //! Buffered text stream adapters.
 
-mod buffered_reader;
-mod buffered_writer;
+mod buffered_text_reader;
+mod buffered_text_writer;
 
-pub use buffered_reader::BufferedReader;
-pub use buffered_writer::BufferedWriter;
+pub use buffered_text_reader::BufferedTextReader;
+pub use buffered_text_writer::BufferedTextWriter;

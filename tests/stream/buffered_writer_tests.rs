@@ -21,9 +21,9 @@ use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::Output;
-use qubit_io_text::BufferedWriter;
+use qubit_io_text::BufferedTextWriter;
 use qubit_io_text::LineEnding;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextWriter;
 
 #[derive(Debug, Default)]
 struct PartialEncoder;
@@ -392,7 +392,7 @@ impl Output for PanicOutput {
 fn test_buffered_writer_encodes_utf8_into_shared_output_buffer() -> std::io::Result<()> {
     let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
         .expect("strict UTF-8 encoder should be constructible");
-    let mut writer = BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
+    let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
 
     writer.write_str("Aé🙂")?;
     writer.finish()?;
@@ -413,7 +413,7 @@ fn test_buffered_writer_accessors_empty_writes_and_finish_state() -> std::io::Re
         .expect("strict UTF-8 encoder should be constructible");
     let mut inner = Cursor::new(b"prefix:".to_vec());
     inner.set_position(7);
-    let mut writer = BufferedWriter::new(inner, encoder);
+    let mut writer = BufferedTextWriter::new(inner, encoder);
 
     assert_eq!(LineEnding::Lf, writer.configured_line_ending());
     assert_eq!(LineEnding::Lf, writer.line_ending());
@@ -447,7 +447,7 @@ fn test_buffered_writer_accessors_empty_writes_and_finish_state() -> std::io::Re
 fn test_buffered_writer_flushes_exact_string_chunks() -> std::io::Result<()> {
     let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
         .expect("strict UTF-8 encoder should be constructible");
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), encoder);
     let text = "a".repeat(256);
 
     writer.write_str(text.as_str())?;
@@ -465,7 +465,7 @@ fn test_buffered_writer_flushes_exact_string_chunks() -> std::io::Result<()> {
 
 #[test]
 fn test_buffered_writer_reports_incomplete_encoder_consumption() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), PartialEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), PartialEncoder);
 
     let error = writer
         .write_chars(&['x', 'y'])
@@ -476,7 +476,7 @@ fn test_buffered_writer_reports_incomplete_encoder_consumption() {
 
 #[test]
 fn test_buffered_writer_emits_finish_output() -> std::io::Result<()> {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), FinishByteEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), FinishByteEncoder);
 
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
@@ -492,7 +492,7 @@ fn test_buffered_writer_emits_finish_output() -> std::io::Result<()> {
 
 #[test]
 fn test_buffered_writer_runs_complete_lifecycle_on_first_write() -> std::io::Result<()> {
-    let mut writer = BufferedWriter::with_capacity(Cursor::new(Vec::new()), LifecycleEncoder::default(), 1);
+    let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), LifecycleEncoder::default(), 1);
 
     writer.write_char('A')?;
     writer.write_char('B')?;
@@ -510,7 +510,7 @@ fn test_buffered_writer_runs_complete_lifecycle_on_first_write() -> std::io::Res
 
 #[test]
 fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream() -> std::io::Result<()> {
-    let mut writer = BufferedWriter::with_capacity(Cursor::new(Vec::new()), LifecycleEncoder::default(), 1);
+    let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), LifecycleEncoder::default(), 1);
 
     writer.finish()?;
     let (cursor, pending) = writer.into_parts();
@@ -528,7 +528,7 @@ fn test_buffered_writer_runs_complete_lifecycle_for_empty_stream() -> std::io::R
 fn test_buffered_writer_maps_encoder_errors_to_io_errors() {
     let encoder = CharsetEncoder::with_policy(AsciiCodec, CharsetEncodePolicy::report())
         .expect("strict ASCII encoder should be constructible");
-    let mut writer = BufferedWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
+    let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), encoder, 1);
 
     let error = writer
         .write_char('🙂')
@@ -539,7 +539,7 @@ fn test_buffered_writer_maps_encoder_errors_to_io_errors() {
 
 #[test]
 fn test_buffered_writer_reports_reset_capacity_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
 
     let error = writer
         .write_char('A')
@@ -550,7 +550,7 @@ fn test_buffered_writer_reports_reset_capacity_errors() {
 
 #[test]
 fn test_buffered_writer_reports_reset_domain_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
 
     let error = writer
         .write_char('A')
@@ -558,13 +558,13 @@ fn test_buffered_writer_reports_reset_domain_errors() {
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
     let error = writer
         .write_str(&"a".repeat(256))
         .expect_err("chunk flush must propagate reset domain errors");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), ErrorResetEncoder);
     let error = writer
         .write_line("line")
         .expect_err("line content errors must stop before the line ending");
@@ -573,7 +573,7 @@ fn test_buffered_writer_reports_reset_domain_errors() {
 
 #[test]
 fn test_buffered_writer_reports_finish_domain_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
 
     let error = writer
         .finish()
@@ -584,7 +584,7 @@ fn test_buffered_writer_reports_finish_domain_errors() {
 
 #[test]
 fn test_buffered_writer_finish_propagates_lazy_reset_errors() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), OverflowResetEncoder);
 
     let error = writer.finish().expect_err("finish must propagate lazy reset errors");
 
@@ -594,7 +594,7 @@ fn test_buffered_writer_finish_propagates_lazy_reset_errors() {
 
 #[test]
 fn test_buffered_writer_finish_error_leaves_writer_available_for_retry() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), ErrorFinishEncoder);
 
     let error = writer.finish().expect_err("finish should report the encoder error");
 
@@ -604,7 +604,7 @@ fn test_buffered_writer_finish_error_leaves_writer_available_for_retry() {
 
 #[test]
 fn test_buffered_writer_retries_finish_after_flush_failure() -> std::io::Result<()> {
-    let mut writer = BufferedWriter::new(FlushFailOnceOutput::default(), LifecycleEncoder::default());
+    let mut writer = BufferedTextWriter::new(FlushFailOnceOutput::default(), LifecycleEncoder::default());
 
     writer.write_char('A')?;
     let error = writer
@@ -628,7 +628,7 @@ fn test_buffered_writer_retries_finish_after_flush_failure() -> std::io::Result<
 #[test]
 #[should_panic(expected = "reset wrote beyond its bound")]
 fn test_buffered_writer_rejects_overreported_reset_output() {
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), OverreportedResetEncoder);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), OverreportedResetEncoder);
 
     let _ = writer.write_char('A');
 }
@@ -637,7 +637,7 @@ fn test_buffered_writer_rejects_overreported_reset_output() {
 fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()> {
     let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
         .expect("strict UTF-8 encoder should be constructible");
-    let mut writer = BufferedWriter::new(Cursor::new(Vec::new()), encoder).with_line_ending(LineEnding::CrLf);
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), encoder).with_line_ending(LineEnding::CrLf);
 
     writer.write_line("line")?;
     writer.finish()?;
@@ -654,10 +654,10 @@ fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()> 
 
 #[test]
 fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
-    let mut writer = BufferedWriter::new(PanicOutput::default(), CharsetEncoder::new(Utf8Codec));
+    let mut writer = BufferedTextWriter::new(PanicOutput::default(), CharsetEncoder::new(Utf8Codec));
     writer.write_str("text").expect("the encoded value should be buffered");
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        TextWrite::flush(&mut writer)
+        TextWriter::flush(&mut writer)
     }));
     assert!(result.is_err());
 

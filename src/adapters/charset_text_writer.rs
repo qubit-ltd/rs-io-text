@@ -13,15 +13,15 @@ use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::BufferedOutputRecovery;
-use qubit_io::Output;
+use qubit_io::ByteOutput;
 
-use crate::BufferedWriter;
+use crate::BufferedTextWriter;
 use crate::LineEnding;
-use crate::TextWrite;
+use crate::TextWriter;
 
 /// Text writer that encodes Unicode text with a charset codec.
 ///
-/// This adapter is a charset-specific wrapper around [`BufferedWriter`]. It
+/// This adapter is a charset-specific wrapper around [`BufferedTextWriter`]. It
 /// constructs the appropriate [`CharsetEncoder`] from the supplied codec and
 /// unmappable-character policy.
 ///
@@ -29,7 +29,7 @@ use crate::TextWrite;
 ///
 /// ```
 /// use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
-/// use qubit_io_text::{CharsetTextWriter, TextWrite};
+/// use qubit_io_text::{CharsetTextWriter, TextWriter};
 ///
 /// let mut bytes = Vec::new();
 /// let mut writer = CharsetTextWriter::new(
@@ -50,15 +50,15 @@ use crate::TextWrite;
 #[derive(Debug)]
 pub struct CharsetTextWriter<O, C>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
     C: CharsetCodec<Unit = u8>,
 {
-    writer: BufferedWriter<O, CharsetEncoder<C>>,
+    writer: BufferedTextWriter<O, CharsetEncoder<C>>,
 }
 
 impl<O, C> CharsetTextWriter<O, C>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates a charset text writer with the default buffer capacity.
@@ -103,7 +103,7 @@ where
     pub fn try_new(output: O, codec: C, policy: CharsetEncodePolicy) -> Result<Self, CharsetEncodeError> {
         let encoder = CharsetEncoder::with_policy(codec, policy)?;
         Ok(Self {
-            writer: BufferedWriter::new(output, encoder),
+            writer: BufferedTextWriter::new(output, encoder),
         })
     }
 
@@ -157,7 +157,7 @@ where
     ) -> Result<Self, CharsetEncodeError> {
         let encoder = CharsetEncoder::with_policy(codec, policy)?;
         Ok(Self {
-            writer: BufferedWriter::with_capacity(output, encoder, buffer_capacity),
+            writer: BufferedTextWriter::with_capacity(output, encoder, buffer_capacity),
         })
     }
 
@@ -227,7 +227,7 @@ where
 
 impl<O> CharsetTextWriter<O, Utf8Codec>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
 {
     /// Writes a valid UTF-8 string without re-encoding each scalar value.
     pub(crate) fn write_utf8_bytes(&mut self, text: &str) -> io::Result<()> {
@@ -235,9 +235,9 @@ where
     }
 }
 
-impl<O, C> TextWrite for CharsetTextWriter<O, C>
+impl<O, C> TextWriter for CharsetTextWriter<O, C>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;

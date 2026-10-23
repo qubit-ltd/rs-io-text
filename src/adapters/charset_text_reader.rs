@@ -10,17 +10,17 @@ use std::io;
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetDecoder;
-use qubit_io::Input;
+use qubit_io::ByteInput;
 
-use crate::BufferedReader;
+use crate::BufferedTextReader;
 use crate::LineEndingSet;
-use crate::TextLineRead;
-use crate::TextRead;
+use crate::TextLineReader;
+use crate::TextReader;
 use crate::TextReaderParts;
 
 /// Text reader that decodes a byte stream with a charset codec.
 ///
-/// This adapter is a charset-specific wrapper around [`BufferedReader`]. It
+/// This adapter is a charset-specific wrapper around [`BufferedTextReader`]. It
 /// constructs the appropriate [`CharsetDecoder`] from the supplied codec and
 /// malformed-input policy.
 ///
@@ -30,7 +30,7 @@ use crate::TextReaderParts;
 /// use std::io::Cursor;
 ///
 /// use qubit_codec_text::{CharsetDecodePolicy, Utf8Codec};
-/// use qubit_io_text::{CharsetTextReader, TextRead};
+/// use qubit_io_text::{CharsetTextReader, TextReader};
 ///
 /// let mut reader = CharsetTextReader::new(
 ///     Cursor::new("中文".as_bytes().to_vec()),
@@ -45,15 +45,15 @@ use crate::TextReaderParts;
 #[derive(Debug)]
 pub struct CharsetTextReader<I, C>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
     C: CharsetCodec<Unit = u8>,
 {
-    reader: BufferedReader<I, CharsetDecoder<C>>,
+    reader: BufferedTextReader<I, CharsetDecoder<C>>,
 }
 
 impl<I, C> CharsetTextReader<I, C>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
     C: CharsetCodec<Unit = u8>,
 {
     /// Creates a charset text reader with the default buffer capacity.
@@ -73,7 +73,7 @@ where
     pub fn new(input: I, codec: C, policy: CharsetDecodePolicy) -> Self {
         let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::new(input, decoder),
+            reader: BufferedTextReader::new(input, decoder),
         }
     }
 
@@ -95,7 +95,7 @@ where
     pub fn new_with_buffer_capacity(input: I, codec: C, policy: CharsetDecodePolicy, buffer_capacity: usize) -> Self {
         let decoder = CharsetDecoder::with_policy(codec, policy);
         Self {
-            reader: BufferedReader::with_capacity(input, decoder, buffer_capacity),
+            reader: BufferedTextReader::with_capacity(input, decoder, buffer_capacity),
         }
     }
 
@@ -118,7 +118,7 @@ where
         self.reader.inner()
     }
 
-    /// Sets the line endings recognized by [`TextLineRead::read_line`].
+    /// Sets the line endings recognized by [`TextLineReader::read_line`].
     ///
     /// # Parameters
     /// - `line_endings`: Accepted line-ending sequences.
@@ -196,9 +196,9 @@ where
     }
 }
 
-impl<I, C> TextRead for CharsetTextReader<I, C>
+impl<I, C> TextReader for CharsetTextReader<I, C>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
     C: CharsetCodec<Unit = u8>,
 {
     type Error = io::Error;
@@ -219,9 +219,9 @@ where
     }
 }
 
-impl<I, C> TextLineRead for CharsetTextReader<I, C>
+impl<I, C> TextLineReader for CharsetTextReader<I, C>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
     C: CharsetCodec<Unit = u8>,
 {
     #[inline]

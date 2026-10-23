@@ -19,8 +19,8 @@ use qubit_codec_text::Utf16ByteCodec;
 use qubit_codec_text::Utf32ByteCodec;
 use qubit_io_text::CharsetTextReader;
 use qubit_io_text::CharsetTextWriter;
-use qubit_io_text::TextRead;
-use qubit_io_text::TextWrite;
+use qubit_io_text::TextReader;
+use qubit_io_text::TextWriter;
 
 /// Bounds allocations when the target is invoked outside CI.
 const MAX_FUZZ_INPUT_LEN: usize = 4096;

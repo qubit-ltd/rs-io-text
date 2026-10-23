@@ -10,10 +10,10 @@ use std::ops::DerefMut;
 
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
-use qubit_io::AsyncOutput;
+use qubit_io::AsyncByteOutput;
 
 use crate::AsyncCharsetTextWriter;
-use crate::AsyncTextWrite;
+use crate::AsyncTextWriter;
 use crate::LineEnding;
 
 /// Asynchronous UTF-8 writer over a Qubit byte output.
@@ -30,12 +30,12 @@ use crate::LineEnding;
 /// # Examples
 ///
 /// ```no_run
-/// use qubit_io::AsyncOutput;
+/// use qubit_io::AsyncByteOutput;
 /// use qubit_io_text::AsyncUtf8TextWriter;
 ///
 /// async fn write_text<O>(output: O) -> std::io::Result<()>
 /// where
-///     O: AsyncOutput<Item = u8> + Unpin,
+///     O: AsyncByteOutput + Unpin,
 /// {
 ///     let mut writer = AsyncUtf8TextWriter::new(output);
 ///     writer.write_str_fully_async("hello").await?;
@@ -45,11 +45,11 @@ use crate::LineEnding;
 #[derive(Debug)]
 pub struct AsyncUtf8TextWriter<O>(AsyncCharsetTextWriter<O, Utf8Codec>)
 where
-    O: AsyncOutput<Item = u8>;
+    O: AsyncByteOutput;
 
 impl<O> AsyncUtf8TextWriter<O>
 where
-    O: AsyncOutput<Item = u8>,
+    O: AsyncByteOutput,
 {
     /// Creates a strict UTF-8 writer with the default buffer capacity.
     ///
@@ -124,7 +124,7 @@ where
 
 impl<O> Deref for AsyncUtf8TextWriter<O>
 where
-    O: AsyncOutput<Item = u8>,
+    O: AsyncByteOutput,
 {
     type Target = AsyncCharsetTextWriter<O, Utf8Codec>;
 
@@ -136,7 +136,7 @@ where
 
 impl<O> DerefMut for AsyncUtf8TextWriter<O>
 where
-    O: AsyncOutput<Item = u8>,
+    O: AsyncByteOutput,
 {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
@@ -144,9 +144,9 @@ where
     }
 }
 
-impl<O> AsyncTextWrite for AsyncUtf8TextWriter<O>
+impl<O> AsyncTextWriter for AsyncUtf8TextWriter<O>
 where
-    O: AsyncOutput<Item = u8> + Unpin,
+    O: AsyncByteOutput + Unpin,
 {
     type Error = std::io::Error;
 

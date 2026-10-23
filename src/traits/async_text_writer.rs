@@ -16,7 +16,7 @@ use crate::LineEnding;
 /// Cancellation behavior is implementation-specific; callers must consult the
 /// concrete writer before retrying a cancelled operation.
 #[allow(async_fn_in_trait)]
-pub trait AsyncTextWrite {
+pub trait AsyncTextWriter {
     /// Error returned by this text sink.
     type Error;
 
@@ -106,11 +106,11 @@ pub trait AsyncTextWrite {
             let remaining = chars.len() - index;
             assert!(
                 written > 0,
-                "AsyncTextWrite::write_chars_async returned zero for nonempty input"
+                "AsyncTextWriter::write_chars_async returned zero for nonempty input"
             );
             assert!(
                 written <= remaining,
-                "AsyncTextWrite::write_chars_async returned more characters than supplied"
+                "AsyncTextWriter::write_chars_async returned more characters than supplied"
             );
             index += written;
         }
@@ -140,15 +140,15 @@ pub trait AsyncTextWrite {
             let remaining = text.len() - offset;
             assert!(
                 written > 0,
-                "AsyncTextWrite::write_str_async returned zero for nonempty input"
+                "AsyncTextWriter::write_str_async returned zero for nonempty input"
             );
             assert!(
                 written <= remaining,
-                "AsyncTextWrite::write_str_async returned more bytes than supplied"
+                "AsyncTextWriter::write_str_async returned more bytes than supplied"
             );
             assert!(
                 text.is_char_boundary(offset + written),
-                "AsyncTextWrite::write_str_async returned a non-character-boundary prefix"
+                "AsyncTextWriter::write_str_async returned a non-character-boundary prefix"
             );
             offset += written;
         }
