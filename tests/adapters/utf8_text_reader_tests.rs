@@ -131,6 +131,19 @@ fn test_utf8_reader_read_line_limited_preserves_existing_output() -> std::io::Re
 }
 
 #[test]
+fn test_utf8_reader_limited_crlf_overflow_preserves_next_record() -> std::io::Result<()> {
+    let mut reader =
+        Utf8TextReader::with_capacity(Cursor::new(b"a\r\nok\r\n".to_vec()), 4).with_line_endings(LineEndingSet::CRLF);
+    let mut output = String::from("seed:");
+    let error = reader.read_line_limited(&mut output, 2).expect_err("LF exceeds limit");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:", output);
+    assert!(reader.read_line_limited(&mut output, 16)?);
+    assert_eq!("seed:ok\r\n", output);
+    Ok(())
+}
+
+#[test]
 fn test_new_accessors_expose_wrapped_input() {
     let input = Cursor::new("abc".as_bytes().to_vec());
     let reader = Utf8TextReader::with_capacity(input, 1);

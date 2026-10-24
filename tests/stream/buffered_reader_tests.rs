@@ -23,7 +23,6 @@ use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetDecoder;
 use qubit_codec_text::Utf8Codec;
 use qubit_io_text::BufferedTextReader;
-#[cfg(coverage)]
 use qubit_io_text::LineEnding;
 use qubit_io_text::LineEndingSet;
 use qubit_io_text::TextLineReader;
@@ -154,6 +153,126 @@ fn test_buffered_reader_read_line_limited_returns_unterminated_tail() -> std::io
     let mut empty = BufferedTextReader::new(Cursor::new(Vec::<u8>::new()), decoder);
     let mut output = String::new();
     assert!(!empty.read_line_limited(&mut output, 16)?);
+    Ok(())
+}
+
+#[test]
+fn test_limited_crlf_overflow_preserves_next_record() -> std::io::Result<()> {
+    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"a\r\nok\r\n".to_vec()), decoder, 4)
+        .with_line_endings(LineEndingSet::CRLF);
+    let mut output = String::from("seed:");
+    let error = reader.read_line_limited(&mut output, 2).expect_err("LF exceeds limit");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:", output);
+    assert!(reader.read_line_limited(&mut output, 16)?);
+    assert_eq!("seed:ok\r\n", output);
+    assert!(!reader.read_line_limited(&mut output, 16)?);
+
+    for line_endings in [
+        LineEndingSet::CRLF,
+        LineEndingSet::ALL,
+        LineEndingSet::CRLF.with(LineEnding::Cr),
+    ] {
+        for limit in 0..=3 {
+            let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+            let mut reader = BufferedTextReader::with_capacity(Cursor::new(b"a\r\nok\r\n".to_vec()), decoder, 4)
+                .with_line_endings(line_endings);
+            let mut output = String::new();
+            if limit < 3 {
+                let error = reader
+                    .read_line_limited(&mut output, limit)
+                    .expect_err("first line exceeds limit");
+                assert_eq!(ErrorKind::InvalidData, error.kind());
+                assert_eq!("", output);
+            } else {
+                assert!(reader.read_line_limited(&mut output, limit)?);
+                assert_eq!("a\r\n", output);
+            }
+            output.clear();
+            assert!(reader.read_line_limited(&mut output, 16)?);
+            assert_eq!("ok\r\n", output);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_ignore_long_invalid_stream_uses_bounded_stack() {
+    const PROBE_ENV: &str = "QUBIT_IO_TEXT_RECURSION_PROBE";
+    if std::env::var_os(PROBE_ENV).is_some() {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(|| {
+                let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::ignore());
+                let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![0xff; 256 * 1024]), decoder, 4);
+                let mut output = String::from("seed:");
+                assert_eq!(0, reader.read_to_string(&mut output).unwrap());
+                assert_eq!("seed:", output);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        return;
+    }
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("stream::buffered_reader_tests::test_ignore_long_invalid_stream_uses_bounded_stack")
+        .arg("--nocapture")
+        .env(PROBE_ENV, "1")
+        .status()
+        .unwrap();
+    assert!(status.success(), "isolated recursion probe failed: {status}");
+}
+
+#[derive(Debug)]
+struct CrErrorLfInput {
+    state: u8,
+}
+
+impl Read for CrErrorLfInput {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        if output.is_empty() {
+            return Ok(0);
+        }
+        let value = match self.state {
+            0 => Some(b'\r'),
+            1 => {
+                self.state += 1;
+                return Err(std::io::Error::other("transient lookahead failure"));
+            }
+            2 => Some(b'\n'),
+            3 => Some(b'x'),
+            4 => Some(b'\r'),
+            5 => Some(b'\n'),
+            _ => None,
+        };
+        self.state += 1;
+        if let Some(value) = value {
+            output[0] = value;
+            Ok(1)
+        } else {
+            Ok(0)
+        }
+    }
+}
+
+#[test]
+fn test_limited_crlf_retry_preserves_boundary() -> std::io::Result<()> {
+    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedTextReader::with_capacity(CrErrorLfInput { state: 0 }, decoder, 4)
+        .with_line_endings(LineEndingSet::CRLF);
+    let mut output = String::from("seed:");
+    assert_eq!(
+        ErrorKind::Other,
+        reader.read_line_limited(&mut output, 16).unwrap_err().kind()
+    );
+    assert_eq!("seed:", output);
+    assert!(reader.read_line_limited(&mut output, 16)?);
+    assert_eq!("seed:\r\n", output);
+    output.clear();
+    assert!(reader.read_line_limited(&mut output, 16)?);
+    assert_eq!("x\r\n", output);
     Ok(())
 }
 

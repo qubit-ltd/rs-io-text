@@ -470,6 +470,46 @@ fn test_async_charset_reader_limited_cr_line_is_a_boundary() -> io::Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_limited_crlf_overflow_preserves_next_record() -> io::Result<()> {
+    let input = ChunkedAsyncInput::new(b"a\r\nok\r\n".to_vec(), 1, true);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report())
+        .with_line_endings(LineEndingSet::CRLF);
+    let mut output = String::from("seed:");
+    let error = complete(reader.read_line_limited_async(&mut output, 2)).expect_err("LF exceeds limit");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:", output);
+    assert!(complete(reader.read_line_limited_async(&mut output, 16))?);
+    assert_eq!("seed:ok\r\n", output);
+    assert!(!complete(reader.read_line_limited_async(&mut output, 16))?);
+
+    for line_endings in [
+        LineEndingSet::CRLF,
+        LineEndingSet::ALL,
+        LineEndingSet::CRLF.with(LineEnding::Cr),
+    ] {
+        for limit in 0..=3 {
+            let input = ChunkedAsyncInput::new(b"a\r\nok\r\n".to_vec(), 1, true);
+            let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report())
+                .with_line_endings(line_endings);
+            let mut output = String::new();
+            if limit < 3 {
+                let error =
+                    complete(reader.read_line_limited_async(&mut output, limit)).expect_err("first line exceeds limit");
+                assert_eq!(io::ErrorKind::InvalidData, error.kind());
+                assert_eq!("", output);
+            } else {
+                assert!(complete(reader.read_line_limited_async(&mut output, limit))?);
+                assert_eq!("a\r\n", output);
+            }
+            output.clear();
+            assert!(complete(reader.read_line_limited_async(&mut output, 16))?);
+            assert_eq!("ok\r\n", output);
+        }
+    }
+    Ok(())
+}
+
 #[cfg(coverage)]
 #[test]
 fn test_async_charset_reader_covers_eof_status_recovery_branches() -> io::Result<()> {

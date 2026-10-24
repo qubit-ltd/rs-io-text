@@ -608,10 +608,7 @@ where
                         // CR was checked before the await and output did not
                         // change during lookahead.
                         output.push('\r');
-                        if let Err(error) = self.append_line_char(output, initial_len, max_append_len, '\n') {
-                            self.pending_char = Some('\n');
-                            return self.discard_line_after_limit_async().await.and(Err(error));
-                        }
+                        self.append_line_char(output, initial_len, max_append_len, '\n')?;
                         return Ok(true);
                     }
                     Some(next) => {

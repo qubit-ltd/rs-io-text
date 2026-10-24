@@ -383,48 +383,49 @@ where
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        self.clear_chars();
-        let capacity = self.chars.len();
-        let progress = self.input.transcode_step(
-            &mut self.decoder,
-            &mut decode_error_to_io,
-            self.chars.as_mut_slice(),
-            0,
-            capacity,
-        )?;
-        #[cfg(coverage)]
-        let progress = if progress.is_none() && coverage_force_fill_progress() {
-            Some(TranscodeProgress::complete(0, 0))
-        } else {
-            progress
-        };
-        let Some(progress) = progress else {
-            return self.decode_eof();
-        };
-        let written = progress.written();
-        self.char_position = 0;
-        self.char_limit = written;
-        if self.has_buffered_chars() {
-            return Ok(true);
-        }
-        match coverage_status(progress.status(), true) {
-            TranscodeStatus::NeedOutput { .. } => {
-                self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
-                return self.fill_chars();
+        loop {
+            self.clear_chars();
+            let capacity = self.chars.len();
+            let progress = self.input.transcode_step(
+                &mut self.decoder,
+                &mut decode_error_to_io,
+                self.chars.as_mut_slice(),
+                0,
+                capacity,
+            )?;
+            #[cfg(coverage)]
+            let progress = if progress.is_none() && coverage_force_fill_progress() {
+                Some(TranscodeProgress::complete(0, 0))
+            } else {
+                progress
+            };
+            let Some(progress) = progress else {
+                return self.decode_eof();
+            };
+            let written = progress.written();
+            self.char_position = 0;
+            self.char_limit = written;
+            if self.has_buffered_chars() {
+                return Ok(true);
             }
-            TranscodeStatus::Complete => {
-                return self.fill_chars();
-            }
-            TranscodeStatus::NeedInput { required, .. } => {
-                let fill_result = self.input.fill_until(required.get());
-                #[cfg(coverage)]
-                let fill_result = if coverage_force_fill_error() {
-                    Err(io::Error::other("forced refill error"))
-                } else {
-                    fill_result
-                };
-                if fill_result? {
-                    return self.fill_chars();
+            match coverage_status(progress.status(), true) {
+                TranscodeStatus::NeedOutput { .. } => {
+                    self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
+                    continue;
+                }
+                TranscodeStatus::Complete => continue,
+                TranscodeStatus::NeedInput { required, .. } => {
+                    let fill_result = self.input.fill_until(required.get());
+                    #[cfg(coverage)]
+                    let fill_result = if coverage_force_fill_error() {
+                        Err(io::Error::other("forced refill error"))
+                    } else {
+                        fill_result
+                    };
+                    if fill_result? {
+                        continue;
+                    }
+                    break;
                 }
             }
         }
@@ -495,12 +496,18 @@ where
             }
             if ch == '\r' {
                 if self.line_endings.contains(crate::LineEnding::CrLf) {
-                    match self.read_char()? {
+                    let next = match self.read_char() {
+                        Ok(next) => next,
+                        Err(error) => {
+                            // CR was appended immediately before this lookahead.
+                            output.truncate(output.len() - '\r'.len_utf8());
+                            self.pending_char = Some('\r');
+                            return Err(error);
+                        }
+                    };
+                    match next {
                         Some('\n') => {
-                            if let Err(error) = append_limited_char(output, initial_len, max_append_len, '\n') {
-                                self.pending_char = Some('\n');
-                                return self.discard_line_after_limit().and(Err(error));
-                            }
+                            append_limited_char(output, initial_len, max_append_len, '\n')?;
                             return Ok(true);
                         }
                         Some(next) => {
