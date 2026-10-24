@@ -37,27 +37,24 @@ qubit-io = "0.19"
 ## 快速开始：编码一条 UTF-8 文本消息
 
 ```rust
-use qubit_io_text::{
-    LineEnding,
-    TextWriter,
-    Utf8TextWriter,
-};
+use qubit_io_text::LineEnding;
+use qubit_io_text::TextWriter;
+use qubit_io_text::Utf8TextWriter;
 
-let mut bytes = Vec::new();
-let mut writer = Utf8TextWriter::new(&mut bytes)
-    .with_line_ending(LineEnding::CrLf);
-
-writer.write_line("hello")?;
-writer.write_str("中文")?;
-writer.finish()?;
-
-let (output, recovery) = writer.into_parts();
-let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
-    unreachable!("no inner write panicked");
-};
-assert!(pending.readable().is_empty());
-assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
-# Ok::<(), std::io::Error>(())
+fn main() -> std::io::Result<()> {
+    let mut bytes = Vec::new();
+    let mut writer = Utf8TextWriter::new(&mut bytes).with_line_ending(LineEnding::CrLf);
+    writer.write_line("hello")?;
+    writer.write_str("中文")?;
+    writer.finish()?;
+    let (output, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+        unreachable!("no inner write panicked");
+    };
+    assert!(pending.readable().is_empty());
+    assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
+    Ok(())
+}
 ```
 
 ## Charset 与异步依赖
@@ -98,9 +95,10 @@ where
 ```
 
 在依赖 codec trailer 或底层 flush 结果前，必须调用 `finish()` 或
-`finish_async()`。finish 失败时 writer 仍由调用方持有，可检查或重试。同步 `finish()` 成功
+`finish_async()`。编码器结束成功后，即使交付或 flush 失败，也不能继续追加文本。保留同一个
+writer 并重试 `finish()` 以完成交付；不要重放原始文本。编码器结束本身报错，不代表通常可以安全重试。同步 `finish()` 成功
 后，同步 `into_parts()` 会在不执行额外 I/O 的情况下取回 owned output 和 `BufferedOutputRecovery`。
-异步 `into_parts()` 仍返回原始待写字节向量。同步恢复得到的 `Pending` 仅在外围协议允许时重试；`Indeterminate` 表示底层写入 panic，可能已经产生前缀副作用，不能自动重放。恢复不会调用 finish；编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。
+异步 `into_parts()` 仍返回原始待写字节向量；`into_buffered_parts()` 可直接取回已有的 `Buffer<u8>`，避免为待写字节新建 Vec 并复制。只把 `readable()` 返回的窗口当作待写数据。同步恢复得到的 `Pending` 仅在外围协议允许时重试；`Indeterminate` 表示底层写入 panic，可能已经产生前缀副作用，不能自动重放。恢复不会调用 finish；编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。
 
 ## 核心能力
 
@@ -123,6 +121,10 @@ where
 异步限长行读取拒绝超长记录后，应在同一 reader 上继续调用行读取方法，完成恢复后再读
 下一条记录。运行时配置的替换策略应使用可失败的 `try_*` 构造器；详见
 [错误与诊断](doc/user_guide.zh_CN.md#错误与诊断)。
+
+需要接管异步 writer 现有的待写缓冲区时，可使用 `into_buffered_parts()`；`into_parts()`
+返回的 `Vec<u8>` 接口仍可使用。恢复边界和示例见
+[恢复待写字节](doc/user_guide.zh_CN.md#恢复待写字节)。
 
 本 crate 不拥有 charset 算法，也不选择异步运行时。需要实战场景教程时，请参阅
 [中文用户指南](doc/user_guide.zh_CN.md)或 [English user guide](doc/user_guide.md)；

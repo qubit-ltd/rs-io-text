@@ -49,45 +49,35 @@ qubit-io = "0.19"
 ```rust
 use std::io::Cursor;
 
-use qubit_codec_text::{
-    CharsetDecodePolicy,
-    CharsetEncodePolicy,
-    Utf8Codec,
-};
-use qubit_io_text::{
-    CharsetTextReader,
-    CharsetTextWriter,
-    LineEnding,
-    TextReader,
-    TextWriter,
-};
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::Utf8Codec;
+use qubit_io_text::CharsetTextReader;
+use qubit_io_text::CharsetTextWriter;
+use qubit_io_text::LineEnding;
+use qubit_io_text::TextReader;
+use qubit_io_text::TextWriter;
 
-let mut bytes = Vec::new();
-let mut writer = CharsetTextWriter::new(
-    &mut bytes,
-    Utf8Codec,
-    CharsetEncodePolicy::report(),
-)
-.with_line_ending(LineEnding::CrLf);
-writer.write_line("subject: status")?;
-writer.write_str("中文")?;
-writer.finish()?;
-drop(writer);
-
-let mut reader = CharsetTextReader::new(
-    Cursor::new(bytes),
-    Utf8Codec,
-    CharsetDecodePolicy::report(),
-);
-let mut text = String::new();
-let chars = reader.read_to_string(&mut text)?;
-assert_eq!(19, chars);
-assert_eq!("subject: status\r\n中文", text);
-# Ok::<(), std::io::Error>(())
+fn main() -> std::io::Result<()> {
+    let mut bytes = Vec::new();
+    let mut writer = CharsetTextWriter::new(&mut bytes, Utf8Codec, CharsetEncodePolicy::report())
+        .with_line_ending(LineEnding::CrLf);
+    writer.write_line("subject: status")?;
+    writer.write_str("中文")?;
+    writer.finish()?;
+    drop(writer);
+    let mut reader = CharsetTextReader::new(Cursor::new(bytes), Utf8Codec, CharsetDecodePolicy::report());
+    let mut text = String::new();
+    let chars = reader.read_to_string(&mut text)?;
+    assert_eq!(19, chars);
+    assert_eq!("subject: status\r\n中文", text);
+    Ok(())
+}
 ```
 
-依赖 codec 自己的尾部输出或底层 sink 已 flush 前，必须调用 `finish()`。finish 失败时
-writer 会被保留，调用方可以检查或重试。仅需一次转换时，可使用 `CharsetReadExt` 和
+编码器结束成功后，即使交付或 flush 失败，writer 也会拒绝新的文本。保留同一个 writer 并
+重试 `finish()` 以完成交付；不要重放原始文本。编码器结束报错不保证通常可以安全重试。
+仅需一次转换时，可使用 `CharsetReadExt` 和
 `CharsetWriteExt` 的构造与 one-shot helper，无需长期保存 adapter。
 
 ## 策略、换行与 UTF-8
@@ -159,13 +149,17 @@ where
 - `CharsetDecodePolicy::report()` 报告畸形编码输入和 EOF 处不完整的编码尾部；
   `CharsetEncodePolicy::report()` 报告当前 codec 无法编码的 Unicode 字符。只有在明确允许
   忽略或替换时，才选择对应的 `ignore()` 或 `replace(...)` 策略。
-- `finish` 或 `finish_async` 失败后，writer 仍可用于重试。
+- 编码器结束成功后，writer 会拒绝新的文本，即使输出交付或 flush 返回错误。保留该
+  writer 并重试 `finish`，以继续交付而不重复结束编码器；不要重放原始文本。编码器结束
+  本身报错，不代表事务回滚或通常可以安全重试。
+- `CharsetStringDecoder::decode_to_string_into` 成功时追加文本；返回 `Err` 时目标字符串
+  保留原内容。这不回滚 decoder 状态，也不覆盖 panic；流式 reader 有各自的前缀保留约定。
 - 同步文本操作不保证事务性。读取失败时，目标可能保留已经追加的前缀，输入也可能
   已被消费；写入失败时，前缀可能已被接受或交付，重试整个字符串或整行可能造成重复。
   这些错误不报告已消费前缀。具体 API 可提供更强保证，尤其是下文的追加限额回滚规则
   仍然适用。需要确认缓冲交付时，应显式处理 flush 错误。
 - 异步 reader 的 `input()` 可能已越过其缓冲文本。
-- 同步 buffered writer 的 `into_parts()` 不执行 I/O，并返回 `BufferedOutputRecovery`。`Pending` 表示尚未被报告写出的字节；`Indeterminate` 表示底层写入 panic，可能产生前缀副作用，不应自动重放。恢复不会调用 finish，编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。异步 writer 的 `into_parts()` 仍返回原始待写字节向量。
+- 同步 buffered writer 的 `into_parts()` 不执行 I/O，并返回 `BufferedOutputRecovery`。`Pending` 表示尚未被报告写出的字节；`Indeterminate` 表示底层写入 panic，可能产生前缀副作用，不应自动重放。恢复不会调用 finish，编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。异步 writer 的 `into_parts()` 仍返回原始待写字节向量；`into_buffered_parts()` 直接返回已有缓冲区而不复制，待写窗口是 `pending.readable()`。
 - 当需要限制解码结果时，使用 `read_to_string_limited`、
   `read_to_string_limited_async` 或
   `read_to_string_with_charset_limited`。上限按该调用追加的 UTF-8 字节计算；
@@ -183,6 +177,28 @@ where
   例如输入 `abcdef\nok\n`、限额为 `4` 时，`abcdef\n` 会被丢弃并报告
   `InvalidData`，下一次读取才返回 `ok\n`。字符读取和 `into_parts` 不会自动恢复这项
   行恢复。
+
+### 恢复待写字节
+
+该函数消费调用方已经持有、需要停止使用的 writer，不执行 finish 或 I/O。正常完成应先
+调用 finish；发生错误后，仅在外围输出协议允许时处理 `pending.readable()`，不能重放已交付
+前缀。对于 `AsyncUtf8TextWriter`，可调用 `writer.into_inner().into_buffered_parts()`。
+只需要 `Vec<u8>` 的调用方可以继续使用 `into_parts()`。
+
+```rust
+use qubit_codec_text::CharsetCodec;
+use qubit_io::AsyncByteOutput;
+use qubit_io::Buffer;
+use qubit_io_text::AsyncCharsetTextWriter;
+
+fn recover_pending<O, C>(writer: AsyncCharsetTextWriter<O, C>) -> (O, Buffer<u8>)
+where
+    O: AsyncByteOutput,
+    C: CharsetCodec<Unit = u8>,
+{
+    writer.into_buffered_parts()
+}
+```
 
 ## 排障与最佳实践
 

@@ -38,27 +38,24 @@ qubit-io = "0.19"
 ## Quick Start: Encode a UTF-8 Text Message
 
 ```rust
-use qubit_io_text::{
-    LineEnding,
-    TextWriter,
-    Utf8TextWriter,
-};
+use qubit_io_text::LineEnding;
+use qubit_io_text::TextWriter;
+use qubit_io_text::Utf8TextWriter;
 
-let mut bytes = Vec::new();
-let mut writer = Utf8TextWriter::new(&mut bytes)
-    .with_line_ending(LineEnding::CrLf);
-
-writer.write_line("hello")?;
-writer.write_str("中文")?;
-writer.finish()?;
-
-let (output, recovery) = writer.into_parts();
-let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
-    unreachable!("no inner write panicked");
-};
-assert!(pending.readable().is_empty());
-assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
-# Ok::<(), std::io::Error>(())
+fn main() -> std::io::Result<()> {
+    let mut bytes = Vec::new();
+    let mut writer = Utf8TextWriter::new(&mut bytes).with_line_ending(LineEnding::CrLf);
+    writer.write_line("hello")?;
+    writer.write_str("中文")?;
+    writer.finish()?;
+    let (output, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+        unreachable!("no inner write panicked");
+    };
+    assert!(pending.readable().is_empty());
+    assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
+    Ok(())
+}
 ```
 
 ## Charset and Async Dependencies
@@ -100,11 +97,16 @@ where
 ```
 
 Call `finish()` or `finish_async()` before depending on codec trailers or the
-underlying output flush. A failed finish retains the writer, so callers can
-inspect or retry it. After successful synchronous `finish()`, synchronous
-`into_parts()` recovers the owned output and a `BufferedOutputRecovery` without
-performing further I/O. Async `into_parts()` continues to return its raw pending
-byte vector. Retry synchronous `Pending` bytes only when safe for the surrounding
+underlying output flush. Once encoder finalization succeeds, later text writes
+are rejected even if delivery or flush fails. Keep the same writer and retry
+`finish()` to complete delivery; do not replay the original text. An encoder
+finalization error does not imply a generally safe retry protocol. After
+successful synchronous `finish()`, synchronous `into_parts()` recovers the
+owned output and a `BufferedOutputRecovery` without further I/O. Async
+`into_parts()` continues to return its raw pending byte vector;
+`into_buffered_parts()` recovers the existing `Buffer<u8>` without copying
+pending bytes into a new vector. Use only its `readable()` window as pending
+data. Retry synchronous `Pending` bytes only when safe for the surrounding
 protocol. `Indeterminate` means a panicking inner write may have committed a
 prefix, so do not replay it automatically. Recovery does not call finish, and
 encoder lifecycle output not yet emitted may be absent from the returned buffer.
@@ -133,6 +135,11 @@ After an asynchronous bounded line read rejects an oversized record, resume
 with a line-read method on the same reader to finish recovery before reading
 the next record. Use fallible `try_*` constructors for replacement policies
 from runtime configuration; see [Errors and Diagnostics](doc/user_guide.md#errors-and-diagnostics).
+
+To take ownership of an async writer's existing pending buffer, use
+`into_buffered_parts()`; the `Vec<u8>` from `into_parts()` remains available.
+See [Recovering pending bytes](doc/user_guide.md#recovering-pending-bytes) for
+the recovery boundary and example.
 
 The crate does not own charset algorithms or select an async runtime. For a
 scenario-led tutorial, see the [user guide](doc/user_guide.md) or

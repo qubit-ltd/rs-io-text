@@ -68,8 +68,10 @@ fn main() -> std::io::Result<()> {
     };
     assert!(pending.readable().is_empty());
     assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
-    user_guide_examples::english()?;
-    user_guide_examples::chinese()?;
+    user_guide_examples::readme_english::run()?;
+    user_guide_examples::readme_chinese::run()?;
+    user_guide_examples::guide_english::run()?;
+    user_guide_examples::guide_chinese::run()?;
     drop(write_message(CompileOnlyOutput));
     Ok(())
 }

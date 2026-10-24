@@ -9,25 +9,24 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-/// Extracts and generates the executable core examples from both user guides.
+/// Extracts and generates the executable core examples from four documents.
 fn main() {
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
     let project = manifest.join("../../..");
     let mut generated = String::from("mod user_guide_examples {\n");
     for (file, heading, name) in [
-        ("user_guide.md", "## Core Workflow", "english"),
-        ("user_guide.zh_CN.md", "## 核心流程", "chinese"),
+        ("README.md", "## Quick Start: Encode a UTF-8 Text Message", "readme_english"),
+        ("README.zh_CN.md", "## 快速开始：编码一条 UTF-8 文本消息", "readme_chinese"),
+        ("doc/user_guide.md", "## Core Workflow", "guide_english"),
+        ("doc/user_guide.zh_CN.md", "## 核心流程", "guide_chinese"),
     ] {
-        let path = project.join("doc").join(file);
+        let path = project.join(file);
         println!("cargo:rerun-if-changed={}", path.display());
-        let markdown = fs::read_to_string(&path).expect("read user guide");
+        let markdown = fs::read_to_string(&path).expect("read documented example");
         let code = extract_core(&markdown, heading);
-        generated.push_str(&format!("pub fn {name}() -> std::io::Result<()> {{\n"));
-        for line in code.lines() {
-            generated.push_str(line.strip_prefix("# ").unwrap_or(line));
-            generated.push('\n');
-        }
-        generated.push_str("}\n");
+        generated.push_str(&format!("pub mod {name} {{\n"));
+        generated.push_str(code);
+        generated.push_str("\npub fn run() -> std::io::Result<()> { main() }\n}\n");
     }
     generated.push_str("}\n");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));

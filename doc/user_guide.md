@@ -52,46 +52,36 @@ direct dependencies.
 ```rust
 use std::io::Cursor;
 
-use qubit_codec_text::{
-    CharsetDecodePolicy,
-    CharsetEncodePolicy,
-    Utf8Codec,
-};
-use qubit_io_text::{
-    CharsetTextReader,
-    CharsetTextWriter,
-    LineEnding,
-    TextReader,
-    TextWriter,
-};
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::Utf8Codec;
+use qubit_io_text::CharsetTextReader;
+use qubit_io_text::CharsetTextWriter;
+use qubit_io_text::LineEnding;
+use qubit_io_text::TextReader;
+use qubit_io_text::TextWriter;
 
-let mut bytes = Vec::new();
-let mut writer = CharsetTextWriter::new(
-    &mut bytes,
-    Utf8Codec,
-    CharsetEncodePolicy::report(),
-)
-.with_line_ending(LineEnding::CrLf);
-writer.write_line("subject: status")?;
-writer.write_str("中文")?;
-writer.finish()?;
-drop(writer);
-
-let mut reader = CharsetTextReader::new(
-    Cursor::new(bytes),
-    Utf8Codec,
-    CharsetDecodePolicy::report(),
-);
-let mut text = String::new();
-let chars = reader.read_to_string(&mut text)?;
-assert_eq!(19, chars);
-assert_eq!("subject: status\r\n中文", text);
-# Ok::<(), std::io::Error>(())
+fn main() -> std::io::Result<()> {
+    let mut bytes = Vec::new();
+    let mut writer = CharsetTextWriter::new(&mut bytes, Utf8Codec, CharsetEncodePolicy::report())
+        .with_line_ending(LineEnding::CrLf);
+    writer.write_line("subject: status")?;
+    writer.write_str("中文")?;
+    writer.finish()?;
+    drop(writer);
+    let mut reader = CharsetTextReader::new(Cursor::new(bytes), Utf8Codec, CharsetDecodePolicy::report());
+    let mut text = String::new();
+    let chars = reader.read_to_string(&mut text)?;
+    assert_eq!(19, chars);
+    assert_eq!("subject: status\r\n中文", text);
+    Ok(())
+}
 ```
 
-Call `finish()` before depending on codec-owned trailing output or a flushed
-underlying sink. A failed finish retains the writer, allowing a caller to
-inspect the state or retry. `CharsetReadExt` and `CharsetWriteExt` offer
+Once encoder finalization succeeds, later text writes are rejected even if
+delivery or flush fails. Retry `finish()` on the same writer to complete
+delivery; do not replay the original text. An encoder-finalization error does
+not imply a generally safe retry protocol. `CharsetReadExt` and `CharsetWriteExt` offer
 construction and one-shot helpers when a persistent adapter is unnecessary.
 
 ## Policies, Lines, and UTF-8
@@ -169,7 +159,14 @@ single-step APIs for cancellation-sensitive protocols.
   encoded tails at EOF. `CharsetEncodePolicy::report()` reports Unicode
   characters that the selected codec cannot encode. Use the corresponding
   `ignore()` or `replace(...)` policy only when intentional.
-- A failing `finish` or `finish_async` leaves the writer available for retry.
+- Once encoder finalization succeeds, the writer rejects new text even if
+  output delivery or flush returns an error. Retain that writer and retry
+  `finish` to continue delivery without finalizing again; do not replay the
+  original text. An encoder-finalization error does not imply transactional
+  rollback or general retry safety.
+- `CharsetStringDecoder::decode_to_string_into` appends on success and retains
+  the destination's original contents on `Err`. This does not roll back decoder
+  state or cover panics; streaming readers have separate prefix-retention rules.
 - Synchronous text operations are not transactional. A failing read may leave an
   appended prefix in the destination and may already have consumed input. A
   failing write may already have accepted or delivered a prefix; retrying the
@@ -178,7 +175,7 @@ single-step APIs for cancellation-sensitive protocols.
   particular, the append-limit rollback rules below still apply. Handle flush
   errors explicitly when buffered delivery matters.
 - `input()` can be positioned beyond text already buffered by an async reader.
-- Synchronous buffered-writer `into_parts()` performs no I/O and returns `BufferedOutputRecovery`. `Pending` bytes were not reported as written; `Indeterminate` means a panicking inner write may have produced a prefix and must not be replayed automatically. Recovery does not call finish, and encoder lifecycle output not yet emitted may not be present in the returned buffer. Async writer `into_parts()` still returns its raw pending byte vector.
+- Synchronous buffered-writer `into_parts()` performs no I/O and returns `BufferedOutputRecovery`. `Pending` bytes were not reported as written; `Indeterminate` means a panicking inner write may have produced a prefix and must not be replayed automatically. Recovery does not call finish, and encoder lifecycle output not yet emitted may not be present in the returned buffer. Async writer `into_parts()` still returns its raw pending byte vector; `into_buffered_parts()` returns its existing buffer without copying, and `pending.readable()` is the pending window.
 - Use `read_to_string_limited`, `read_to_string_limited_async`, or
   `read_to_string_with_charset_limited` when decoded output needs a bound.
   The limit applies to UTF-8 bytes appended by that call; exceeding it
@@ -202,6 +199,30 @@ single-step APIs for cancellation-sensitive protocols.
   input `abcdef\nok\n` with limit `4`, the rejected `abcdef\n` record is
   discarded, `InvalidData` is reported, and the next line read returns `ok\n`.
   This recovery does not apply to character reads or `into_parts`.
+
+### Recovering pending bytes
+
+This consumes a writer already held by the caller when it must stop using it.
+It performs no finish or I/O. Prefer finishing normally; after an error, only
+handle bytes from `pending.readable()` when the output protocol makes that safe.
+Never replay a prefix already delivered. For `AsyncUtf8TextWriter`, call
+`writer.into_inner().into_buffered_parts()`. Callers that prefer a `Vec<u8>` can
+keep using `into_parts()`.
+
+```rust
+use qubit_codec_text::CharsetCodec;
+use qubit_io::AsyncByteOutput;
+use qubit_io::Buffer;
+use qubit_io_text::AsyncCharsetTextWriter;
+
+fn recover_pending<O, C>(writer: AsyncCharsetTextWriter<O, C>) -> (O, Buffer<u8>)
+where
+    O: AsyncByteOutput,
+    C: CharsetCodec<Unit = u8>,
+{
+    writer.into_buffered_parts()
+}
+```
 
 ## Troubleshooting and Best Practices
 
