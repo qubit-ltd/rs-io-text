@@ -368,7 +368,6 @@ impl Output for FlushFailOnceOutput {
     }
 }
 
-
 #[derive(Default)]
 struct PanicOutput {
     bytes: Vec<u8>,
@@ -656,9 +655,7 @@ fn test_buffered_writer_applies_configured_line_ending() -> std::io::Result<()> 
 fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
     let mut writer = BufferedTextWriter::new(PanicOutput::default(), CharsetEncoder::new(Utf8Codec));
     writer.write_str("text").expect("the encoded value should be buffered");
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        TextWriter::flush(&mut writer)
-    }));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| TextWriter::flush(&mut writer)));
     assert!(result.is_err());
 
     let (inner, recovery) = writer.into_parts();

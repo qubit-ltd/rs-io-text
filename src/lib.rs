@@ -14,7 +14,8 @@
 //! also provides adapters for in-memory text, UTF-8 byte streams, and
 //! byte-oriented [`qubit_codec_text`] charsets. [`AsyncCharsetTextReader`] and
 //! [`AsyncCharsetTextWriter`] drive the same charset state machines through
-//! runtime-neutral [`qubit_io::AsyncByteInput`] and [`qubit_io::AsyncByteOutput`].
+//! runtime-neutral [`qubit_io::AsyncByteInput`] and
+//! [`qubit_io::AsyncByteOutput`].
 #![deny(missing_docs)]
 
 mod adapters;

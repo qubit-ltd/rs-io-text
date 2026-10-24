@@ -31,7 +31,6 @@
 /// }
 /// ```
 #[allow(async_fn_in_trait)]
-
 pub trait AsyncTextReader {
     /// Error returned by this text source.
     type Error;

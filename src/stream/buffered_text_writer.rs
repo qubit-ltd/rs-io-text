@@ -143,7 +143,8 @@ where
     pub const fn configured_line_ending(&self) -> LineEnding {
         self.line_ending
     }
-    /// Recovers the wrapped output and the status of encoded bytes retained by this writer.
+    /// Recovers the wrapped output and the status of encoded bytes retained by
+    /// this writer.
     ///
     /// This method performs no I/O and does not call [`Self::finish`] or flush
     /// the wrapped output. `Pending` bytes were not reported as written and may

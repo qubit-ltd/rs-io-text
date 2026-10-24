@@ -14,13 +14,3 @@ reason = "Inject reserve failure hooks so allocation error mapping can be exerci
 rule = "coverage-cfg"
 path = "src/adapters/charset_string_encoder.rs"
 reason = "Inject reserve failure hooks so allocation error mapping can be exercised under coverage builds."
-
-[[exceptions]]
-rule = "coverage-cfg"
-path = "src/stream/buffered_reader.rs"
-reason = "Inject decoder status and refill branches so buffered reader coverage thresholds include recovery paths."
-
-[[exceptions]]
-rule = "coverage-cfg"
-path = "src/stream/buffered_writer.rs"
-reason = "Inject a reset reserve failure so the recoverable allocation error path can be exercised under coverage builds."

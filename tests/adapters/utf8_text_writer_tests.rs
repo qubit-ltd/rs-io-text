@@ -45,7 +45,6 @@ impl Write for FailingWriter {
     }
 }
 
-
 #[derive(Default)]
 struct PanicOutput {
     bytes: Vec<u8>,
@@ -161,9 +160,7 @@ fn test_write_methods_propagate_underlying_errors() {
 fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
     let mut writer = Utf8TextWriter::new(PanicOutput::default());
     writer.write_str("text").expect("the encoded value should be buffered");
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        TextWriter::flush(&mut writer)
-    }));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| TextWriter::flush(&mut writer)));
     assert!(result.is_err());
 
     let (inner, recovery) = writer.into_parts();

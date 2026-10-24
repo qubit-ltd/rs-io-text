@@ -112,7 +112,6 @@ impl Codec for NeedOutputCodec {
     }
 }
 
-
 #[derive(Default)]
 struct PanicOutput {
     bytes: Vec<u8>,
@@ -486,9 +485,7 @@ fn test_charset_write_ext_one_shot_reports_unencodable_replacement() -> std::io:
 fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
     let mut writer = CharsetTextWriter::new(PanicOutput::default(), Utf8Codec, CharsetEncodePolicy::report());
     writer.write_str("text").expect("the encoded value should be buffered");
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        TextWriter::flush(&mut writer)
-    }));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| TextWriter::flush(&mut writer)));
     assert!(result.is_err());
 
     let (inner, recovery) = writer.into_parts();
