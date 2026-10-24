@@ -55,7 +55,6 @@ where
     C: CharsetCodec,
 {
     decoder: CharsetDecoder<C>,
-    charset: Charset,
 }
 
 impl<C> CharsetStringDecoder<C>
@@ -89,10 +88,8 @@ where
     /// Returns a string decoder configured with `policy`.
     #[must_use]
     pub fn with_policy(codec: C, policy: CharsetDecodePolicy) -> Self {
-        let charset = codec.charset();
         Self {
             decoder: CharsetDecoder::with_policy(codec, policy),
-            charset,
         }
     }
 
@@ -259,7 +256,7 @@ where
     ) -> Result<(), CharsetDecodeError> {
         if input_index > input.len() {
             return Err(CharsetDecodeError::new(
-                self.charset,
+                self.decoder.charset(),
                 CharsetDecodeErrorKind::InvalidInputIndex { input_len: input.len() },
                 input_index,
             ));
@@ -291,20 +288,21 @@ where
         input_index: usize,
         output: &mut String,
     ) -> Result<(), CharsetDecodeError> {
+        let charset = self.decoder.charset();
         let reset_capacity = match coverage_capacity_result(self.decoder.max_reset_output_len(), true) {
             Ok(capacity) => capacity,
-            Err(_) => return Err(output_length_overflow(self.charset)),
+            Err(_) => return Err(output_length_overflow(charset)),
         };
         let char_capacity = reset_capacity.max(CHAR_CHUNK_CAPACITY);
         #[cfg(coverage)]
         let char_capacity = char_capacity.saturating_sub(coverage_take_char_capacity_shrink());
         let mut chars = Vec::new();
-        ensure_char_capacity(&mut chars, char_capacity, self.charset)?;
+        ensure_char_capacity(&mut chars, char_capacity, charset)?;
         let reset_written = match self.decoder.reset(&mut chars, 0) {
             Ok(written) => written,
-            Err(error) => return Err(map_decode_error(self.charset, error)),
+            Err(error) => return Err(map_decode_error(charset, error)),
         };
-        append_chars(output, &chars[..reset_written], self.charset)?;
+        append_chars(output, &chars[..reset_written], charset)?;
         let mut output_char_count = reset_written;
 
         let mut input_cursor = input_index;
@@ -312,13 +310,13 @@ where
             let progress = match self.decoder.transcode_eof(input, input_cursor, &mut chars, 0) {
                 Ok(progress) => progress,
                 Err(error) => {
-                    return Err(map_decode_error(self.charset, error));
+                    return Err(map_decode_error(charset, error));
                 }
             };
-            append_chars(output, &chars[..progress.written()], self.charset)?;
+            append_chars(output, &chars[..progress.written()], charset)?;
             let checked_output_char_count = coverage_output_count(output_char_count);
             let Some(next_output_char_count) = checked_output_char_count.checked_add(progress.written()) else {
-                return Err(output_length_overflow(self.charset));
+                return Err(output_length_overflow(charset));
             };
             output_char_count = next_output_char_count;
             input_cursor += progress.read();
@@ -330,12 +328,12 @@ where
                         required: required.get(),
                         available,
                     };
-                    return Err(CharsetDecodeError::new(self.charset, kind, input_cursor));
+                    return Err(CharsetDecodeError::new(charset, kind, input_cursor));
                 }
                 TranscodeStatus::NeedOutput { required, .. } => {
                     if progress.read() == 0 && progress.written() == 0 {
                         let required = required.get().max(CHAR_CHUNK_CAPACITY);
-                        ensure_char_capacity(&mut chars, required, self.charset)?;
+                        ensure_char_capacity(&mut chars, required, charset)?;
                     }
                 }
             }
@@ -343,16 +341,16 @@ where
 
         let finish_capacity = match coverage_capacity_result(self.decoder.max_finish_output_len(), false) {
             Ok(capacity) => capacity,
-            Err(_) => return Err(output_length_overflow(self.charset)),
+            Err(_) => return Err(output_length_overflow(charset)),
         };
-        ensure_char_capacity(&mut chars, finish_capacity, self.charset)?;
+        ensure_char_capacity(&mut chars, finish_capacity, charset)?;
         let finish_written = match self.decoder.finish(&mut chars, 0) {
             Ok(written) => written,
             Err(error) => {
-                return Err(map_finish_decode_error(self.charset, error, output_char_count));
+                return Err(map_finish_decode_error(charset, error, output_char_count));
             }
         };
-        append_chars(output, &chars[..finish_written], self.charset)
+        append_chars(output, &chars[..finish_written], charset)
     }
 }
 

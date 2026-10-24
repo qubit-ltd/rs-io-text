@@ -75,9 +75,9 @@ where
     ///
     /// # Panics
     ///
-    /// In replacement mode, panics if `codec` cannot encode either the default
-    /// replacement character or the fallback `?` replacement. That indicates a
-    /// broken codec invariant, not recoverable input data.
+    /// Panics in replacement mode when the configured replacement character
+    /// cannot be encoded by the selected codec. Use [`Self::try_new`] for
+    /// policies obtained from configuration.
     #[must_use]
     #[inline]
     pub fn new(output: O, codec: C, policy: CharsetEncodePolicy) -> Self {
@@ -122,8 +122,10 @@ where
     ///
     /// # Panics
     ///
-    /// In replacement mode, panics if no replacement character can be encoded
-    /// by the codec.
+    /// Panics in replacement mode when the configured replacement character
+    /// cannot be encoded by the selected codec. Use
+    /// [`Self::try_new_with_buffer_capacity`] for policies obtained from
+    /// configuration.
     #[must_use]
     #[inline]
     pub fn new_with_buffer_capacity(output: O, codec: C, policy: CharsetEncodePolicy, buffer_capacity: usize) -> Self {

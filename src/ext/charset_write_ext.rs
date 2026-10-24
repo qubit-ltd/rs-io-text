@@ -43,6 +43,13 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     /// # Returns
     ///
     /// Returns a streaming text writer with the default buffer capacity.
+    ///
+    /// # Panics
+    ///
+    /// Panics in replacement mode when the configured replacement character
+    /// cannot be encoded by the selected codec. Use
+    /// [`Self::try_charset_text_writer`] for policies obtained from
+    /// configuration.
     #[must_use]
     #[inline]
     fn charset_text_writer<C>(self, codec: C, policy: CharsetEncodePolicy) -> CharsetTextWriter<Self, C>
@@ -90,6 +97,13 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     /// # Returns
     ///
     /// Returns a streaming text writer using at least `capacity` bytes.
+    ///
+    /// # Panics
+    ///
+    /// Panics in replacement mode when the configured replacement character
+    /// cannot be encoded by the selected codec. Use
+    /// [`Self::try_buffered_charset_text_writer`] for policies obtained from
+    /// configuration.
     #[must_use]
     #[inline]
     fn buffered_charset_text_writer<C>(

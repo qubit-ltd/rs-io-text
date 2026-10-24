@@ -8,6 +8,7 @@
 
 use core::num::NonZeroUsize;
 
+use qubit_codec::ByteOrder;
 use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
 #[cfg(coverage)]
@@ -22,11 +23,13 @@ use qubit_codec_text::CharsetDecodeError;
 use qubit_codec_text::CharsetDecodeErrorKind;
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetDecodeResult;
+use qubit_codec_text::CharsetDecoder;
 use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodeErrorKind;
 use qubit_codec_text::CharsetEncodeResult;
 use qubit_codec_text::MalformedAction;
 use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::Utf16ByteCodec;
 use qubit_codec_text::Utf32U32Codec;
 use qubit_io_text::CharsetStringDecoder;
 
@@ -559,4 +562,31 @@ fn test_charset_string_decoder_decode_to_string_propagates_finish_errors() {
 
     assert_eq!(CharsetDecodeErrorKind::malformed_unknown(), error.kind());
     assert_eq!(1, error.index());
+}
+
+#[test]
+fn test_current_charset_after_decoder_replacement() {
+    let mut decoder = CharsetStringDecoder::with_policy(
+        Utf16ByteCodec::new(ByteOrder::LittleEndian),
+        CharsetDecodePolicy::report(),
+    );
+    *decoder.decoder_mut() =
+        CharsetDecoder::with_policy(Utf16ByteCodec::new(ByteOrder::BigEndian), CharsetDecodePolicy::report());
+    let mut output = String::from("seed:");
+    let error = decoder.decode_to_string_into(&[], 1, &mut output).unwrap_err();
+    assert_eq!(decoder.decoder().charset(), error.charset());
+    assert_eq!("seed:", output);
+    decoder.decode_to_string_into(&[0, b'A'], 0, &mut output).unwrap();
+    assert_eq!("seed:A", output);
+}
+
+#[test]
+fn test_current_charset_after_codec_replacement() {
+    let mut decoder = CharsetStringDecoder::with_policy(
+        Utf16ByteCodec::new(ByteOrder::LittleEndian),
+        CharsetDecodePolicy::report(),
+    );
+    *decoder.decoder_mut().codec_mut() = Utf16ByteCodec::new(ByteOrder::BigEndian);
+    let error = decoder.decode_to_string_into(&[], 1, &mut String::new()).unwrap_err();
+    assert_eq!(decoder.decoder().charset(), error.charset());
 }

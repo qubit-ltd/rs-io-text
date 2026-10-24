@@ -333,6 +333,35 @@ fn test_charset_write_ext_try_writer_reports_unencodable_replacement() {
 }
 
 #[test]
+#[should_panic(expected = "charset encode policy replacement must be encodable")]
+fn test_charset_text_writer_new_panics_for_unencodable_replacement() {
+    let _ = CharsetTextWriter::new(Vec::<u8>::new(), AsciiCodec, CharsetEncodePolicy::replace('中'));
+}
+
+#[test]
+#[should_panic(expected = "charset encode policy replacement must be encodable")]
+fn test_charset_text_writer_new_with_buffer_capacity_panics_for_unencodable_replacement() {
+    let _ = CharsetTextWriter::new_with_buffer_capacity(
+        Vec::<u8>::new(),
+        AsciiCodec,
+        CharsetEncodePolicy::replace('中'),
+        8,
+    );
+}
+
+#[test]
+#[should_panic(expected = "charset encode policy replacement must be encodable")]
+fn test_charset_write_ext_writer_panics_for_unencodable_replacement() {
+    let _ = Vec::<u8>::new().charset_text_writer(AsciiCodec, CharsetEncodePolicy::replace('中'));
+}
+
+#[test]
+#[should_panic(expected = "charset encode policy replacement must be encodable")]
+fn test_charset_write_ext_buffered_writer_panics_for_unencodable_replacement() {
+    let _ = Vec::<u8>::new().buffered_charset_text_writer(AsciiCodec, CharsetEncodePolicy::replace('中'), 8);
+}
+
+#[test]
 fn test_charset_write_ext_accepts_qubit_output_without_std_write() -> std::io::Result<()> {
     let output = OutputOnlyWriter::default();
     let mut writer = output.charset_text_writer(Utf8Codec, CharsetEncodePolicy::report());
