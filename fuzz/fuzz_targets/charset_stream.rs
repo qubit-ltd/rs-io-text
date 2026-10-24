@@ -92,7 +92,10 @@ fn fuzz_utf8_round_trip(data: &[u8]) {
         writer.write_str(text).expect("valid UTF-8 must encode in strict mode");
         writer.finish().expect("in-memory UTF-8 writer must finish");
         let (output, pending) = writer.into_parts();
-        assert!(pending.readable().is_empty());
+        assert!(matches!(
+            pending,
+            qubit_io::BufferedOutputRecovery::Pending(buffer) if buffer.readable().is_empty()
+        ));
 
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(output.into_inner()),
@@ -147,7 +150,10 @@ fn fuzz_multibyte_round_trips(data: &[u8]) {
             writer.write_str(text).expect("UTF-16 encoding must succeed");
             writer.finish().expect("UTF-16 writer must finish");
             let (output, pending) = writer.into_parts();
-            assert!(pending.readable().is_empty());
+            assert!(matches!(
+                pending,
+                qubit_io::BufferedOutputRecovery::Pending(buffer) if buffer.readable().is_empty()
+            ));
 
             let mut reader = CharsetTextReader::new_with_buffer_capacity(
                 Cursor::new(output.into_inner()),
@@ -170,7 +176,10 @@ fn fuzz_multibyte_round_trips(data: &[u8]) {
         writer.write_str(text).expect("UTF-32 encoding must succeed");
         writer.finish().expect("UTF-32 writer must finish");
         let (output, pending) = writer.into_parts();
-        assert!(pending.readable().is_empty());
+        assert!(matches!(
+            pending,
+            qubit_io::BufferedOutputRecovery::Pending(buffer) if buffer.readable().is_empty()
+        ));
 
         let mut reader = CharsetTextReader::new_with_buffer_capacity(
             Cursor::new(output.into_inner()),

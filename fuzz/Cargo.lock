@@ -122,6 +122,7 @@ dependencies = [
  "libfuzzer-sys",
  "qubit-codec",
  "qubit-codec-text",
+ "qubit-io",
  "qubit-io-text",
 ]
 
