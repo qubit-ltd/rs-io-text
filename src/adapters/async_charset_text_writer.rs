@@ -29,6 +29,10 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// Asynchronously encodes Unicode text into a charset byte output.
 ///
 /// Encoded bytes live in this writer until the wrapped output accepts them.
+/// Successful write calls mean text was encoded and accepted into this
+/// buffer, not delivered to the output. Capacity pressure may deliver older
+/// bytes during a later write; call [`Self::flush_async`] when delivery must be
+/// observable and [`Self::finish_async`] to finalize and deliver the stream.
 /// Each `write_*_async` operation returns after one encoder step, before any
 /// later output poll, and reports exactly how much source it committed. Use
 /// the explicit `*_fully_async` methods when a complete source range is
@@ -319,6 +323,10 @@ where
     ///
     /// - `ch`: Character to encode and write.
     ///
+    /// A successful write accepts encoded bytes into the buffer without
+    /// guaranteeing delivery. Capacity pressure may deliver older bytes;
+    /// call [`Self::flush_async`] when delivery must be observable.
+    ///
     /// # Errors
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
@@ -339,6 +347,10 @@ where
     /// # Parameters
     ///
     /// - `chars`: Characters to encode and write.
+    ///
+    /// A successful write accepts encoded bytes into the buffer without
+    /// guaranteeing delivery. Capacity pressure may deliver older bytes;
+    /// call [`Self::flush_async`] when delivery must be observable.
     ///
     /// # Errors
     ///
@@ -386,6 +398,10 @@ where
     /// # Parameters
     ///
     /// - `text`: Unicode text to encode and write.
+    ///
+    /// A successful write accepts encoded bytes into the buffer without
+    /// guaranteeing delivery. Capacity pressure may deliver older bytes;
+    /// call [`Self::flush_async`] when delivery must be observable.
     ///
     /// # Errors
     ///
@@ -503,14 +519,15 @@ where
         self.output.flush_async().await
     }
 
-    /// Starts the encoder lifecycle and sends any stream prefix.
+    /// Starts the encoder lifecycle, retaining reset output until capacity or
+    /// an explicit delivery call.
     async fn ensure_started_async(&mut self) -> io::Result<()> {
         if !self.started {
             let mut map_error = encode_error_to_io;
             self.output.reset_async(&mut self.encoder, &mut map_error).await?;
             self.started = true;
         }
-        self.output.drain_async().await
+        Ok(())
     }
 
     /// Encodes one character-slice progress step.
