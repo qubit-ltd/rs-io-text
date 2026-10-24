@@ -15,6 +15,7 @@ use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_io::AsyncByteOutput;
+use qubit_io::Buffer;
 
 use crate::AsyncTextWriter;
 use crate::LineEnding;
@@ -246,7 +247,10 @@ where
         self
     }
 
-    /// Returns the wrapped output and every encoded byte still pending.
+    /// Returns the wrapped output and every encoded byte still pending as a
+    /// vector for convenience. This copies the readable window; use
+    /// [`Self::into_buffered_parts`] to recover the existing buffer without
+    /// copying.
     ///
     /// This method does not call [`Self::finish_async`] or
     /// [`qubit_io::AsyncOutput::flush_async`] on the wrapped output. Call
@@ -260,8 +264,43 @@ where
     /// Returns the wrapped output and pending bytes in logical write order.
     #[must_use = "the returned output and pending bytes must be handled"]
     pub fn into_parts(self) -> (O, Vec<u8>) {
-        let (output, pending) = self.output.into_parts();
+        let (output, pending) = self.into_buffered_parts();
         (output, pending.readable().to_vec())
+    }
+
+    /// Recovers the output and its owned pending-byte buffer without copying.
+    ///
+    /// This method performs no I/O, allocation for a new pending buffer, or
+    /// encoder finalization. Use `pending.readable()` for bytes not yet
+    /// delivered; the backing storage may also contain a consumed prefix
+    /// and spare capacity. Call `finish_async` first for normal completion.
+    /// Otherwise, encoder lifecycle output that has not been emitted is
+    /// abandoned.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped output and the existing pending-byte buffer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use qubit_codec_text::CharsetEncodePolicy;
+    /// use qubit_codec_text::Utf8Codec;
+    /// use qubit_io::AsyncByteOutput;
+    /// use qubit_io_text::AsyncCharsetTextWriter;
+    ///
+    /// fn recover<O: AsyncByteOutput>(output: O) {
+    ///     let writer = AsyncCharsetTextWriter::new(
+    ///         output, Utf8Codec, CharsetEncodePolicy::report(),
+    ///     );
+    ///     let (_output, pending) = writer.into_buffered_parts();
+    ///     assert!(pending.is_empty());
+    /// }
+    /// ```
+    #[must_use = "the output and pending-byte buffer must be handled"]
+    #[inline]
+    pub fn into_buffered_parts(self) -> (O, Buffer<u8>) {
+        self.output.into_parts()
     }
 
     /// Returns an error when encoding has already been finished.

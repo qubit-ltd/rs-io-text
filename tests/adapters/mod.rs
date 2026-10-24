@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 mod async_charset_text_tests;
+mod async_charset_text_writer_tests;
 mod async_utf8_text_reader_tests;
 mod async_utf8_text_writer_tests;
 mod charset_string_decoder_tests;
