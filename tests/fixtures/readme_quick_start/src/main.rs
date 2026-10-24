@@ -5,6 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::AsyncByteOutput;
@@ -12,9 +16,7 @@ use qubit_io_text::AsyncCharsetTextWriter;
 use qubit_io_text::LineEnding;
 use qubit_io_text::TextWriter;
 use qubit_io_text::Utf8TextWriter;
-use std::pin::Pin;
-use std::task::Context;
-use std::task::Poll;
+include!(concat!(env!("OUT_DIR"), "/user_guide_examples.rs"));
 
 struct CompileOnlyOutput;
 
@@ -66,6 +68,8 @@ fn main() -> std::io::Result<()> {
     };
     assert!(pending.readable().is_empty());
     assert_eq!("hello\r\n中文".as_bytes(), output.as_slice());
+    user_guide_examples::english()?;
+    user_guide_examples::chinese()?;
     drop(write_message(CompileOnlyOutput));
     Ok(())
 }

@@ -75,6 +75,7 @@ let mut writer = CharsetTextWriter::new(
 writer.write_line("subject: status")?;
 writer.write_str("中文")?;
 writer.finish()?;
+drop(writer);
 
 let mut reader = CharsetTextReader::new(
     Cursor::new(bytes),
