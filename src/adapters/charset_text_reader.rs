@@ -176,6 +176,9 @@ where
     /// The limit applies only to text appended by this call. On overflow the
     /// destination is restored and the remainder of the oversized line is
     /// consumed through its configured line ending.
+    /// If discarding hits an input error, retry a line-reading method on this
+    /// reader to resume with the original limit and line-ending policy; the
+    /// original overflow error is then reported once before the next line.
     ///
     /// # Parameters
     ///

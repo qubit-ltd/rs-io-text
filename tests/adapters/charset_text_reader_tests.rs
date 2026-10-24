@@ -114,6 +114,53 @@ fn test_charset_reader_read_line_limited_forwards_utf8_limit() -> std::io::Resul
 }
 
 #[test]
+fn test_charset_reader_rejected_line_resumes_after_input_error() -> std::io::Result<()> {
+    struct Input {
+        position: usize,
+        failed: bool,
+    }
+    impl Read for Input {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            if output.is_empty() {
+                return Ok(0);
+            }
+            if self.position == 5 && !self.failed {
+                self.failed = true;
+                return Err(io::Error::new(ErrorKind::WouldBlock, "temporary"));
+            }
+            let bytes = b"abcdef\nok\n";
+            if self.position == bytes.len() {
+                return Ok(0);
+            }
+            output[0] = bytes[self.position];
+            self.position += 1;
+            Ok(1)
+        }
+    }
+    let mut reader = CharsetTextReader::new(
+        Input {
+            position: 0,
+            failed: false,
+        },
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut output = String::from("seed:");
+    assert_eq!(
+        ErrorKind::WouldBlock,
+        reader.read_line_limited(&mut output, 4).unwrap_err().kind()
+    );
+    assert_eq!(
+        ErrorKind::InvalidData,
+        reader.read_line(&mut output).unwrap_err().kind()
+    );
+    assert_eq!("seed:", output);
+    assert!(reader.read_line(&mut output)?);
+    assert_eq!("seed:ok\n", output);
+    Ok(())
+}
+
+#[test]
 fn test_new_accepts_qubit_input_without_std_read() -> std::io::Result<()> {
     let input = InputOnlyReader::new("input中文");
     let mut reader = CharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());

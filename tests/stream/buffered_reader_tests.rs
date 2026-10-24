@@ -226,6 +226,101 @@ fn test_ignore_long_invalid_stream_uses_bounded_stack() {
 }
 
 #[derive(Debug)]
+struct RejectedLineInput {
+    text: &'static [u8],
+    position: usize,
+    failures: Vec<usize>,
+}
+
+impl Read for RejectedLineInput {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        if output.is_empty() {
+            return Ok(0);
+        }
+        if self.failures.first() == Some(&self.position) {
+            self.failures.remove(0);
+            return Err(std::io::Error::new(ErrorKind::WouldBlock, "temporary"));
+        }
+        if self.position == self.text.len() {
+            return Ok(0);
+        }
+        output[0] = self.text[self.position];
+        self.position += 1;
+        Ok(1)
+    }
+}
+
+#[test]
+fn test_rejected_line_retries_repeated_errors_and_reports_original_limit_once() -> std::io::Result<()> {
+    let input = RejectedLineInput {
+        text: b"abcdef\nok\n",
+        position: 0,
+        failures: vec![5, 6],
+    };
+    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedTextReader::with_capacity(input, decoder, 4);
+    let mut output = String::from("seed:");
+    assert_eq!(
+        ErrorKind::WouldBlock,
+        reader.read_line_limited(&mut output, 4).unwrap_err().kind()
+    );
+    assert_eq!(ErrorKind::WouldBlock, reader.read_line(&mut output).unwrap_err().kind());
+    let error = reader.read_line(&mut output).unwrap_err();
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("4-byte append limit"));
+    assert_eq!("seed:", output);
+    assert!(reader.read_line(&mut output)?);
+    assert_eq!("seed:ok\n", output);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_preserves_crlf_and_original_line_ending_policy() -> std::io::Result<()> {
+    let input = RejectedLineInput {
+        text: b"abcdef\r\nok\r\n",
+        position: 0,
+        failures: vec![7],
+    };
+    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedTextReader::with_capacity(input, decoder, 4);
+    let mut output = String::new();
+    assert_eq!(
+        ErrorKind::WouldBlock,
+        reader.read_line_limited(&mut output, 4).unwrap_err().kind()
+    );
+    reader = reader.with_line_endings(LineEndingSet::CR);
+    assert_eq!(
+        ErrorKind::InvalidData,
+        reader.read_line_limited(&mut output, 99).unwrap_err().kind()
+    );
+    assert!(reader.read_line_limited(&mut output, 99)?);
+    assert_eq!("ok\r", output);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_reports_once_when_discard_reaches_eof() -> std::io::Result<()> {
+    let input = RejectedLineInput {
+        text: b"abcdef",
+        position: 0,
+        failures: vec![5],
+    };
+    let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+    let mut reader = BufferedTextReader::with_capacity(input, decoder, 4);
+    let mut output = String::new();
+    assert_eq!(
+        ErrorKind::WouldBlock,
+        reader.read_line_limited(&mut output, 4).unwrap_err().kind()
+    );
+    assert_eq!(
+        ErrorKind::InvalidData,
+        reader.read_line_limited(&mut output, 4).unwrap_err().kind()
+    );
+    assert!(!reader.read_line_limited(&mut output, 4)?);
+    Ok(())
+}
+
+#[derive(Debug)]
 struct CrErrorLfInput {
     state: u8,
 }

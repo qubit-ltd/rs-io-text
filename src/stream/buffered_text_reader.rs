@@ -79,6 +79,9 @@ where
     /// Holds a character consumed ahead while resolving a line-ending sequence
     /// or limit.
     pending_char: Option<char>,
+    /// Stores the original limit and line-ending policy while an oversized line
+    /// is being discarded.
+    rejected_line: Option<(usize, LineEndingSet)>,
     /// Records whether decoder reset has completed.
     started: bool,
     /// Records whether decoder finalization has completed.
@@ -128,6 +131,7 @@ where
             char_limit: 0,
             line_endings: LineEndingSet::ALL,
             pending_char: None,
+            rejected_line: None,
             started: false,
             finished: false,
         }
@@ -283,12 +287,22 @@ where
     }
 
     /// Discards the remainder of the current line after a bounded read fails.
-    fn discard_line_after_limit(&mut self) -> io::Result<()> {
-        let line_endings = self.line_endings;
+    fn discard_line_after_limit(&mut self, line_endings: LineEndingSet) -> io::Result<()> {
         let mut pending = self.pending_char.take();
         let result = discard_line_with(line_endings, &mut pending, || self.read_char());
         self.pending_char = pending;
         result
+    }
+
+    /// Resumes discarding a rejected line and reports its original limit error
+    /// once.
+    fn finish_rejected_line(&mut self) -> io::Result<io::Error> {
+        let (limit, line_endings) = self
+            .rejected_line
+            .expect("a rejected line must exist before discard resumes");
+        self.discard_line_after_limit(line_endings)?;
+        self.rejected_line = None;
+        Ok(crate::io_error::text_append_limit_error(limit))
     }
 
     /// Decodes the retained EOF tail according to the decoder's policy.
@@ -434,14 +448,25 @@ where
     /// [`io::ErrorKind::InvalidData`] and restores `output` to its original
     /// length when the line exceeds `max_append_len`. The remainder of the
     /// oversized line is consumed through its configured line ending before
-    /// the error is returned.
+    /// the error is returned. If discarding hits an input error, retry either
+    /// line-reading method on this reader: it resumes with the original limit
+    /// and line-ending policy, then reports the original `InvalidData` once
+    /// before reading the next line. Character-reading methods and
+    /// [`Self::into_parts`] do not resume this line-level recovery.
     pub fn read_line_limited(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
+        if self.rejected_line.is_some() {
+            return Err(self.finish_rejected_line()?);
+        }
         let initial_len = output.len();
         let mut read = false;
         while let Some(ch) = self.read_char()? {
             if let Err(error) = append_limited_char(output, initial_len, max_append_len, ch) {
                 self.pending_char = Some(ch);
-                return self.discard_line_after_limit().and(Err(error));
+                self.rejected_line = Some((max_append_len, self.line_endings));
+                return match self.finish_rejected_line() {
+                    Err(discard_error) => Err(discard_error),
+                    Ok(_) => Err(error),
+                };
             }
             read = true;
             if ch == '\n' && self.line_endings.contains(crate::LineEnding::Lf) {
@@ -546,6 +571,9 @@ where
     D::DecodeError: Send + Sync + 'static,
 {
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
+        if self.rejected_line.is_some() {
+            return Err(self.finish_rejected_line()?);
+        }
         let line_endings = self.line_endings;
         let mut pending_char = self.pending_char.take();
         let result = read_line_with(line_endings, output, &mut pending_char, || self.read_char());

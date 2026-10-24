@@ -131,6 +131,49 @@ fn test_utf8_reader_read_line_limited_preserves_existing_output() -> std::io::Re
 }
 
 #[test]
+fn test_utf8_reader_rejected_line_resumes_after_input_error() -> std::io::Result<()> {
+    struct Input {
+        position: usize,
+        failed: bool,
+    }
+    impl Read for Input {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            if output.is_empty() {
+                return Ok(0);
+            }
+            if self.position == 5 && !self.failed {
+                self.failed = true;
+                return Err(io::Error::new(ErrorKind::WouldBlock, "temporary"));
+            }
+            let bytes = b"abcdef\nok\n";
+            if self.position == bytes.len() {
+                return Ok(0);
+            }
+            output[0] = bytes[self.position];
+            self.position += 1;
+            Ok(1)
+        }
+    }
+    let mut reader = Utf8TextReader::new(Input {
+        position: 0,
+        failed: false,
+    });
+    let mut output = String::from("seed:");
+    assert_eq!(
+        ErrorKind::WouldBlock,
+        reader.read_line_limited(&mut output, 4).unwrap_err().kind()
+    );
+    assert_eq!(
+        ErrorKind::InvalidData,
+        reader.read_line(&mut output).unwrap_err().kind()
+    );
+    assert_eq!("seed:", output);
+    assert!(reader.read_line(&mut output)?);
+    assert_eq!("seed:ok\n", output);
+    Ok(())
+}
+
+#[test]
 fn test_utf8_reader_limited_crlf_overflow_preserves_next_record() -> std::io::Result<()> {
     let mut reader =
         Utf8TextReader::with_capacity(Cursor::new(b"a\r\nok\r\n".to_vec()), 4).with_line_endings(LineEndingSet::CRLF);
