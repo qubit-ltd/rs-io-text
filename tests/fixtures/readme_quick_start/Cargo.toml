@@ -8,3 +8,5 @@ publish = false
 
 [dependencies]
 qubit-io-text = { path = "../../.." }
+qubit-io = "0.19"
+qubit-codec-text = { path = "../../../../rs-codec-text", version = "0.9" }

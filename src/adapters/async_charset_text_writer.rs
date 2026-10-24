@@ -245,7 +245,7 @@ where
     /// Returns the wrapped output and every encoded byte still pending.
     ///
     /// This method does not call [`Self::finish_async`] or
-    /// [`AsyncOutput::flush_async`] on the wrapped output. Call
+    /// [`qubit_io::AsyncOutput::flush_async`] on the wrapped output. Call
     /// [`Self::finish_async`] first for normal completion; after a successful
     /// finish, the returned byte vector is empty. Calling this method first
     /// explicitly abandons encoder lifecycle output that has not been emitted

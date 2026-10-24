@@ -4,7 +4,7 @@
 [API 文档](https://docs.rs/qubit-io-text)
 
 本指南面向需要处理 Unicode 文本和文本行、而不是已编码字节的 Rust 应用，适用于
-`qubit-io-text` 0.6。Charset 算法来自 `qubit-codec-text`，字节流和字符流抽象来自
+`qubit-io-text` 0.8。Charset 算法来自 `qubit-codec-text`，字节流和字符流抽象来自
 `qubit-io`。
 
 ## 概念模型
@@ -20,7 +20,8 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 | 字符流 | `InputTextReader`、`OutputTextWriter` | `CharInput`、`CharOutput` |
 | 严格 UTF-8 字节 | `Utf8TextReader`、`Utf8TextWriter` | `ByteInput`、`ByteOutput` |
 | 同步 charset 转换 | `CharsetTextReader`、`CharsetTextWriter` | `ByteInput`、`ByteOutput` |
-| 运行时无关的异步转换 | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` | `AsyncByteInput`、`AsyncByteOutput` |
+| 运行时无关的异步文本 | `AsyncTextReader`、`AsyncTextLineReader`、`AsyncTextWriter` | Unicode 文本 |
+| 运行时无关的异步转换 | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter`、`AsyncUtf8TextReader`、`AsyncUtf8TextWriter` | `AsyncByteInput`、`AsyncByteOutput` |
 
 `TextReader::read_to_string` 将内容追加到目标并返回追加的 Unicode scalar value 数量，
 而不是 UTF-8 字节数；`TextWriter::write_line` 会追加配置好的 `LineEnding`。
@@ -35,9 +36,9 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 
 ```toml
 [dependencies]
-qubit-io-text = "0.6"
-qubit-codec-text = "0.7"
-qubit-io = "0.17"
+qubit-io-text = "0.8"
+qubit-codec-text = "0.9"
+qubit-io = "0.19"
 ```
 
 本指南使用由 `qubit-codec-text` 和 `qubit-io` 提供的 `Utf8Codec` 与
@@ -102,7 +103,8 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 
 ## 异步流程
 
-异步 charset adapter 实现了异步文本 trait。构造过程不执行 I/O。
+运行时无关的 `AsyncTextReader`、`AsyncTextLineReader` 与 `AsyncTextWriter` 定义异步文本操作。
+Charset 与 UTF-8 adapter 实现相应 trait；构造 adapter 时不会执行 I/O。
 
 ```rust
 use qubit_io::AsyncByteOutput;

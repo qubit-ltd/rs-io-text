@@ -4,7 +4,7 @@
 [API reference](https://docs.rs/qubit-io-text)
 
 This guide is for Rust applications that should work with Unicode text and
-lines instead of encoded bytes. It covers `qubit-io-text` 0.6, whose charset
+lines instead of encoded bytes. It covers `qubit-io-text` 0.8, whose charset
 algorithms come from `qubit-codec-text` and whose byte and character streams
 come from `qubit-io`.
 
@@ -20,7 +20,8 @@ streams, UTF-8 byte streams, or configurable character sets.
 | Character streams | `InputTextReader`, `OutputTextWriter` | `CharInput`, `CharOutput` |
 | Strict UTF-8 bytes | `Utf8TextReader`, `Utf8TextWriter` | `ByteInput`, `ByteOutput` |
 | Synchronous charset conversion | `CharsetTextReader`, `CharsetTextWriter` | `ByteInput`, `ByteOutput` |
-| Runtime-neutral async conversion | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` | `AsyncByteInput`, `AsyncByteOutput` |
+| Runtime-neutral async text | `AsyncTextReader`, `AsyncTextLineReader`, `AsyncTextWriter` | Unicode text |
+| Runtime-neutral async conversion | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter`, `AsyncUtf8TextReader`, `AsyncUtf8TextWriter` | `AsyncByteInput`, `AsyncByteOutput` |
 
 `TextReader::read_to_string` appends to its destination and returns the number of
 Unicode scalar values appended, not UTF-8 bytes. `TextWriter::write_line` adds
@@ -37,9 +38,9 @@ reads the same bytes back as text.
 
 ```toml
 [dependencies]
-qubit-io-text = "0.6"
-qubit-codec-text = "0.7"
-qubit-io = "0.17"
+qubit-io-text = "0.8"
+qubit-codec-text = "0.9"
+qubit-io = "0.19"
 ```
 
 This guide uses `Utf8Codec` and `AsyncByteOutput`, which are owned by
@@ -107,8 +108,10 @@ wrappers over the same byte-stream boundary.
 
 ## Async Workflow
 
-Async APIs are limited to charset adapters; there is not an async counterpart
-for every synchronous text trait. Construction performs no I/O.
+The runtime-neutral `AsyncTextReader`, `AsyncTextLineReader`, and
+`AsyncTextWriter` traits define asynchronous text operations. Charset and UTF-8
+adapters implement the applicable traits, and constructing an adapter performs
+no I/O.
 
 ```rust
 use qubit_io::AsyncByteOutput;
