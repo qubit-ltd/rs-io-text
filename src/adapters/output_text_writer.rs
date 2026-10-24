@@ -19,6 +19,31 @@ use crate::TextWriter;
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 
 /// Text writer over a boxed `qubit_io::CharOutput`.
+///
+/// Unbuffered outputs are wrapped in [`BufferedOutput`] automatically, so a
+/// successful write may only mean that characters entered the buffer. Call and
+/// handle [`TextWriter::flush`] explicitly when delivery errors must be
+/// observable. Dropping this writer cannot report a final flush error, and
+/// [`OutputTextWriter::into_inner`] does not flush. A successful flush does not
+/// guarantee persistence, and it does not finish a charset encoder lifecycle.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_io_text::OutputTextWriter;
+/// use qubit_io_text::StringCharOutput;
+/// use qubit_io_text::TextWriter;
+///
+/// let mut text = String::new();
+/// {
+///     let output = StringCharOutput::new(&mut text);
+///     let mut writer = OutputTextWriter::new(output);
+///     writer.write_line("hello 中")?;
+///     writer.flush()?;
+/// }
+/// assert_eq!("hello 中\n", text);
+/// # Ok::<(), std::io::Error>(())
+/// ```
 pub struct OutputTextWriter<'a> {
     output: Box<dyn CharOutput + 'a>,
     line_ending: LineEnding,
