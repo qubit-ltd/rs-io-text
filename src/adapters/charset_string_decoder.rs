@@ -238,6 +238,12 @@ where
     /// underlying decoder requests more input, the tail is reported as
     /// [`CharsetDecodeErrorKind::IncompleteSequence`].
     ///
+    /// On success, decoded text is appended to `output`. If this method returns
+    /// `Err`, the destination string retains its original contents. This
+    /// guarantee applies to the destination only; it does not roll back
+    /// decoder state or cover panics. Streaming text-reader operations have
+    /// their own prefix-retention contracts.
+    ///
     /// # Parameters
     ///
     /// - `input`: Complete input slice visible to the decoder.

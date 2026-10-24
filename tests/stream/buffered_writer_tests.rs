@@ -611,6 +611,11 @@ fn test_buffered_writer_retries_finish_after_flush_failure() -> std::io::Result<
         .expect_err("first finish should report the scripted flush failure");
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 
+    let error = writer
+        .write_str("extra")
+        .expect_err("finalized writer must reject new text after a flush error");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+
     writer.finish()?;
     let (output, pending) = writer.into_parts();
     let pending = match pending {

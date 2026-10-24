@@ -120,6 +120,13 @@ where
 
     /// Finalizes encoded output and flushes pending bytes.
     ///
+    /// Once encoder finalization succeeds, later text writes are rejected, even
+    /// if this call returns an output delivery or flush error. Retry
+    /// `finish` on the same writer to complete delivery without finalizing
+    /// the encoder again. Do not replay the original text. An
+    /// encoder-finalization error itself does not imply transactional
+    /// rollback or a generally safe retry protocol.
+    ///
     /// # Errors
     ///
     /// Returns an encoding finalization or underlying output error.
