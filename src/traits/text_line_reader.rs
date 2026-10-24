@@ -38,7 +38,12 @@ pub trait TextLineReader: TextReader {
     ///
     /// # Errors
     /// Returns an implementation-specific error when the source cannot be read
-    /// or decoded.
+    /// or decoded. This operation is not transactional: output may retain a
+    /// prefix appended by this call, and the source may already have consumed
+    /// or read ahead. The default implementation retains appended text. The
+    /// error does not report the number of appended characters. Concrete
+    /// implementations may document stronger guarantees; an error does not
+    /// promise input reset.
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let mut read = false;
         while let Some(ch) = self.read_char()? {

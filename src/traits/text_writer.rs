@@ -10,7 +10,11 @@ use crate::LineEnding;
 /// Writes Unicode text to a text sink.
 ///
 /// `TextWriter` accepts Rust Unicode text and delegates byte encoding, storage,
-/// logging, or other sink-specific behavior to the concrete implementation.
+/// logging, or other sink-specific behavior to the concrete implementation. An
+/// error may occur after a prefix has been accepted, buffered, or delivered to
+/// the underlying sink. The error does not report the consumed prefix, so
+/// retrying the complete input can duplicate text. Successful acceptance does
+/// not by itself guarantee that buffered output has been flushed.
 ///
 /// # Examples
 ///
@@ -60,7 +64,11 @@ pub trait TextWriter {
     ///
     /// # Errors
     /// Returns an implementation-specific error when any character cannot be
-    /// accepted by the sink.
+    /// accepted by the sink. An error may occur after a prefix has been
+    /// accepted, buffered, or delivered to the underlying sink. The error
+    /// does not report the consumed prefix, so retrying the complete input
+    /// can duplicate text. Successful acceptance does not by itself
+    /// guarantee that buffered output has been flushed.
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         for ch in chars {
             self.write_char(*ch)?;
@@ -75,7 +83,11 @@ pub trait TextWriter {
     ///
     /// # Errors
     /// Returns an implementation-specific error when the text cannot be
-    /// accepted by the sink.
+    /// accepted by the sink. An error may occur after a prefix has been
+    /// accepted, buffered, or delivered to the underlying sink. The error
+    /// does not report the consumed prefix, so retrying the complete input
+    /// can duplicate text. Successful acceptance does not by itself
+    /// guarantee that buffered output has been flushed.
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error>;
 
     /// Writes a line followed by the configured line ending.
@@ -85,7 +97,12 @@ pub trait TextWriter {
     ///
     /// # Errors
     /// Returns an implementation-specific error when the line or line ending
-    /// cannot be accepted by the sink.
+    /// cannot be accepted by the sink. An error may occur after a prefix has
+    /// been accepted, buffered, or delivered to the underlying sink. The error
+    /// does not report the consumed prefix, so retrying the complete input can
+    /// duplicate text. If the line content succeeds but its terminator fails,
+    /// the content remains written. Successful acceptance does not by itself
+    /// guarantee that buffered output has been flushed.
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.write_str(line)?;

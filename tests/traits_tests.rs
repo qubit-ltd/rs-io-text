@@ -421,6 +421,29 @@ impl TextWriter for FailingTextWriter {
     }
 }
 
+#[derive(Default)]
+struct FailOnceOnSecondWrite {
+    calls: usize,
+    output: String,
+}
+
+impl TextWriter for FailOnceOnSecondWrite {
+    type Error = WriteError;
+
+    fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
+        self.calls += 1;
+        if self.calls == 2 {
+            return Err(WriteError);
+        }
+        self.output.push_str(text);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
 struct FailOnSecondWrite {
     calls: usize,
 }
@@ -627,4 +650,47 @@ fn test_default_write_methods_write_complete_text() {
     assert_eq!(Ok(()), writer.flush());
 
     assert_eq!("中A🙂line\n", writer.output);
+}
+
+#[test]
+fn test_default_reads_retain_appended_prefix_on_error() {
+    let mut reader = FailAfterCharReader {
+        first: '中',
+        emitted: false,
+        fail_after_first: true,
+    };
+    let mut chars = vec![':'];
+    assert_eq!(Err(ReadError), reader.read_chars(&mut chars, 2));
+    assert_eq!(vec![':', '中'], chars);
+
+    let mut reader = FailAfterCharReader {
+        first: '中',
+        emitted: false,
+        fail_after_first: true,
+    };
+    let mut text = String::from("seed:");
+    assert_eq!(Err(ReadError), reader.read_to_string(&mut text));
+    assert_eq!("seed:中", text);
+
+    let mut reader = FailAfterCharReader {
+        first: '中',
+        emitted: false,
+        fail_after_first: true,
+    };
+    let mut line = String::from("seed:");
+    assert_eq!(Err(ReadError), reader.read_line(&mut line));
+    assert_eq!("seed:中", line);
+}
+
+#[test]
+fn test_default_writes_can_commit_a_prefix_before_error() {
+    let mut writer = FailOnceOnSecondWrite::default();
+    assert_eq!(Err(WriteError), writer.write_line("abcd"));
+    assert_eq!("abcd", writer.output);
+    assert_eq!(Ok(()), writer.write_line("abcd"));
+    assert_eq!("abcdabcd\n", writer.output);
+
+    let mut writer = FailOnceOnSecondWrite::default();
+    assert_eq!(Err(WriteError), writer.write_chars(&['中', '🙂']));
+    assert_eq!("中", writer.output);
 }

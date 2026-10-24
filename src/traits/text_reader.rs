@@ -7,9 +7,13 @@
 // =============================================================================
 /// Reads Unicode scalar values and strings from a text source.
 ///
-/// `TextReader` operates on Rust [`char`] and [`str`] values. Implementations are
-/// responsible for decoding any external byte encoding before exposing text to
-/// callers.
+/// `TextReader` operates on Rust [`char`] and [`str`] values. Implementations
+/// are responsible for decoding any external byte encoding before exposing text
+/// to callers. These operations are not transactional. On error, output may
+/// retain a prefix appended by the call, and the source may already have
+/// consumed or read ahead. The default implementation retains appended text. An
+/// error does not report the number of appended characters. Concrete
+/// implementations may document stronger guarantees.
 ///
 /// # Examples
 ///
@@ -49,6 +53,11 @@ pub trait TextReader {
     ///
     /// # Errors
     /// Returns an implementation-specific error when reading a character fails.
+    /// This operation is not transactional: output may retain a prefix appended
+    /// by this call, and the source may already have consumed or read ahead.
+    /// The default implementation retains appended text. The error does not
+    /// report the number of appended characters. Concrete implementations
+    /// may document stronger guarantees.
     fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         while count < max {
@@ -72,7 +81,11 @@ pub trait TextReader {
     ///
     /// # Errors
     /// Returns an implementation-specific error when the source cannot be read
-    /// or decoded.
+    /// or decoded. This operation is not transactional: output may retain a
+    /// prefix appended by this call, and the source may already have consumed
+    /// or read ahead. The default implementation retains appended text. The
+    /// error does not report the number of appended characters. Concrete
+    /// implementations may document stronger guarantees.
     fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         while let Some(ch) = self.read_char()? {
