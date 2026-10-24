@@ -129,6 +129,11 @@ next call. The `*_fully_async` convenience loops are not cancellation-safe:
 after cancellation their source position cannot be recovered reliably. Use
 the single-step APIs for cancellation-sensitive protocols.
 
+After an asynchronous bounded line read rejects an oversized record, resume
+with a line-read method on the same reader to finish recovery before reading
+the next record. Use fallible `try_*` constructors for replacement policies
+from runtime configuration; see [Errors and Diagnostics](doc/user_guide.md#errors-and-diagnostics).
+
 The crate does not own charset algorithms or select an async runtime. For a
 scenario-led tutorial, see the [user guide](doc/user_guide.md) or
 [中文用户指南](doc/user_guide.zh_CN.md); for every public item, see the

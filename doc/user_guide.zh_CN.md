@@ -95,6 +95,22 @@ writer 会被保留，调用方可以检查或重试。仅需一次转换时，�
 `CharsetEncodePolicy`。两者均可独立报告、忽略或使用自定义替换字符，并在 adapter
 构造时选定。
 
+若策略来自运行时配置，应使用可失败构造器，例如
+`CharsetTextWriter::try_new`。`AsciiCodec` 无法编码
+`CharsetEncodePolicy::replace('中')`，因此该策略会在构造时被拒绝：
+
+```rust
+use qubit_codec_text::{AsciiCodec, CharsetEncodePolicy};
+use qubit_io_text::CharsetTextWriter;
+
+let result = CharsetTextWriter::try_new(
+    Vec::<u8>::new(),
+    AsciiCodec,
+    CharsetEncodePolicy::replace('中'),
+);
+assert!(result.is_err());
+```
+
 `LineEnding::Lf`、`LineEnding::CrLf` 和 `LineEnding::Cr` 决定 `write_line` 追加的
 内容。内置文本读取器默认识别 LF、CRLF 和 CR，并在返回字符串中保留完整终止符。
 需要自定义策略时，可在读取器上调用 `with_line_endings` 配置 `LineEndingSet`；写入器
@@ -152,6 +168,15 @@ where
 
   对 `read_line_limited` 和 `read_line_limited_async`，超长行会先消费到配置的行结束符，
   然后才返回错误，因此下一次读取从下一条逻辑记录开始。
+
+- 异步行读取若在追加上限超出前取消，目标字符串可能已有成功解码的前缀。应在同一
+  reader 上继续读取，不要重复追加这个前缀；上限按每次调用追加的字节计算，不是整条
+  逻辑行的累计上限。行一旦超限，目标字符串会回滚。如果取消或临时输入错误中断了
+  被拒绝记录的丢弃，应继续调用同一 reader 的行读取方法：它会按原限额和换行配置完成
+  丢弃，再报告一次原始 `InvalidData`。恢复期间若先遇到输入错误，会先返回该输入错误。
+  例如输入 `abcdef\nok\n`、限额为 `4` 时，`abcdef\n` 会被丢弃并报告
+  `InvalidData`，下一次读取才返回 `ok\n`。字符读取和 `into_parts` 不会自动恢复这项
+  行恢复。
 
 ## 排障与最佳实践
 

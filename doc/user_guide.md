@@ -98,6 +98,22 @@ construction and one-shot helpers when a persistent adapter is unnecessary.
 Choose `CharsetDecodePolicy` for malformed input and `CharsetEncodePolicy` for
 unencodable output. Each policy can report, ignore, or replace with its own
 configured replacement value, and is chosen during adapter construction.
+For configuration supplied at runtime, use a fallible constructor such as
+`CharsetTextWriter::try_new`; for example, `AsciiCodec` cannot encode
+`CharsetEncodePolicy::replace('中')`, so this policy is rejected during
+construction.
+
+```rust
+use qubit_codec_text::{AsciiCodec, CharsetEncodePolicy};
+use qubit_io_text::CharsetTextWriter;
+
+let result = CharsetTextWriter::try_new(
+    Vec::<u8>::new(),
+    AsciiCodec,
+    CharsetEncodePolicy::replace('中'),
+);
+assert!(result.is_err());
+```
 
 `LineEnding::Lf`, `LineEnding::CrLf`, and `LineEnding::Cr` control what
 `write_line` appends. Built-in text readers accept LF, CRLF, and CR by default
@@ -163,6 +179,19 @@ single-step APIs for cancellation-sensitive protocols.
   For `read_line_limited` and `read_line_limited_async`, an oversized line is
   consumed through its configured line ending before the error is returned, so
   the next line read starts at the next logical record.
+
+- An asynchronous line read cancelled before the append limit is exceeded can
+  leave a successfully decoded prefix in its destination. Resume that read on
+  the same reader without appending the prefix again; the limit counts bytes
+  appended by each call, not the whole logical line. Once a line exceeds its
+  limit, the destination is rolled back. If cancellation or a temporary input
+  error interrupts discarding the rejected record, continue with a line-read
+  method on the same reader: it finishes discarding with the original limit and
+  line-ending configuration, then reports the original `InvalidData` error
+  once. An input error is reported first if it occurs during recovery. For
+  input `abcdef\nok\n` with limit `4`, the rejected `abcdef\n` record is
+  discarded, `InvalidData` is reported, and the next line read returns `ok\n`.
+  This recovery does not apply to character reads or `into_parts`.
 
 ## Troubleshooting and Best Practices
 

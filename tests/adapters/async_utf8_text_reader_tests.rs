@@ -108,3 +108,15 @@ fn test_async_utf8_text_reader_forwards_all_async_read_methods() -> io::Result<(
     assert!(!complete(reader.read_line_async(&mut line))?);
     Ok(())
 }
+
+#[test]
+fn test_async_utf8_text_reader_resumes_rejected_line_before_next_record() -> io::Result<()> {
+    let mut reader = AsyncUtf8TextReader::new(ReadyInput::new("abcdef\nok\n"));
+    let mut output = String::from("seed:");
+    let error = complete(reader.read_line_limited_async(&mut output, 4)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:", output);
+    assert!(complete(reader.read_line_limited_async(&mut output, 4))?);
+    assert_eq!("seed:ok\n", output);
+    Ok(())
+}

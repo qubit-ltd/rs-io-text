@@ -76,6 +76,9 @@ where
     char_limit: usize,
     line_endings: LineEndingSet,
     pending_char: Option<char>,
+    /// Retains the original append limit and line-ending policy while an
+    /// oversized line is being discarded across suspension or input errors.
+    rejected_line: Option<(usize, LineEndingSet)>,
     started: bool,
     finished: bool,
 }
@@ -126,6 +129,7 @@ where
             char_limit: 0,
             line_endings: LineEndingSet::ALL,
             pending_char: None,
+            rejected_line: None,
             started: false,
             finished: false,
         }
@@ -308,6 +312,9 @@ where
     where
         I: Unpin,
     {
+        if self.has_buffered_chars() {
+            return Ok(true);
+        }
         if self.finished {
             return Ok(false);
         }
@@ -571,19 +578,30 @@ where
     ///
     /// # Errors
     ///
-    /// Returns input and decoding errors.
+    /// Returns input and decoding errors. If a previous limited read rejected
+    /// a line, this call first completes discarding that line and returns its
+    /// original [`io::ErrorKind::InvalidData`] error.
     ///
     /// # Cancellation safety
     ///
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded line prefix. Resume on the same reader
     /// and do not append that prefix a second time.
+    ///
+    /// If the line has already exceeded its limit, resume with a line-reading
+    /// method on the same reader. The reader completes discarding the rejected
+    /// record with the original limit and line-ending policy before reporting
+    /// `InvalidData`. Character reads and `into_parts` do not resume this line
+    /// recovery.
     pub async fn read_line_async(&mut self, output: &mut String) -> io::Result<bool> {
         self.read_line_async_impl(output, None).await
     }
 
     /// Reads one line with an optional UTF-8 append limit.
     async fn read_line_async_impl(&mut self, output: &mut String, max_append_len: Option<usize>) -> io::Result<bool> {
+        if self.rejected_line.is_some() {
+            return Err(self.finish_rejected_line_async().await?);
+        }
         let initial_len = output.len();
         let mut read = false;
         while let Some(ch) = self.read_char_async().await? {
@@ -594,8 +612,8 @@ where
                 {
                     output.truncate(initial_len);
                     self.pending_char = Some(ch);
-                    let error = crate::io_error::text_append_limit_error(max_append_len);
-                    return self.discard_line_after_limit_async().await.and(Err(error));
+                    self.rejected_line = Some((max_append_len, self.line_endings));
+                    return Err(self.finish_rejected_line_async().await?);
                 }
 
                 // Keep CR pending while the CRLF lookahead may suspend. If
@@ -628,7 +646,11 @@ where
 
             if let Err(error) = self.append_line_char(output, initial_len, max_append_len, ch) {
                 self.pending_char = Some(ch);
-                return self.discard_line_after_limit_async().await.and(Err(error));
+                let Some(limit) = max_append_len else {
+                    return Err(error);
+                };
+                self.rejected_line = Some((limit, self.line_endings));
+                return Err(self.finish_rejected_line_async().await?);
             }
             if ch == '\n' && self.line_endings.contains(LineEnding::Lf) {
                 return Ok(true);
@@ -658,16 +680,46 @@ where
     ///
     /// Returns input or decoding errors, or [`io::ErrorKind::InvalidData`]
     /// when the decoded line exceeds `max_append_len`. On overflow, `output`
-    /// is restored to its original length and the remainder of the oversized
-    /// line is consumed through its configured line ending.
+    /// is restored to its original length and the oversized line is discarded
+    /// through its configured line ending before `InvalidData` is returned.
+    /// If cancellation or an input error interrupts that discard, the next
+    /// line-read call on this reader resumes it and reports `InvalidData` only
+    /// after reaching the saved line boundary. An input error encountered
+    /// during recovery is returned first.
     ///
     /// # Cancellation safety
     ///
-    /// Cancelling this future retains reader state, but `output` can already
-    /// contain a successfully decoded prefix. Resume on the same reader and
-    /// do not append that prefix a second time.
+    /// Cancelling before overflow retains reader state, but `output` can
+    /// already contain a successfully decoded prefix. Resume on the same
+    /// reader and do not append that prefix a second time; the byte limit is
+    /// per call. After overflow, a cancelled discard or an input error leaves
+    /// the rejected record pending. A later line-read call on this reader
+    /// continues discarding it with the original limit and line-ending
+    /// policy, then reports `InvalidData` once. That recovery call does not
+    /// change its output. A later line-read call can then read the next record.
+    /// Character reads and `into_parts` do not resume rejected-line recovery.
     pub async fn read_line_limited_async(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
         self.read_line_async_impl(output, Some(max_append_len)).await
+    }
+
+    /// Finishes discarding a previously rejected line before reporting its
+    /// original append-limit error.
+    ///
+    /// The rejected line's original limit and line-ending policy remain in
+    /// `rejected_line` while this future is pending or returns an input error.
+    /// Cancelling this future therefore leaves the same line ready for another
+    /// line-read attempt. The caller must have recorded a rejected line first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an input or decoding error if discarding cannot continue yet.
+    async fn finish_rejected_line_async(&mut self) -> io::Result<io::Error> {
+        let (limit, line_endings) = self
+            .rejected_line
+            .expect("a rejected line must exist before discard resumes");
+        self.discard_line_after_limit_async(line_endings).await?;
+        self.rejected_line = None;
+        Ok(crate::io_error::text_append_limit_error(limit))
     }
 
     /// Reads one decoded character without consulting `pending_char`.
@@ -681,16 +733,16 @@ where
     }
 
     /// Discards the remainder of the current line after a bounded read fails.
-    async fn discard_line_after_limit_async(&mut self) -> io::Result<()> {
+    async fn discard_line_after_limit_async(&mut self, line_endings: LineEndingSet) -> io::Result<()> {
         loop {
             let Some(ch) = self.read_char_async().await? else {
                 return Ok(());
             };
-            if ch == '\n' && self.line_endings.contains(LineEnding::Lf) {
+            if ch == '\n' && line_endings.contains(LineEnding::Lf) {
                 return Ok(());
             }
             if ch == '\r' {
-                if self.line_endings.contains(LineEnding::CrLf) {
+                if line_endings.contains(LineEnding::CrLf) {
                     self.pending_char = Some('\r');
                     let next = self.read_char_from_buffer_async().await?;
                     self.pending_char = None;
@@ -698,7 +750,7 @@ where
                         Some('\n') => return Ok(()),
                         Some(next) => {
                             self.pending_char = Some(next);
-                            if self.line_endings.contains(LineEnding::Cr) {
+                            if line_endings.contains(LineEnding::Cr) {
                                 return Ok(());
                             }
                             continue;
@@ -706,7 +758,7 @@ where
                         None => return Ok(()),
                     }
                 }
-                if self.line_endings.contains(LineEnding::Cr) {
+                if line_endings.contains(LineEnding::Cr) {
                     return Ok(());
                 }
             }

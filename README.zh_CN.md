@@ -120,6 +120,10 @@ where
 输入后再继续。`*_fully_async` 是便利循环，取消后无法可靠恢复其源位置；取消敏感场景
 只使用单步 API，不要重试完整文本。
 
+异步限长行读取拒绝超长记录后，应在同一 reader 上继续调用行读取方法，完成恢复后再读
+下一条记录。运行时配置的替换策略应使用可失败的 `try_*` 构造器；详见
+[错误与诊断](doc/user_guide.zh_CN.md#错误与诊断)。
+
 本 crate 不拥有 charset 算法，也不选择异步运行时。需要实战场景教程时，请参阅
 [中文用户指南](doc/user_guide.zh_CN.md)或 [English user guide](doc/user_guide.md)；
 全部公开项目请参阅 [API 文档](https://docs.rs/qubit-io-text)。

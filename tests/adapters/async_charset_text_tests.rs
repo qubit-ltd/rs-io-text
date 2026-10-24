@@ -75,6 +75,8 @@ enum ScriptedCodecMode {
     Lifecycle,
     DecodeResetError,
     DecodeFinishError,
+    DecodeFinishTail,
+    DecodeFinishLines,
     EncodeResetError,
     EncodeValueError,
     EncodeFinishError,
@@ -165,6 +167,12 @@ impl Codec for ScriptedCodec {
         if self.mode == ScriptedCodecMode::DecodeResetError {
             return Err(Self::decode_error());
         }
+        if matches!(
+            self.mode,
+            ScriptedCodecMode::DecodeFinishTail | ScriptedCodecMode::DecodeFinishLines
+        ) {
+            return Ok(0);
+        }
         output[output_index] = '^';
         Ok(1)
     }
@@ -189,6 +197,14 @@ impl Codec for ScriptedCodec {
         if self.mode == ScriptedCodecMode::DecodeFinishError {
             return Err(Self::decode_error());
         }
+        if self.mode == ScriptedCodecMode::DecodeFinishTail {
+            output[output_index..output_index + 2].copy_from_slice(&['X', 'Y']);
+            return Ok(2);
+        }
+        if self.mode == ScriptedCodecMode::DecodeFinishLines {
+            output[output_index..output_index + 3].copy_from_slice(&['X', '\n', 'Y']);
+            return Ok(3);
+        }
         output[output_index] = '!';
         Ok(1)
     }
@@ -200,6 +216,7 @@ struct ChunkedAsyncInput {
     max_chunk: usize,
     pending: bool,
     error: Option<io::ErrorKind>,
+    error_at_position: Option<(usize, io::ErrorKind)>,
     progress: Option<Rc<Cell<usize>>>,
 }
 
@@ -211,6 +228,7 @@ impl ChunkedAsyncInput {
             max_chunk,
             pending,
             error: None,
+            error_at_position: None,
             progress: None,
         }
     }
@@ -222,6 +240,11 @@ impl ChunkedAsyncInput {
 
     fn with_progress(mut self, progress: Rc<Cell<usize>>) -> Self {
         self.progress = Some(progress);
+        self
+    }
+
+    fn with_error_at_position(mut self, position: usize, error: io::ErrorKind) -> Self {
+        self.error_at_position = Some((position, error));
         self
     }
 }
@@ -238,6 +261,13 @@ impl AsyncInput for ChunkedAsyncInput {
     ) -> Poll<io::Result<usize>> {
         if let Some(kind) = self.error.take() {
             return Poll::Ready(Err(io::Error::new(kind, "scripted input failure")));
+        }
+        if self
+            .error_at_position
+            .is_some_and(|(position, _)| self.position == position)
+        {
+            let (_, kind) = self.error_at_position.take().expect("checked error position");
+            return Poll::Ready(Err(io::Error::new(kind, "scripted positioned input failure")));
         }
         if self.pending {
             self.pending = false;
@@ -351,6 +381,22 @@ where
     panic!("test future did not complete");
 }
 
+fn poll_until_position<F: Future>(
+    mut future: Pin<&mut F>,
+    context: &mut Context<'_>,
+    progress: &Cell<usize>,
+    target: usize,
+) -> bool {
+    for _ in 0..128 {
+        match future.as_mut().poll(context) {
+            Poll::Pending if progress.get() == target => return true,
+            Poll::Pending => {}
+            Poll::Ready(_) => return false,
+        }
+    }
+    false
+}
+
 #[test]
 fn test_async_charset_reader_decodes_across_pending_and_byte_boundaries() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("中🙂\nnext".as_bytes().to_vec(), 1, true);
@@ -365,6 +411,63 @@ fn test_async_charset_reader_decodes_across_pending_and_byte_boundaries() -> io:
     assert!(complete(reader.read_line_async(&mut line))?);
     assert_eq!("next", line);
     assert!(!complete(reader.read_line_async(&mut line))?);
+    Ok(())
+}
+
+#[test]
+fn test_async_charset_reader_finish_tail_characters_survive_eof() -> io::Result<()> {
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        ScriptedCodec::new(ScriptedCodecMode::DecodeFinishTail),
+        CharsetDecodePolicy::report(),
+    );
+    assert_eq!(Some('X'), complete(reader.read_char_async())?);
+    assert_eq!(Some('Y'), complete(reader.read_char_async())?);
+    assert_eq!(None, complete(reader.read_char_async())?);
+    assert_eq!(None, complete(reader.read_char_async())?);
+
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        ScriptedCodec::new(ScriptedCodecMode::DecodeFinishTail),
+        CharsetDecodePolicy::report(),
+    );
+    let mut chars = Vec::new();
+    assert_eq!(1, complete(reader.read_chars_async(&mut chars, 1))?);
+    assert_eq!(vec!['X'], chars);
+    chars.clear();
+    assert_eq!(1, complete(reader.read_chars_async(&mut chars, 1))?);
+    assert_eq!(vec!['Y'], chars);
+    chars.clear();
+    assert_eq!(0, complete(reader.read_chars_async(&mut chars, 1))?);
+
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        ScriptedCodec::new(ScriptedCodecMode::DecodeFinishLines),
+        CharsetDecodePolicy::report(),
+    );
+    let mut line = String::new();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("X\n", line);
+    line.clear();
+    assert!(complete(reader.read_line_async(&mut line))?);
+    assert_eq!("Y", line);
+    line.clear();
+    assert!(!complete(reader.read_line_async(&mut line))?);
+    assert!(line.is_empty());
+
+    let input = ChunkedAsyncInput::new(Vec::new(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new(
+        input,
+        ScriptedCodec::new(ScriptedCodecMode::DecodeFinishTail),
+        CharsetDecodePolicy::report(),
+    );
+    assert_eq!(Some('X'), complete(reader.read_char_async())?);
+    let mut output = String::new();
+    complete(reader.read_to_string_async(&mut output))?;
+    assert_eq!("Y", output);
     Ok(())
 }
 
@@ -551,15 +654,175 @@ fn test_async_charset_reader_line_cancellation_preserves_cr_lookahead() -> io::R
     let mut line = String::new();
     let mut context = test_context();
     let mut future = Box::pin(reader.read_line_async(&mut line));
-    loop {
-        if future.as_mut().poll(&mut context).is_pending() && progress.get() == b"first\r".len() {
-            break;
-        }
-    }
+    assert!(poll_until_position(
+        future.as_mut(),
+        &mut context,
+        &progress,
+        b"first\r".len(),
+    ));
     drop(future);
     assert_eq!("first", line);
     assert!(complete(reader.read_line_async(&mut line))?);
     assert_eq!("first\r\n", line);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_survives_cancellation() -> io::Result<()> {
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"abcdef\nok\n".to_vec(), 1, false).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::from("seed:");
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+    let mut stopped = false;
+    for _ in 0..128 {
+        match future.as_mut().poll(&mut context) {
+            Poll::Pending if progress.get() == 5 => {
+                stopped = true;
+                break;
+            }
+            Poll::Pending => {}
+            Poll::Ready(result) => panic!("expected cancellation point, got {result:?}"),
+        }
+    }
+    assert!(stopped, "discard must suspend after consuming e");
+    drop(future);
+    assert_eq!("seed:", output);
+    let error = complete(reader.read_line_limited_async(&mut output, 4)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:", output);
+    assert!(complete(reader.read_line_limited_async(&mut output, 4))?);
+    assert_eq!("seed:ok\n", output);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_survives_repeated_cancellation() -> io::Result<()> {
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"abcdefgh\nok\n".to_vec(), 1, false).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::from("seed:");
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 5));
+    drop(future);
+    let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 6));
+    drop(future);
+
+    let error = complete(reader.read_line_limited_async(&mut output, 4)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:", output);
+    assert!(complete(reader.read_line_limited_async(&mut output, 4))?);
+    assert_eq!("seed:ok\n", output);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_preserves_crlf_boundary_and_config_snapshot() -> io::Result<()> {
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"abcde\r\nok\n".to_vec(), 1, false).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report())
+        .with_line_endings(LineEndingSet::CRLF);
+    let mut output = String::new();
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 6));
+    drop(future);
+    reader = reader.with_line_endings(LineEndingSet::CR);
+    let error = complete(reader.read_line_async(&mut output)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("4-byte append limit"));
+    assert_eq!("", output);
+    assert!(complete(reader.read_line_async(&mut output))?);
+    assert_eq!("ok\n", output);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_recovers_cr_and_lf_endings_at_eof() -> io::Result<()> {
+    for (line_ending, endings) in [(b'\r', LineEndingSet::CR), (b'\n', LineEndingSet::LF)] {
+        let mut bytes = b"abcde".to_vec();
+        bytes.extend([line_ending, b'o', b'k', line_ending]);
+        let progress = Rc::new(Cell::new(0));
+        let input = ChunkedAsyncInput::new(bytes, 1, false).with_progress(progress.clone());
+        let mut reader =
+            AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report()).with_line_endings(endings);
+        let mut output = String::new();
+        let mut context = test_context();
+        let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+        assert!(poll_until_position(future.as_mut(), &mut context, &progress, 5));
+        drop(future);
+        let error = complete(reader.read_line_limited_async(&mut output, 4)).unwrap_err();
+        assert_eq!(io::ErrorKind::InvalidData, error.kind());
+        assert!(complete(reader.read_line_limited_async(&mut output, 8))?);
+        assert_eq!(format!("ok{}", line_ending as char), output);
+    }
+
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"abcdef".to_vec(), 1, false).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::new();
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 5));
+    drop(future);
+    let error = complete(reader.read_line_limited_async(&mut output, 4)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert!(!complete(reader.read_line_limited_async(&mut output, 4))?);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_preserves_state_after_one_shot_io_error() -> io::Result<()> {
+    let input =
+        ChunkedAsyncInput::new(b"abcdef\nok\n".to_vec(), 1, false).with_error_at_position(5, io::ErrorKind::Other);
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::from("seed:");
+    let error = complete(reader.read_line_limited_async(&mut output, 4)).unwrap_err();
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    assert_eq!("seed:", output);
+    let error = complete(reader.read_line_limited_async(&mut output, 99)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:", output);
+    assert!(complete(reader.read_line_limited_async(&mut output, 99))?);
+    assert_eq!("seed:ok\n", output);
+    Ok(())
+}
+
+#[test]
+fn test_rejected_line_keeps_original_limit_when_resumed_unbounded() -> io::Result<()> {
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"abcdef\nok\n".to_vec(), 1, false).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::new();
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 5));
+    drop(future);
+    let error = complete(reader.read_line_async(&mut output)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("4-byte append limit"));
+    assert!(complete(reader.read_line_async(&mut output))?);
+    assert_eq!("ok\n", output);
+    Ok(())
+}
+
+#[test]
+fn test_line_prefix_cancellation_keeps_append_limit_per_call() -> io::Result<()> {
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"abcde".to_vec(), 1, false).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::new();
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_line_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 2));
+    drop(future);
+    assert_eq!("ab", output);
+
+    assert!(complete(reader.read_line_limited_async(&mut output, 4))?);
+    assert_eq!("abcde", output);
     Ok(())
 }
 

@@ -5,18 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow coverage-cfg
-
-#[cfg(coverage)]
-use std::cell::Cell;
 use std::error::Error as StdError;
 use std::io;
 
 use qubit_codec::CapacityError;
 use qubit_codec::TranscodeDecodeInput;
 use qubit_codec::TranscodeDecoder;
-#[cfg(coverage)]
-use qubit_codec::TranscodeProgress;
 use qubit_codec::TranscodeStatus;
 use qubit_io::ByteInput;
 use qubit_utils::UncheckedSlice;
@@ -172,20 +166,6 @@ where
         self.line_endings
     }
 
-    /// Forces one decoder status for coverage-only branch tests.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_force_next_status(mode: u8) {
-        COVERAGE_FORCE_STATUS.with(|state| state.set(mode));
-    }
-
-    /// Forces the next input refill to return an I/O error in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_force_next_fill_error() {
-        COVERAGE_FORCE_FILL_ERROR.with(|state| state.set(true));
-    }
-
     /// Consumes this reader and returns every component that may contain
     /// unread logical input.
     ///
@@ -311,24 +291,6 @@ where
         result
     }
 
-    /// Re-enters the completed decoder path for coverage-only tests.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_finish_again(&mut self) -> io::Result<bool> {
-        self.finished = std::hint::black_box(true);
-        self.finish_decoder()
-    }
-
-    /// Touches decoded-buffer helpers for coverage-only tests.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_touch_buffer_state(&mut self) {
-        std::hint::black_box(self.has_buffered_chars());
-        self.clear_chars();
-        self.finished = true;
-        let _ = std::hint::black_box(self.finish_decoder());
-    }
-
     /// Decodes the retained EOF tail according to the decoder's policy.
     ///
     /// # Returns
@@ -353,7 +315,7 @@ where
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        match coverage_status(progress.status(), false) {
+        match progress.status() {
             TranscodeStatus::NeedOutput { required, .. } => {
                 self.chars.resize(required.get(), '\0');
                 self.decode_eof()
@@ -376,6 +338,9 @@ where
     ///
     /// Returns I/O and decoding errors from the wrapped reader or decoder.
     fn fill_chars(&mut self) -> io::Result<bool> {
+        if self.has_buffered_chars() {
+            return Ok(true);
+        }
         if self.finished {
             return Ok(false);
         }
@@ -393,12 +358,6 @@ where
                 0,
                 capacity,
             )?;
-            #[cfg(coverage)]
-            let progress = if progress.is_none() && coverage_force_fill_progress() {
-                Some(TranscodeProgress::complete(0, 0))
-            } else {
-                progress
-            };
             let Some(progress) = progress else {
                 return self.decode_eof();
             };
@@ -408,7 +367,7 @@ where
             if self.has_buffered_chars() {
                 return Ok(true);
             }
-            match coverage_status(progress.status(), true) {
+            match progress.status() {
                 TranscodeStatus::NeedOutput { .. } => {
                     self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
                     continue;
@@ -416,12 +375,6 @@ where
                 TranscodeStatus::Complete => continue,
                 TranscodeStatus::NeedInput { required, .. } => {
                     let fill_result = self.input.fill_until(required.get());
-                    #[cfg(coverage)]
-                    let fill_result = if coverage_force_fill_error() {
-                        Err(io::Error::other("forced refill error"))
-                    } else {
-                        fill_result
-                    };
                     if fill_result? {
                         continue;
                     }
@@ -527,42 +480,6 @@ where
         }
         Ok(read)
     }
-}
-
-#[cfg(coverage)]
-thread_local! {
-    static COVERAGE_FORCE_STATUS: Cell<u8> = const { Cell::new(0) };
-    static COVERAGE_FORCE_FILL_ERROR: Cell<bool> = const { Cell::new(false) };
-}
-
-#[cfg(coverage)]
-fn coverage_status(status: TranscodeStatus, from_fill: bool) -> TranscodeStatus {
-    let mode = COVERAGE_FORCE_STATUS.with(|state| state.replace(0));
-    match (from_fill, mode) {
-        (false, 1) | (true, 3) => TranscodeStatus::NeedInput {
-            required: std::num::NonZeroUsize::MIN,
-        },
-        (false, 2) => TranscodeStatus::NeedOutput {
-            required: std::num::NonZeroUsize::MIN,
-        },
-        (true, 4) => TranscodeStatus::Complete,
-        _ => status,
-    }
-}
-
-#[cfg(coverage)]
-fn coverage_force_fill_progress() -> bool {
-    COVERAGE_FORCE_STATUS.with(|state| matches!(state.get(), 3 | 4))
-}
-
-#[cfg(coverage)]
-fn coverage_force_fill_error() -> bool {
-    COVERAGE_FORCE_FILL_ERROR.with(|state| state.replace(false))
-}
-
-#[cfg(not(coverage))]
-fn coverage_status(status: TranscodeStatus, _from_fill: bool) -> TranscodeStatus {
-    status
 }
 
 impl<R, D> TextReader for BufferedTextReader<R, D>
