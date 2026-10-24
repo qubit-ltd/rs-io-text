@@ -47,15 +47,11 @@ impl Input for CrThenErrorThenChar {
             }
             1 => {
                 self.state = 2;
-                Ok(0)
-            }
-            2 => {
-                self.state = 3;
                 Err(Error::other("transient read failure"))
             }
-            3 => {
+            2 => {
                 output[index] = 'X';
-                self.state = 4;
+                self.state = 3;
                 Ok(1)
             }
             _ => Ok(0),
@@ -68,6 +64,84 @@ struct ChunkedCharInput {
     chars: Vec<char>,
     position: usize,
     max_chunk: usize,
+}
+
+#[derive(Debug)]
+struct ShortThenErrorInput {
+    position: usize,
+    failed: bool,
+    first: char,
+}
+
+#[derive(Debug)]
+struct PendingThenErrorInput {
+    state: u8,
+}
+
+#[derive(Debug)]
+struct InterruptedThenShortInput {
+    interrupted: bool,
+    inner: ShortThenErrorInput,
+}
+
+impl Input for InterruptedThenShortInput {
+    type Item = char;
+
+    unsafe fn read_unchecked(&mut self, output: &mut [char], index: usize, count: usize) -> std::io::Result<usize> {
+        if !self.interrupted {
+            self.interrupted = true;
+            return Err(Error::from(ErrorKind::Interrupted));
+        }
+        unsafe { self.inner.read_unchecked(output, index, count) }
+    }
+}
+
+impl Input for ShortThenErrorInput {
+    type Item = char;
+
+    unsafe fn read_unchecked(&mut self, output: &mut [char], index: usize, count: usize) -> std::io::Result<usize> {
+        if count == 0 {
+            return Ok(0);
+        }
+        if self.position >= 2 && !self.failed {
+            self.failed = true;
+            return Err(Error::other("error after confirmed prefix"));
+        }
+        let chars = [self.first, '\n', 'z'];
+        if self.position == chars.len() {
+            return Ok(0);
+        }
+        output[index] = chars[self.position];
+        self.position += 1;
+        Ok(1)
+    }
+}
+
+impl Input for PendingThenErrorInput {
+    type Item = char;
+
+    unsafe fn read_unchecked(&mut self, output: &mut [char], index: usize, count: usize) -> std::io::Result<usize> {
+        if count == 0 {
+            return Ok(0);
+        }
+        match self.state {
+            0 => {
+                output[index..index + 3].copy_from_slice(&['a', '\n', 'x']);
+                self.state = 1;
+                Ok(3)
+            }
+            1 => {
+                self.state = 2;
+                Err(Error::other("error after pending character"))
+            }
+            2 => {
+                output[index] = 'z';
+                self.state = 3;
+                Ok(1)
+            }
+            _ => Ok(0),
+        }
+    }
 }
 
 impl ChunkedCharInput {
@@ -158,6 +232,106 @@ fn test_read_line_preserves_cr_when_crlf_lookahead_fails() -> std::io::Result<()
     line.clear();
     assert!(reader.read_line(&mut line)?);
     assert_eq!("X", line);
+    Ok(())
+}
+
+#[test]
+fn test_short_line_returns_before_next_source_error() -> std::io::Result<()> {
+    let input = ShortThenErrorInput {
+        position: 0,
+        failed: false,
+        first: 'a',
+    };
+    let mut reader = InputTextReader::new(input);
+    let mut output = String::new();
+    assert!(reader.read_line(&mut output)?);
+    assert_eq!("a\n", output);
+    assert_eq!(
+        ErrorKind::Other,
+        reader.read_line(&mut String::new()).unwrap_err().kind()
+    );
+    assert_eq!(Some('z'), reader.read_char()?);
+    Ok(())
+}
+
+#[test]
+fn test_bulk_read_retains_confirmed_prefix_on_error() -> std::io::Result<()> {
+    let input = ShortThenErrorInput {
+        position: 0,
+        failed: false,
+        first: 'a',
+    };
+    let mut reader = InputTextReader::new(input);
+    let mut output = String::from("seed:");
+    assert_eq!(ErrorKind::Other, reader.read_to_string(&mut output).unwrap_err().kind());
+    assert_eq!("seed:a\n", output);
+    assert_eq!(1, reader.read_to_string(&mut output)?);
+    assert_eq!("seed:a\nz", output);
+    Ok(())
+}
+
+#[test]
+fn test_read_chars_retains_confirmed_prefix_on_error() -> std::io::Result<()> {
+    let input = ShortThenErrorInput {
+        position: 0,
+        failed: false,
+        first: 'a',
+    };
+    let mut reader = InputTextReader::new(input);
+    let mut output = vec!['s'];
+    assert_eq!(ErrorKind::Other, reader.read_chars(&mut output, 8).unwrap_err().kind());
+    assert_eq!(vec!['s', 'a', '\n'], output);
+    assert_eq!(1, reader.read_chars(&mut output, 8)?);
+    assert_eq!(vec!['s', 'a', '\n', 'z'], output);
+    Ok(())
+}
+
+#[test]
+fn test_read_chars_counts_unicode_characters_on_short_reads() -> std::io::Result<()> {
+    let input = ShortThenErrorInput {
+        position: 0,
+        failed: false,
+        first: '中',
+    };
+    let mut reader = InputTextReader::new(input);
+    let mut output = Vec::new();
+    assert_eq!(2, reader.read_chars(&mut output, 2)?);
+    assert_eq!(vec!['中', '\n'], output);
+    assert_eq!(ErrorKind::Other, reader.read_chars(&mut output, 8).unwrap_err().kind());
+    assert_eq!(1, reader.read_chars(&mut output, 8)?);
+    assert_eq!(vec!['中', '\n', 'z'], output);
+    Ok(())
+}
+
+#[test]
+fn test_read_chars_preserves_pending_prefix_when_source_errors() -> std::io::Result<()> {
+    let mut reader = InputTextReader::new(PendingThenErrorInput { state: 0 });
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("a\n", line);
+
+    let mut chars = vec!['s'];
+    assert_eq!(ErrorKind::Other, reader.read_chars(&mut chars, 8).unwrap_err().kind());
+    assert_eq!(vec!['s', 'x'], chars);
+    assert_eq!(1, reader.read_chars(&mut chars, 8)?);
+    assert_eq!(vec!['s', 'x', 'z'], chars);
+    Ok(())
+}
+
+#[test]
+fn test_short_line_retries_interrupted_source_read() -> std::io::Result<()> {
+    let input = InterruptedThenShortInput {
+        interrupted: false,
+        inner: ShortThenErrorInput {
+            position: 0,
+            failed: false,
+            first: 'a',
+        },
+    };
+    let mut reader = InputTextReader::new(input);
+    let mut output = String::new();
+    assert!(reader.read_line(&mut output)?);
+    assert_eq!("a\n", output);
     Ok(())
 }
 

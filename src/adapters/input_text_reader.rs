@@ -168,6 +168,26 @@ impl<'a> InputTextReader<'a> {
         self.line_endings
     }
 
+    /// Reads one available character chunk, retrying interrupted source calls.
+    ///
+    /// # Parameters
+    /// - `output`: Destination storage receiving the confirmed source prefix.
+    ///
+    /// # Returns
+    /// Returns the number of characters transferred by one successful read.
+    ///
+    /// # Errors
+    /// Returns the first non-interrupted source error without discarding
+    /// earlier chunks.
+    fn read_chunk(&mut self, output: &mut [char]) -> io::Result<usize> {
+        loop {
+            match self.input.read(output) {
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                result => return result,
+            }
+        }
+    }
+
     /// Moves up to `max` queued characters into `output` and returns the count.
     fn drain_pending_chars(&mut self, output: &mut Vec<char>, max: usize) -> usize {
         let mut count = 0;
@@ -201,7 +221,7 @@ impl TextReader for InputTextReader<'_> {
             return Ok(Some(ch));
         }
         let mut ch = ['\0'];
-        if self.input.read_fully(&mut ch)? == 0 {
+        if self.read_chunk(&mut ch)? == 0 {
             Ok(None)
         } else {
             Ok(Some(ch[0]))
@@ -213,7 +233,7 @@ impl TextReader for InputTextReader<'_> {
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         while count < max {
             let requested = (max - count).min(chars.len());
-            let read = self.input.read_fully(&mut chars[..requested])?;
+            let read = self.read_chunk(&mut chars[..requested])?;
             if read == 0 {
                 break;
             }
@@ -227,7 +247,7 @@ impl TextReader for InputTextReader<'_> {
         let mut count = self.drain_pending_string(output);
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         loop {
-            let read = self.input.read_fully(&mut chars)?;
+            let read = self.read_chunk(&mut chars)?;
             if read == 0 {
                 return Ok(count);
             }
@@ -245,7 +265,7 @@ impl TextLineReader for InputTextReader<'_> {
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         loop {
             if pending.is_empty() {
-                let count = self.input.read_fully(&mut chars)?;
+                let count = self.read_chunk(&mut chars)?;
                 if count == 0 {
                     self.pending = pending;
                     return Ok(read);
@@ -263,7 +283,7 @@ impl TextLineReader for InputTextReader<'_> {
             if ch == '\r' {
                 if line_endings.contains(LineEnding::CrLf) {
                     if pending.is_empty() {
-                        let count = match self.input.read_fully(&mut chars) {
+                        let count = match self.read_chunk(&mut chars) {
                             Ok(count) => count,
                             Err(error) => {
                                 pending.push_front('\r');
