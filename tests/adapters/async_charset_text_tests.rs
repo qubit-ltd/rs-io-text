@@ -16,6 +16,7 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
+use qubit_codec::ByteOrder;
 use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
 use qubit_codec_text::AsciiCodec;
@@ -28,6 +29,8 @@ use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodeErrorKind;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::Utf16ByteCodec;
+use qubit_codec_text::Utf32ByteCodec;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 use qubit_io_text::AsyncCharsetTextReader;
@@ -1408,4 +1411,108 @@ fn test_async_charset_reader_limited_read_rolls_back_appended_text() {
 
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
     assert_eq!("prefix:", output);
+}
+
+/// Checks actual codecs against independent byte fixtures at async boundaries.
+fn assert_async_multibyte<C>(codec: C, expected: &[u8], unit_width: usize) -> io::Result<()>
+where
+    C: CharsetCodec<Unit = u8> + Copy,
+{
+    let text = "A中🙂\r\nZ";
+    for capacity in [1, 2, 3, 4, 8] {
+        let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
+            ChunkedAsyncOutput::new(1, true),
+            codec,
+            CharsetEncodePolicy::report(),
+            capacity,
+        );
+        let mut offset = 0;
+        while offset < text.len() {
+            let consumed = complete(writer.write_str_async(&text[offset..]))?;
+            assert!(consumed > 0 && consumed <= text.len() - offset);
+            assert!(text.is_char_boundary(offset + consumed));
+            offset += consumed;
+        }
+        complete(writer.finish_async())?;
+        let (output, pending) = writer.into_parts();
+        assert!(pending.is_empty());
+        assert_eq!(expected, output.bytes.as_slice());
+        let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
+            ChunkedAsyncInput::new(expected.to_vec(), 1, true),
+            codec,
+            CharsetDecodePolicy::report(),
+            capacity,
+        );
+        let mut decoded = String::new();
+        assert_eq!(
+            text.chars().count(),
+            complete(reader.read_to_string_async(&mut decoded))?
+        );
+        assert_eq!(text, decoded);
+    }
+
+    for cut in 1..expected.len() {
+        let progress = Rc::new(Cell::new(0));
+        let input = ChunkedAsyncInput::new(expected.to_vec(), 1, false).with_progress(progress.clone());
+        let mut reader =
+            AsyncCharsetTextReader::new_with_buffer_capacity(input, codec, CharsetDecodePolicy::report(), 1);
+        let mut decoded = String::new();
+        let mut cx = test_context();
+        let mut future = Box::pin(reader.read_to_string_async(&mut decoded));
+        assert!(poll_until_position(future.as_mut(), &mut cx, &progress, cut));
+        drop(future);
+        complete(reader.read_to_string_async(&mut decoded))?;
+        assert_eq!(text, decoded);
+    }
+
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(expected.to_vec(), 1, false).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(input, codec, CharsetDecodePolicy::report(), 1);
+    let mut line = String::from("seed:");
+    let mut cx = test_context();
+    let mut future = Box::pin(reader.read_line_limited_async(&mut line, 4));
+    let after_cr = expected.len() - 2 * unit_width;
+    assert!(poll_until_position(future.as_mut(), &mut cx, &progress, after_cr));
+    drop(future);
+    assert_eq!("seed:", line);
+    assert_eq!(
+        io::ErrorKind::InvalidData,
+        complete(reader.read_line_limited_async(&mut line, 99))
+            .unwrap_err()
+            .kind(),
+    );
+    assert_eq!("seed:", line);
+    line.clear();
+    assert!(complete(reader.read_line_limited_async(&mut line, 4))?);
+    assert_eq!("Z", line);
+    line.clear();
+    assert!(!complete(reader.read_line_limited_async(&mut line, 4))?);
+
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
+        ChunkedAsyncInput::new(expected[..expected.len() - 1].to_vec(), 1, true),
+        codec,
+        CharsetDecodePolicy::report(),
+        1,
+    );
+    let error = complete(reader.read_to_string_async(&mut String::new())).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    Ok(())
+}
+
+#[test]
+fn test_async_multibyte_utf16() -> io::Result<()> {
+    let text = "A中🙂\r\nZ";
+    let le: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let be: Vec<u8> = text.encode_utf16().flat_map(u16::to_be_bytes).collect();
+    assert_async_multibyte(Utf16ByteCodec::new(ByteOrder::LittleEndian), &le, 2)?;
+    assert_async_multibyte(Utf16ByteCodec::new(ByteOrder::BigEndian), &be, 2)
+}
+
+#[test]
+fn test_async_multibyte_utf32() -> io::Result<()> {
+    let text = "A中🙂\r\nZ";
+    let le: Vec<u8> = text.chars().flat_map(|ch| u32::from(ch).to_le_bytes()).collect();
+    let be: Vec<u8> = text.chars().flat_map(|ch| u32::from(ch).to_be_bytes()).collect();
+    assert_async_multibyte(Utf32ByteCodec::new(ByteOrder::LittleEndian), &le, 4)?;
+    assert_async_multibyte(Utf32ByteCodec::new(ByteOrder::BigEndian), &be, 4)
 }
