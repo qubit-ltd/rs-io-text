@@ -147,3 +147,54 @@ fn test_string_text_reader_is_infallible() {
 
     assert_infallible(&reader);
 }
+
+#[test]
+fn test_position_includes_pending_unicode_lookahead() -> Result<(), Infallible> {
+    for next in ['é', '🙂'] {
+        for mode in 0..3 {
+            let text = format!("a\r{next}z");
+            let mut reader = StringTextReader::new(text.clone());
+            let mut line = String::new();
+            assert!(reader.read_line(&mut line)?);
+            assert_eq!("a\r", line);
+            let physical = 2 + next.len_utf8();
+            assert_eq!(physical, reader.position());
+            match mode {
+                0 => assert_eq!(Some(next), reader.read_char()?),
+                1 => {
+                    let mut chars = vec![':'];
+                    assert_eq!(0, reader.read_chars(&mut chars, 0)?);
+                    assert_eq!(physical, reader.position());
+                    assert_eq!(1, reader.read_chars(&mut chars, 1)?);
+                    assert_eq!(vec![':', next], chars);
+                }
+                _ => {
+                    let mut tail = String::from("seed:");
+                    assert_eq!(2, reader.read_to_string(&mut tail)?);
+                    assert_eq!(format!("seed:{next}z"), tail);
+                    assert_eq!(text.len(), reader.position());
+                }
+            }
+            if mode < 2 {
+                assert_eq!(physical, reader.position());
+                assert_eq!(Some('z'), reader.read_char()?);
+            }
+            assert_eq!(None, reader.read_char()?);
+            assert_eq!(text.len(), reader.position());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_position_at_end_can_retain_pending_character() -> Result<(), Infallible> {
+    let mut reader = StringTextReader::new(String::from("a\ré"));
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line)?);
+    assert_eq!("a\r", line);
+    assert_eq!(4, reader.position());
+    assert_eq!(Some('é'), reader.read_char()?);
+    assert_eq!(4, reader.position());
+    assert_eq!(None, reader.read_char()?);
+    Ok(())
+}

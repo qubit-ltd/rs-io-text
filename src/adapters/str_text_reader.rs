@@ -17,8 +17,9 @@ use crate::line_ending_set::read_line_with;
 
 /// Text reader over a borrowed string slice.
 ///
-/// The reader borrows its input and tracks its position as a UTF-8 byte
-/// offset. It recognizes LF, CRLF, and CR line endings by default.
+/// The reader borrows its input and tracks its physical UTF-8 byte offset,
+/// including any character read ahead while recognizing line endings. It
+/// recognizes LF, CRLF, and CR line endings by default.
 ///
 /// # Type Parameters
 ///
@@ -41,7 +42,7 @@ use crate::line_ending_set::read_line_with;
 pub struct StrTextReader<'a> {
     /// Borrowed text being consumed by this reader.
     text: &'a str,
-    /// UTF-8 byte offset of the next unread character.
+    /// Physical UTF-8 byte offset, including line-ending lookahead.
     position: usize,
     /// Line terminators recognized by [`TextLineReader::read_line`].
     line_endings: LineEndingSet,
@@ -68,10 +69,16 @@ impl<'a> StrTextReader<'a> {
         }
     }
 
-    /// Returns the current byte position in the underlying string slice.
+    /// Returns the physical UTF-8 byte position in the underlying string.
+    ///
+    /// Line-ending detection may read one character ahead and retain it for the
+    /// next read. This position includes that character and can equal the input
+    /// length before all characters have been returned. Reading a retained
+    /// character does not advance this position. Do not use this value as a
+    /// checkpoint of text already delivered to the caller.
     ///
     /// # Returns
-    /// The current byte position.
+    /// The underlying byte offset, including any line-ending lookahead.
     #[must_use]
     #[inline]
     pub const fn position(&self) -> usize {
