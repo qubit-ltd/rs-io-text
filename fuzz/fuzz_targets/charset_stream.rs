@@ -9,6 +9,7 @@
 #![no_main]
 
 use std::io::Cursor;
+use std::io::ErrorKind;
 
 use libfuzzer_sys::fuzz_target;
 use qubit_codec::ByteOrder;
@@ -31,6 +32,7 @@ fuzz_target!(|data: &[u8]| {
     fuzz_replacing_utf8(data);
     fuzz_utf8_round_trip(data);
     fuzz_bounded_utf8_reads(data);
+    fuzz_mixed_utf8_reads(data);
     fuzz_multibyte_round_trips(data);
 });
 
@@ -111,20 +113,106 @@ fn fuzz_utf8_round_trip(data: &[u8]) {
     }
 }
 
-/// Exercises append limits and line-oriented state transitions on arbitrary
-/// input without allowing the target to allocate unbounded output.
+/// Checks bounded bulk reads against the standard UTF-8 replacement decoder.
 fn fuzz_bounded_utf8_reads(data: &[u8]) {
+    let expected = String::from_utf8_lossy(data);
+    let variable_limit = usize::from(data.first().copied().unwrap_or(0)) % 129;
     for capacity in 1..=4 {
-        let mut reader = CharsetTextReader::new_with_buffer_capacity(
-            Cursor::new(data.to_vec()),
-            Utf8Codec,
-            CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
-            capacity,
-        );
-        let mut output = String::new();
-        let result = reader.read_to_string_limited(&mut output, 128);
-        if result.is_ok() {
-            assert!(output.len() <= 128);
+        for limit in [0, variable_limit, 128, expected.len().saturating_sub(1), expected.len()] {
+            let mut reader = CharsetTextReader::new_with_buffer_capacity(
+                Cursor::new(data.to_vec()),
+                Utf8Codec,
+                CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
+                capacity,
+            );
+            let mut output = String::from("seed:中");
+            let result = reader.read_to_string_limited(&mut output, limit);
+            if expected.len() <= limit {
+                assert_eq!(expected.chars().count(), result.expect("bounded text must fit"));
+                assert_eq!(format!("seed:中{expected}"), output);
+            } else {
+                assert_eq!(
+                    ErrorKind::InvalidData,
+                    result.expect_err("text must exceed limit").kind()
+                );
+                assert_eq!("seed:中", output);
+            }
+        }
+    }
+}
+
+/// Returns the byte length of the next line under the default ALL policy.
+/// This model uses string boundaries rather than the production state machine.
+fn expected_line_len(text: &str) -> usize {
+    let Some(index) = text.find(['\r', '\n']) else {
+        return text.len();
+    };
+    let ending = if text[index..].starts_with("\r\n") { 2 } else { 1 };
+    index + ending
+}
+
+/// Checks mixed line and character operations against a logical text cursor.
+fn fuzz_mixed_utf8_reads(data: &[u8]) {
+    let expected = String::from_utf8_lossy(data);
+    let variable_limit = usize::from(data.first().copied().unwrap_or(0)) % 17;
+    for capacity in 1..=4 {
+        for limit in [0, variable_limit, 128, expected.len()] {
+            let mut reader = CharsetTextReader::new_with_buffer_capacity(
+                Cursor::new(data.to_vec()),
+                Utf8Codec,
+                CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
+                capacity,
+            );
+            let mut position = 0;
+            let operations = [2_u8, 0, 1].into_iter().chain(data.iter().copied());
+            for selector in operations.take(expected.chars().count().saturating_add(2)) {
+                let suffix = &expected[position..];
+                match selector % 3 {
+                    0 => {
+                        let next = suffix.chars().next();
+                        assert_eq!(next, reader.read_char().expect("replacement read succeeds"));
+                        if let Some(ch) = next {
+                            position += ch.len_utf8();
+                        }
+                    }
+                    1 => {
+                        let max = usize::from(selector) % 4 + 1;
+                        let wanted: Vec<char> = suffix.chars().take(max).collect();
+                        let mut output = vec!['中'];
+                        let count = reader
+                            .read_chars(&mut output, max)
+                            .expect("replacement bulk read succeeds");
+                        assert_eq!(wanted.len(), count);
+                        assert_eq!('中', output[0]);
+                        assert_eq!(wanted.as_slice(), &output[1..]);
+                        position += wanted.iter().map(|ch| ch.len_utf8()).sum::<usize>();
+                    }
+                    _ => {
+                        let length = expected_line_len(suffix);
+                        let line = &suffix[..length];
+                        let mut output = String::from("seed:中");
+                        let result = reader.read_line_limited(&mut output, limit);
+                        if length <= limit {
+                            assert_eq!(!line.is_empty(), result.expect("line must fit"));
+                            assert_eq!(format!("seed:中{line}"), output);
+                        } else {
+                            assert_eq!(
+                                ErrorKind::InvalidData,
+                                result.expect_err("line must exceed limit").kind()
+                            );
+                            assert_eq!("seed:中", output);
+                        }
+                        // Oversized records are discarded through their ending.
+                        position += length;
+                    }
+                }
+            }
+            let mut tail = String::new();
+            let count = reader
+                .read_to_string(&mut tail)
+                .expect("replacement tail read succeeds");
+            assert_eq!(&expected[position..], tail);
+            assert_eq!(expected[position..].chars().count(), count);
         }
     }
 }
