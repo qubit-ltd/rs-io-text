@@ -156,9 +156,14 @@ where
 
 ## 错误与诊断
 
-- `Strict` 会报告畸形编码输入、不完整的 EOF 编码尾部和当前 codec 无法编码的 Unicode
-  文本。
+- `CharsetDecodePolicy::report()` 报告畸形编码输入和 EOF 处不完整的编码尾部；
+  `CharsetEncodePolicy::report()` 报告当前 codec 无法编码的 Unicode 字符。只有在明确允许
+  忽略或替换时，才选择对应的 `ignore()` 或 `replace(...)` 策略。
 - `finish` 或 `finish_async` 失败后，writer 仍可用于重试。
+- 同步文本操作不保证事务性。读取失败时，目标可能保留已经追加的前缀，输入也可能
+  已被消费；写入失败时，前缀可能已被接受或交付，重试整个字符串或整行可能造成重复。
+  这些错误不报告已消费前缀。具体 API 可提供更强保证，尤其是下文的追加限额回滚规则
+  仍然适用。需要确认缓冲交付时，应显式处理 flush 错误。
 - 异步 reader 的 `input()` 可能已越过其缓冲文本。
 - 同步 buffered writer 的 `into_parts()` 不执行 I/O，并返回 `BufferedOutputRecovery`。`Pending` 表示尚未被报告写出的字节；`Indeterminate` 表示底层写入 panic，可能产生前缀副作用，不应自动重放。恢复不会调用 finish，编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。异步 writer 的 `into_parts()` 仍返回原始待写字节向量。
 - 当需要限制解码结果时，使用 `read_to_string_limited`、
@@ -184,9 +189,9 @@ where
 | 症状 | 首先检查 |
 | --- | --- |
 | 换行符不符合预期 | 调用 `write_line` 前在 writer 上配置 `LineEnding`。 |
-| 解码拒绝数据 | 确认 codec，并有意选择 `Strict` 或 `Replace`。 |
+| 解码拒绝数据 | 确认 codec，并有意选择 `CharsetDecodePolicy::report()` 或 `CharsetDecodePolicy::replace(...)` 及其替换字符。 |
 | 输出似乎不完整 | finish charset writer；仅 flush 不会结束 codec。 |
-| 异步重试导致文本重复 | 将之前的写入视为部分完成，采用 framing 或幂等机制。 |
+| 失败后重试导致文本重复 | 同步错误不报告已接受的前缀；异步单步方法会返回成功进度。异步写入从返回的剩余后缀继续；必要时使用 framing 或幂等机制。 |
 
 需要组合导入文本 trait 和 adapter 时，可使用 `qubit_io_text::prelude::*`。Codec 应从
 `qubit-codec-text` 导入，因为本 crate 不拥有 charset 算法。

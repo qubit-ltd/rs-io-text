@@ -165,9 +165,18 @@ single-step APIs for cancellation-sensitive protocols.
 
 ## Errors and Diagnostics
 
-- `Strict` reports malformed encoded input, incomplete encoded EOF tails, and
-  Unicode text that the selected codec cannot encode.
+- `CharsetDecodePolicy::report()` reports malformed encoded input and incomplete
+  encoded tails at EOF. `CharsetEncodePolicy::report()` reports Unicode
+  characters that the selected codec cannot encode. Use the corresponding
+  `ignore()` or `replace(...)` policy only when intentional.
 - A failing `finish` or `finish_async` leaves the writer available for retry.
+- Synchronous text operations are not transactional. A failing read may leave an
+  appended prefix in the destination and may already have consumed input. A
+  failing write may already have accepted or delivered a prefix; retrying the
+  complete string or line can duplicate text. These errors do not report the
+  consumed prefix. Concrete APIs can provide stronger guarantees; in
+  particular, the append-limit rollback rules below still apply. Handle flush
+  errors explicitly when buffered delivery matters.
 - `input()` can be positioned beyond text already buffered by an async reader.
 - Synchronous buffered-writer `into_parts()` performs no I/O and returns `BufferedOutputRecovery`. `Pending` bytes were not reported as written; `Indeterminate` means a panicking inner write may have produced a prefix and must not be replayed automatically. Recovery does not call finish, and encoder lifecycle output not yet emitted may not be present in the returned buffer. Async writer `into_parts()` still returns its raw pending byte vector.
 - Use `read_to_string_limited`, `read_to_string_limited_async`, or
@@ -199,9 +208,9 @@ single-step APIs for cancellation-sensitive protocols.
 | Symptom | Check first |
 | --- | --- |
 | A line ending is unexpected | Configure `LineEndingSet` on the reader, or `LineEnding` on the writer, before calling the line operation. |
-| Decoding rejects data | Confirm the codec and use `Strict` or `Replace` intentionally. |
+| Decoding rejects data | Confirm the codec and intentionally choose `CharsetDecodePolicy::report()` or `CharsetDecodePolicy::replace(...)`, including its replacement value. |
 | Output seems incomplete | Finish the charset writer; flushing alone does not finish the codec. |
-| An async retry duplicates text | Treat the previous write as partially applied and use framing or idempotency. |
+| Retrying after a failed write duplicates text | A synchronous error does not report its accepted prefix; an async single-step method reports successful progress. Resume async writes from the returned suffix, and use framing or idempotency where needed. |
 
 Import `qubit_io_text::prelude::*` when its grouped text traits and adapters
 are convenient. Import codecs from `qubit-codec-text`, because this crate does
