@@ -252,20 +252,57 @@ fn test_finish_error_leaves_charset_writer_available_for_retry() {
 }
 
 #[test]
-fn test_write_methods_defer_underlying_errors_until_flush() {
+fn test_write_methods_buffer_with_sufficient_capacity() {
+    let mut writer =
+        CharsetTextWriter::new_with_buffer_capacity(FailingWriter, AsciiCodec, CharsetEncodePolicy::report(), 64);
+    writer.write_char('x').unwrap();
+    writer.write_chars(&['x']).unwrap();
+    writer.write_line("x").unwrap();
+    assert_eq!(ErrorKind::Other, writer.flush().unwrap_err().kind());
+    let (_, recovery) = writer.into_parts();
+    match recovery {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => assert_eq!(b"xxx\n", buffer.readable()),
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("no inner write panicked"),
+    }
+}
+
+#[test]
+fn test_capacity_pressure_reports_output_error_and_keeps_pending_bytes() {
     let mut writer =
         CharsetTextWriter::new_with_buffer_capacity(FailingWriter, AsciiCodec, CharsetEncodePolicy::report(), 1);
+    writer.write_char('x').unwrap();
+    assert_eq!(ErrorKind::Other, writer.write_chars(&['y']).unwrap_err().kind());
+    let (_, recovery) = writer.into_parts();
+    match recovery {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => assert_eq!(b"x", buffer.readable()),
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("no inner write panicked"),
+    }
+}
 
-    writer
-        .write_char('x')
-        .expect("first single-byte write should stay buffered");
-    writer
-        .write_chars(&['x'])
-        .expect("write_chars should grow the persistent buffer");
-    writer
-        .write_line("x")
-        .expect("write_line should keep pending bytes buffered");
-    assert_eq!(ErrorKind::Other, writer.flush().expect_err("flush must fail").kind(),);
+#[test]
+fn test_capacity_pressure_from_single_char_keeps_pending_bytes() {
+    let mut writer =
+        CharsetTextWriter::new_with_buffer_capacity(FailingWriter, AsciiCodec, CharsetEncodePolicy::report(), 1);
+    writer.write_char('x').unwrap();
+    assert_eq!(ErrorKind::Other, writer.write_char('y').unwrap_err().kind());
+    let (_, recovery) = writer.into_parts();
+    match recovery {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => assert_eq!(b"x", buffer.readable()),
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("no inner write panicked"),
+    }
+}
+
+#[test]
+fn test_capacity_pressure_from_line_keeps_pending_bytes() {
+    let mut writer =
+        CharsetTextWriter::new_with_buffer_capacity(FailingWriter, AsciiCodec, CharsetEncodePolicy::report(), 1);
+    writer.write_char('x').unwrap();
+    assert_eq!(ErrorKind::Other, writer.write_line("y").unwrap_err().kind());
+    let (_, recovery) = writer.into_parts();
+    match recovery {
+        qubit_io::BufferedOutputRecovery::Pending(buffer) => assert_eq!(b"x", buffer.readable()),
+        qubit_io::BufferedOutputRecovery::Indeterminate(_) => panic!("no inner write panicked"),
+    }
 }
 
 #[test]
