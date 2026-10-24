@@ -108,7 +108,7 @@ where
 | Unicode 文本 trait | `TextReader`、`TextLineReader`、`TextWriter` |
 | 内存文本 | `StrTextReader`、`StringTextReader`、`StringTextWriter` |
 | 字符流 | `StringCharInput`、`StringCharOutput`、`InputTextReader`、`OutputTextWriter` |
-| UTF-8 字节流 | 基于 `Input`/`Output` 的 `Utf8TextReader`、`Utf8TextWriter` |
+| UTF-8 字节流 | 基于 `ByteInput`/`ByteOutput` 的 `Utf8TextReader`、`Utf8TextWriter` |
 | 同步 charset | `CharsetTextReader`、`CharsetTextWriter`、`CharsetReadExt`、`CharsetWriteExt` |
 | 异步文本 | `AsyncTextReader`、`AsyncTextLineReader`、`AsyncTextWriter` |
 | 异步 charset | `AsyncCharsetTextReader`、`AsyncCharsetTextWriter` |

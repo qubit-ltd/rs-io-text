@@ -115,7 +115,7 @@ encoder lifecycle output not yet emitted may be absent from the returned buffer.
 | Unicode text traits | `TextReader`, `TextLineReader`, `TextWriter` |
 | In-memory text | `StrTextReader`, `StringTextReader`, `StringTextWriter` |
 | Character streams | `StringCharInput`, `StringCharOutput`, `InputTextReader`, `OutputTextWriter` |
-| UTF-8 byte streams | `Utf8TextReader`, `Utf8TextWriter` over `Input`/`Output` |
+| UTF-8 byte streams | `Utf8TextReader`, `Utf8TextWriter` over `ByteInput`/`ByteOutput` |
 | Synchronous charsets | `CharsetTextReader`, `CharsetTextWriter`, `CharsetReadExt`, `CharsetWriteExt` |
 | Asynchronous text | `AsyncTextReader`, `AsyncTextLineReader`, `AsyncTextWriter` |
 | Asynchronous charsets | `AsyncCharsetTextReader`, `AsyncCharsetTextWriter` |
