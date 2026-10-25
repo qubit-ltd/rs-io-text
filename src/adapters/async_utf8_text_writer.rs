@@ -21,7 +21,10 @@ use crate::LineEnding;
 /// This convenience wrapper fixes the codec to UTF-8 while preserving the
 /// buffering, cancellation, finalization, and state-recovery behavior
 /// of [`AsyncCharsetTextWriter`]. Methods of the wrapped writer are available
-/// through [`Deref`] and [`DerefMut`].
+/// through [`Deref`] and [`DerefMut`]. After encoder finalization succeeds, all
+/// text-writing methods reject input, including empty strings and character
+/// slices; retry [`AsyncCharsetTextWriter::finish_async`] to resume delivery
+/// after an output failure.
 ///
 /// # Type Parameters
 ///
@@ -164,6 +167,14 @@ where
 
     async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
         self.0.write_str_async(text).await
+    }
+
+    async fn write_chars_fully_async(&mut self, chars: &[char]) -> Result<(), Self::Error> {
+        self.0.write_chars_fully_async(chars).await
+    }
+
+    async fn write_str_fully_async(&mut self, text: &str) -> Result<(), Self::Error> {
+        self.0.write_str_fully_async(text).await
     }
 
     async fn write_line_fully_async(&mut self, line: &str) -> Result<(), Self::Error> {

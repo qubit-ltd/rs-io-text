@@ -17,6 +17,7 @@ use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::AsyncOutput;
 use qubit_io_text::AsyncCharsetTextWriter;
+use qubit_io_text::AsyncTextWriter;
 use qubit_io_text::AsyncUtf8TextWriter;
 
 /// Records delivery and injects one error after accepting a byte prefix.
@@ -60,6 +61,77 @@ fn complete<F: Future>(future: F) -> F::Output {
         Poll::Ready(result) => result,
         Poll::Pending => panic!("scripted output must not suspend"),
     }
+}
+
+/// Checks that both complete-write trait methods reject a finalized writer.
+async fn assert_finished_empty_trait<W>(writer: &mut W)
+where
+    W: AsyncTextWriter<Error = io::Error>,
+{
+    let error = writer
+        .write_str_fully_async("")
+        .await
+        .expect_err("finished string write");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = writer
+        .write_chars_fully_async(&[])
+        .await
+        .expect_err("finished character write");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_async_charset_writer_open_empty_writes_do_not_perform_io() -> io::Result<()> {
+    let mut writer = AsyncCharsetTextWriter::new(RecoveryOutput::default(), Utf8Codec, CharsetEncodePolicy::report());
+
+    complete(writer.write_str_fully_async(""))?;
+    complete(writer.write_chars_fully_async(&[]))?;
+    assert_eq!(0, writer.output_mut().writes);
+    assert_eq!(0, writer.output_mut().flushes);
+    Ok(())
+}
+
+#[test]
+fn test_async_charset_writer_finished_empty_writes_are_rejected() -> io::Result<()> {
+    let mut writer = AsyncCharsetTextWriter::new(RecoveryOutput::default(), Utf8Codec, CharsetEncodePolicy::report());
+    complete(writer.finish_async())?;
+    let writes = writer.output_mut().writes;
+    let flushes = writer.output_mut().flushes;
+
+    let error = complete(writer.write_str_async("")).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_chars_async(&[])).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_str_fully_async("")).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_chars_fully_async(&[])).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    complete(assert_finished_empty_trait(&mut writer));
+
+    assert_eq!(writes, writer.output_mut().writes);
+    assert_eq!(flushes, writer.output_mut().flushes);
+    Ok(())
+}
+
+#[test]
+fn test_async_charset_writer_finished_empty_writes_after_delivery_failure() -> io::Result<()> {
+    let mut writer = AsyncCharsetTextWriter::new(RecoveryOutput::default(), Utf8Codec, CharsetEncodePolicy::report());
+    complete(writer.write_str_fully_async("abc"))?;
+    assert_eq!(
+        io::ErrorKind::BrokenPipe,
+        complete(writer.finish_async()).unwrap_err().kind()
+    );
+
+    let error = complete(writer.write_str_fully_async("")).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_chars_fully_async(&[])).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+
+    complete(assert_finished_empty_trait(&mut writer));
+
+    complete(writer.finish_async())?;
+    assert_eq!(b"abc", writer.output_mut().bytes.as_slice());
+    Ok(())
 }
 
 #[test]

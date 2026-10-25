@@ -38,6 +38,9 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// later output poll, and reports exactly how much source it committed. Use
 /// the explicit `*_fully_async` methods when a complete source range is
 /// required; those convenience loops can commit a prefix before cancellation.
+/// After encoder finalization succeeds, every text write rejects input,
+/// including empty strings and character slices. This remains true if output
+/// delivery later fails; call `finish_async` again to resume delivery.
 ///
 /// # Type Parameters
 ///
@@ -338,6 +341,14 @@ where
         AsyncCharsetTextWriter::write_str_async(self, text).await
     }
 
+    async fn write_chars_fully_async(&mut self, chars: &[char]) -> Result<(), Self::Error> {
+        AsyncCharsetTextWriter::write_chars_fully_async(self, chars).await
+    }
+
+    async fn write_str_fully_async(&mut self, text: &str) -> Result<(), Self::Error> {
+        AsyncCharsetTextWriter::write_str_fully_async(self, text).await
+    }
+
     async fn write_line_fully_async(&mut self, line: &str) -> Result<(), Self::Error> {
         AsyncCharsetTextWriter::write_line_fully_async(self, line).await
     }
@@ -417,7 +428,8 @@ where
     /// # Errors
     ///
     /// Returns encoding or output errors. A character prefix may already be
-    /// committed when an error is returned.
+    /// committed when an error is returned. Returns an invalid-input error if
+    /// the writer has been finished, including when `chars` is empty.
     ///
     /// # Cancellation safety
     ///
@@ -425,6 +437,7 @@ where
     /// its source position cannot be recovered reliably; use the single-step
     /// API for cancellation-sensitive code.
     pub async fn write_chars_fully_async(&mut self, chars: &[char]) -> io::Result<()> {
+        self.ensure_open()?;
         let mut index = 0;
         while index < chars.len() {
             index += self.write_chars_async(&chars[index..]).await?;
@@ -481,7 +494,8 @@ where
     /// # Errors
     ///
     /// Returns encoding or output errors. A UTF-8 prefix may already be
-    /// committed when an error is returned.
+    /// committed when an error is returned. Returns an invalid-input error if
+    /// the writer has been finished, including when `text` is empty.
     ///
     /// # Cancellation safety
     ///
@@ -489,6 +503,7 @@ where
     /// its source position cannot be recovered reliably; use the single-step
     /// API for cancellation-sensitive code.
     pub async fn write_str_fully_async(&mut self, text: &str) -> io::Result<()> {
+        self.ensure_open()?;
         let mut offset = 0;
         while offset < text.len() {
             offset += self.write_str_async(&text[offset..]).await?;

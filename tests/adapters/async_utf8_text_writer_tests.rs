@@ -42,6 +42,37 @@ impl AsyncOutput for ReadyOutput {
     }
 }
 
+/// Records delivery and fails once after accepting a byte prefix.
+#[derive(Default)]
+struct RecoveryOutput {
+    bytes: Vec<u8>,
+    writes: usize,
+}
+
+impl AsyncOutput for RecoveryOutput {
+    type Item = u8;
+
+    unsafe fn poll_write_unchecked(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        input: &[u8],
+        index: usize,
+        count: usize,
+    ) -> Poll<io::Result<usize>> {
+        self.writes += 1;
+        if self.writes == 2 {
+            return Poll::Ready(Err(io::Error::new(io::ErrorKind::BrokenPipe, "scripted failure")));
+        }
+        let take = if self.writes == 1 { count.min(1) } else { count };
+        self.bytes.extend_from_slice(&input[index..index + take]);
+        Poll::Ready(Ok(take))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
 /// Polls a ready test future to completion.
 fn complete<F>(future: F) -> F::Output
 where
@@ -53,6 +84,75 @@ where
         Poll::Ready(output) => output,
         Poll::Pending => panic!("ready output must not suspend"),
     }
+}
+
+/// Checks that both complete-write trait methods reject a finalized writer.
+async fn assert_finished_empty_trait<W>(writer: &mut W)
+where
+    W: AsyncTextWriter<Error = io::Error>,
+{
+    let error = writer
+        .write_str_fully_async("")
+        .await
+        .expect_err("finished string write");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = writer
+        .write_chars_fully_async(&[])
+        .await
+        .expect_err("finished character write");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_async_utf8_text_writer_open_empty_writes_do_not_write_bytes() -> io::Result<()> {
+    let mut writer = AsyncUtf8TextWriter::new(ReadyOutput::default());
+
+    complete(writer.write_str_fully_async(""))?;
+    complete(writer.write_chars_fully_async(&[]))?;
+
+    assert!(writer.output().0.is_empty());
+    Ok(())
+}
+
+#[test]
+fn test_async_utf8_text_writer_finished_empty_writes_are_rejected() -> io::Result<()> {
+    let mut writer = AsyncUtf8TextWriter::new(ReadyOutput::default());
+    complete(writer.finish_async())?;
+    let bytes = writer.output().0.clone();
+
+    let error = complete(writer.write_str_async("")).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_chars_async(&[])).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_str_fully_async("")).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_chars_fully_async(&[])).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    complete(assert_finished_empty_trait(&mut writer));
+
+    assert_eq!(bytes, writer.output().0);
+    Ok(())
+}
+
+#[test]
+fn test_async_utf8_text_writer_finished_empty_writes_after_delivery_failure() -> io::Result<()> {
+    let mut writer = AsyncUtf8TextWriter::new(RecoveryOutput::default());
+    complete(writer.write_str_fully_async("abc"))?;
+    assert_eq!(
+        io::ErrorKind::BrokenPipe,
+        complete(writer.finish_async()).unwrap_err().kind()
+    );
+
+    let error = complete(writer.write_str_fully_async("")).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = complete(writer.write_chars_fully_async(&[])).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+
+    complete(assert_finished_empty_trait(&mut writer));
+
+    complete(writer.finish_async())?;
+    assert_eq!(b"abc", writer.output().bytes.as_slice());
+    Ok(())
 }
 
 #[test]
