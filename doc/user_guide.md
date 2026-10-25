@@ -153,6 +153,12 @@ reportable prefix and return its count; resume with the suffix. The
 cancellation their source position cannot be recovered reliably. Use the
 single-step APIs for cancellation-sensitive protocols.
 
+On successful return, `write_str_async` counts consumed UTF-8 bytes, while
+`write_chars_async` counts consumed `char` elements. Advance only the
+corresponding source suffix. The [AsyncTextWriter example](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextWriter.html#examples)
+shows both loops and explicit finalization; the [AsyncTextLineReader example](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextLineReader.html#examples)
+shows line reads that preserve terminators.
+
 ## Errors and Diagnostics
 
 - `CharsetDecodePolicy::report()` reports malformed encoded input and incomplete

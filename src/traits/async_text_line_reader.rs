@@ -13,6 +13,33 @@ use super::AsyncTextReader;
 /// preserve a recognized terminator in the returned text.
 /// Cancellation behavior is implementation-specific; callers must consult the
 /// concrete reader before retrying a cancelled operation.
+///
+/// # Examples
+///
+/// For input `A\r\n中\n🙂`, this function returns `A\r\n`, `中\n`, and `🙂`.
+/// A successful read includes a final unterminated line; `false` means EOF
+/// with no new text. Clear the destination after saving each line because
+/// reads append to it, and recognized terminators remain in the returned text.
+///
+/// ```no_run
+/// use qubit_io::AsyncByteInput;
+/// use qubit_io_text::AsyncTextLineReader;
+/// use qubit_io_text::AsyncUtf8TextReader;
+///
+/// async fn read_lines<I>(input: I) -> std::io::Result<Vec<String>>
+/// where
+///     I: AsyncByteInput + Unpin,
+/// {
+///     let mut reader = AsyncUtf8TextReader::new(input);
+///     let mut lines = Vec::new();
+///     let mut line = String::new();
+///     while AsyncTextLineReader::read_line_async(&mut reader, &mut line).await? {
+///         lines.push(line.clone());
+///         line.clear();
+///     }
+///     Ok(lines)
+/// }
+/// ```
 #[allow(async_fn_in_trait)]
 pub trait AsyncTextLineReader: AsyncTextReader {
     /// Reads one line into `output`.

@@ -144,6 +144,8 @@ where
 剩余后缀继续写入。`*_fully_async` 便利循环取消后无法可靠恢复源位置；取消敏感场景只
 使用单步 API，不要整体重试字符串。
 
+成功返回时，`write_str_async` 的进度按 UTF-8 字节计数，`write_chars_async` 则按 `char` 元素计数；继续写入时，要据此截取各自的输入后缀。[AsyncTextWriter 示例](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextWriter.html#examples) 展示两种推进方式和显式结束编码器的步骤；[AsyncTextLineReader 示例](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextLineReader.html#examples) 展示保留终止符的逐行读取。
+
 ## 错误与诊断
 
 - `CharsetDecodePolicy::report()` 报告畸形编码输入和 EOF 处不完整的编码尾部；

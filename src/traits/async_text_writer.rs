@@ -15,6 +15,53 @@ use crate::LineEnding;
 /// bounds.
 /// Cancellation behavior is implementation-specific; callers must consult the
 /// concrete writer before retrying a cancelled operation.
+///
+/// # Examples
+///
+/// This function writes `A中🙂A中🙂done\n`. String progress counts UTF-8 bytes,
+/// while character-slice progress counts `char` elements.
+///
+/// ```no_run
+/// use qubit_io::AsyncByteOutput;
+/// use qubit_io_text::AsyncTextWriter;
+/// use qubit_io_text::AsyncUtf8TextWriter;
+///
+/// async fn write_text<O>(output: O) -> std::io::Result<()>
+/// where
+///     O: AsyncByteOutput + Unpin,
+/// {
+///     let mut writer = AsyncUtf8TextWriter::new(output);
+///     let text = "A中🙂";
+///     let mut byte_offset = 0;
+///     while byte_offset < text.len() {
+///         let bytes = AsyncTextWriter::write_str_async(
+///             &mut writer,
+///             &text[byte_offset..],
+///         )
+///         .await?;
+///         byte_offset += bytes;
+///     }
+///
+///     let chars = ['A', '中', '🙂'];
+///     let mut char_index = 0;
+///     while char_index < chars.len() {
+///         let count = AsyncTextWriter::write_chars_async(
+///             &mut writer,
+///             &chars[char_index..],
+///         )
+///         .await?;
+///         char_index += count;
+///     }
+///
+///     AsyncTextWriter::write_line_fully_async(&mut writer, "done").await?;
+///     AsyncTextWriter::finish_async(&mut writer).await?;
+///     Ok(())
+/// }
+/// ```
+///
+/// Advance a source suffix only after a successful return. Errors propagate
+/// to the caller; these loops do not make replaying the entire input safe
+/// after an error or cancellation.
 #[allow(async_fn_in_trait)]
 pub trait AsyncTextWriter {
     /// Error returned by this text sink.
