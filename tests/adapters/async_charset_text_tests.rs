@@ -85,14 +85,18 @@ enum ScriptedCodecMode {
     EncodeFinishError,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct ScriptedCodec {
     mode: ScriptedCodecMode,
+    encode_finish_calls: Option<Rc<Cell<usize>>>,
 }
 
 impl ScriptedCodec {
     const fn new(mode: ScriptedCodecMode) -> Self {
-        Self { mode }
+        Self {
+            mode,
+            encode_finish_calls: None,
+        }
     }
 
     const fn decode_error() -> CharsetDecodeError {
@@ -161,6 +165,9 @@ impl Codec for ScriptedCodec {
     unsafe fn encode_finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::EncodeError> {
         if self.mode == ScriptedCodecMode::EncodeFinishError {
             return Err(Self::encode_error());
+        }
+        if let Some(calls) = &self.encode_finish_calls {
+            calls.set(calls.get() + 1);
         }
         output[output_index] = b'!';
         Ok(1)
@@ -298,6 +305,7 @@ struct ChunkedAsyncOutput {
     write_zero: bool,
     write_error: Option<io::ErrorKind>,
     flush_error: Option<io::ErrorKind>,
+    flush_pending: bool,
 }
 
 impl ChunkedAsyncOutput {
@@ -310,6 +318,7 @@ impl ChunkedAsyncOutput {
             write_zero: false,
             write_error: None,
             flush_error: None,
+            flush_pending: false,
         }
     }
 
@@ -357,9 +366,14 @@ impl AsyncOutput for ChunkedAsyncOutput {
         Poll::Ready(Ok(written))
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         if let Some(kind) = self.flush_error.take() {
             return Poll::Ready(Err(io::Error::new(kind, "scripted flush failure")));
+        }
+        if self.flush_pending {
+            self.flush_pending = false;
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
         }
         self.flushed = true;
         Poll::Ready(Ok(()))
@@ -490,6 +504,70 @@ fn test_async_charset_writer_finish_error_retries_lifecycle_output_once() -> io:
     let (output, pending) = writer.into_parts();
     assert!(pending.is_empty());
     assert_eq!(b"^A!", output.bytes.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_async_charset_writer_finish_cancellation_retries_without_repeating_lifecycle() -> io::Result<()> {
+    for during_flush in [false, true] {
+        let calls = Rc::new(Cell::new(0));
+        let mut codec = ScriptedCodec::new(ScriptedCodecMode::Lifecycle);
+        codec.encode_finish_calls = Some(calls.clone());
+        let mut output = ChunkedAsyncOutput::new(if during_flush { 64 } else { 1 }, false);
+        output.flush_pending = during_flush;
+        let mut writer = AsyncCharsetTextWriter::new(output, codec, CharsetEncodePolicy::report());
+        complete(writer.write_char_async('A'))?;
+        assert_eq!(0, calls.get());
+        let mut context = test_context();
+        {
+            let mut future = Box::pin(writer.finish_async());
+            assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+        }
+        let expected: &[u8] = if during_flush { b"^A!" } else { b"^" };
+        assert_eq!(expected, writer.output().bytes.as_slice());
+        assert!(!writer.output().flushed);
+        assert_eq!(1, calls.get());
+        assert_eq!(
+            io::ErrorKind::InvalidInput,
+            complete(writer.write_char_async('B')).unwrap_err().kind()
+        );
+        complete(writer.finish_async())?;
+        assert_eq!(b"^A!", writer.output().bytes.as_slice());
+        assert!(writer.output().flushed);
+        assert_eq!(1, calls.get());
+        complete(writer.finish_async())?;
+        assert_eq!(1, calls.get());
+        let (output, pending) = writer.into_parts();
+        assert_eq!(b"^A!", output.bytes.as_slice());
+        assert!(pending.is_empty());
+    }
+    Ok(())
+}
+
+#[test]
+fn test_async_charset_writer_flush_cancellation_preserves_suffix_and_open_state() -> io::Result<()> {
+    for during_flush in [false, true] {
+        let mut output = ChunkedAsyncOutput::new(if during_flush { 64 } else { 1 }, false);
+        output.flush_pending = during_flush;
+        let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
+        complete(writer.write_str_fully_async("abc"))?;
+        let mut context = test_context();
+        {
+            let mut future = Box::pin(writer.flush_async());
+            assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+        }
+        let expected: &[u8] = if during_flush { b"abc" } else { b"a" };
+        assert_eq!(expected, writer.output().bytes.as_slice());
+        assert!(!writer.output().flushed);
+        complete(writer.flush_async())?;
+        assert_eq!(b"abc", writer.output().bytes.as_slice());
+        assert!(writer.output().flushed);
+        complete(writer.write_char_async('d'))?;
+        complete(writer.finish_async())?;
+        let (output, pending) = writer.into_parts();
+        assert_eq!(b"abcd", output.bytes.as_slice());
+        assert!(pending.is_empty());
+    }
     Ok(())
 }
 
