@@ -5,52 +5,58 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::future::Future;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
+use std::task::Waker;
 
-use qubit_codec_text::CharsetEncodePolicy;
-use qubit_codec_text::Utf8Codec;
-use qubit_io::AsyncByteOutput;
-use qubit_io_text::AsyncCharsetTextWriter;
+use qubit_io::AsyncOutput;
 use qubit_io_text::LineEnding;
 use qubit_io_text::TextWriter;
 use qubit_io_text::Utf8TextWriter;
 include!(concat!(env!("OUT_DIR"), "/user_guide_examples.rs"));
 
-struct CompileOnlyOutput;
+/// Records the output of the executable documentation examples.
+#[derive(Default)]
+pub(crate) struct RecordingAsyncOutput {
+    bytes: Vec<u8>,
+    flushed: bool,
+}
 
-impl qubit_io::AsyncOutput for CompileOnlyOutput {
+impl AsyncOutput for RecordingAsyncOutput {
     type Item = u8;
 
     unsafe fn poll_write_unchecked(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
-        _input: &[Self::Item],
-        _index: usize,
+        input: &[Self::Item],
+        index: usize,
         count: usize,
     ) -> Poll<std::io::Result<usize>> {
+        self.bytes.extend_from_slice(&input[index..index + count]);
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        self.flushed = true;
         Poll::Ready(Ok(()))
     }
 }
 
-async fn write_message<O>(output: O) -> std::io::Result<O>
-where
-    O: AsyncByteOutput + Unpin,
-{
-    let mut writer = AsyncCharsetTextWriter::new(output, Utf8Codec, CharsetEncodePolicy::report());
-    writer.write_line_fully_async("hello").await?;
-    writer.finish_async().await?;
-    let (output, pending) = writer.into_parts();
-    assert!(pending.is_empty());
-    Ok(output)
+/// Polls examples using only the immediately ready documentation output.
+fn complete<F: Future>(future: F) -> F::Output {
+    let mut context = Context::from_waker(Waker::noop());
+    let mut future = std::pin::pin!(future);
+    for _ in 0..512 {
+        if let Poll::Ready(value) = future.as_mut().poll(&mut context) {
+            return value;
+        }
+    }
+    panic!("documentation example did not complete");
 }
 
-/// Compiles the documented synchronous and asynchronous usage examples.
+/// Compiles and executes the documented synchronous and asynchronous examples.
 fn main() -> std::io::Result<()> {
     let mut bytes = Vec::new();
     let mut writer = Utf8TextWriter::new(&mut bytes).with_line_ending(LineEnding::CrLf);
@@ -72,6 +78,17 @@ fn main() -> std::io::Result<()> {
     user_guide_examples::readme_chinese::run()?;
     user_guide_examples::guide_english::run()?;
     user_guide_examples::guide_chinese::run()?;
-    drop(write_message(CompileOnlyOutput));
+    let output = complete(user_guide_examples::readme_async_english::run(RecordingAsyncOutput::default()))?;
+    assert_eq!(b"hello\n", output.bytes.as_slice());
+    assert!(output.flushed);
+    let output = complete(user_guide_examples::readme_async_chinese::run(RecordingAsyncOutput::default()))?;
+    assert_eq!(b"hello\n", output.bytes.as_slice());
+    assert!(output.flushed);
+    let output = complete(user_guide_examples::guide_async_english::run(RecordingAsyncOutput::default()))?;
+    assert_eq!(b"subject: status\r\n", output.bytes.as_slice());
+    assert!(output.flushed);
+    let output = complete(user_guide_examples::guide_async_chinese::run(RecordingAsyncOutput::default()))?;
+    assert_eq!(b"subject: status\r\n", output.bytes.as_slice());
+    assert!(output.flushed);
     Ok(())
 }

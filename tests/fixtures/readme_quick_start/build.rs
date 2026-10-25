@@ -9,7 +9,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-/// Extracts and generates the executable core examples from four documents.
+/// Extracts and generates the executable synchronous and asynchronous examples from four documents.
 fn main() {
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
     let project = manifest.join("../../..");
@@ -27,6 +27,22 @@ fn main() {
         generated.push_str(&format!("pub mod {name} {{\n"));
         generated.push_str(code);
         generated.push_str("\npub fn run() -> std::io::Result<()> { main() }\n}\n");
+    }
+    for (file, heading, name, function) in [
+        ("README.md", "## Runtime-Neutral Async", "readme_async_english", "write_message"),
+        ("README.zh_CN.md", "## 运行时无关的异步 API", "readme_async_chinese", "write_message"),
+        ("doc/user_guide.md", "## Async Workflow", "guide_async_english", "write_document"),
+        ("doc/user_guide.zh_CN.md", "## 异步流程", "guide_async_chinese", "write_document"),
+    ] {
+        let path = project.join(file);
+        println!("cargo:rerun-if-changed={}", path.display());
+        let markdown = fs::read_to_string(&path).expect("read documented async example");
+        let code = extract_core(&markdown, heading);
+        generated.push_str(&format!("pub mod {name} {{\n"));
+        generated.push_str(code);
+        generated.push_str(&format!(
+            "\npub(crate) async fn run(output: crate::RecordingAsyncOutput) -> std::io::Result<crate::RecordingAsyncOutput> {{ {function}(output).await }}\n}}\n"
+        ));
     }
     generated.push_str("}\n");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));
