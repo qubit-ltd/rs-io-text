@@ -849,15 +849,42 @@ impl TranscodeDecoder for OverflowResetDecoder {
 
 #[test]
 fn test_buffered_reader_decodes_utf8_across_single_byte_refills() -> std::io::Result<()> {
-    let bytes = "Aé🙂".as_bytes().to_vec();
+    let input = RejectedLineInput {
+        text: "Aé中🙂".as_bytes(),
+        position: 0,
+        failures: vec![],
+    };
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedTextReader::with_capacity(Cursor::new(bytes), decoder, 1);
-
+    let mut reader = BufferedTextReader::with_capacity(input, decoder, 1);
     let mut output = String::new();
-    let count = reader.read_to_string(&mut output)?;
+    assert_eq!(4, reader.read_to_string(&mut output)?);
+    assert_eq!("Aé中🙂", output);
+    assert_eq!(10, reader.inner().position);
+    assert_eq!(None, reader.read_char()?);
+    Ok(())
+}
 
-    assert_eq!(3, count);
-    assert_eq!("Aé🙂", output);
+#[test]
+fn test_buffered_reader_decodes_utf8_after_single_byte_refill_errors() -> std::io::Result<()> {
+    for (position, prefix) in [(2, "A"), (4, "Aé"), (5, "Aé"), (7, "Aé中"), (8, "Aé中"), (9, "Aé中")] {
+        let input = RejectedLineInput {
+            text: "Aé中🙂".as_bytes(),
+            position: 0,
+            failures: vec![position],
+        };
+        let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+        let mut reader = BufferedTextReader::with_capacity(input, decoder, 1);
+        let mut output = String::from("seed:");
+        let error = reader
+            .read_to_string(&mut output)
+            .expect_err("injected short-read error");
+        assert_eq!(ErrorKind::WouldBlock, error.kind(), "position {position}");
+        assert_eq!(position, reader.inner().position);
+        assert_eq!(format!("seed:{prefix}"), output, "position {position}");
+        assert_eq!(4 - prefix.chars().count(), reader.read_to_string(&mut output)?);
+        assert_eq!("seed:Aé中🙂", output, "position {position}");
+        assert_eq!(None, reader.read_char()?);
+    }
     Ok(())
 }
 
