@@ -73,7 +73,30 @@ impl<'a> StrCharInput<'a> {
 impl Input for StrCharInput<'_> {
     type Item = char;
 
-    /// Reads characters into an indexed output range.
+    /// Reads characters into an indexed output range without checking the
+    /// range.
+    ///
+    /// # Parameters
+    ///
+    /// - `output` - Destination character storage.
+    /// - `index` - Starting element index in `output`.
+    /// - `count` - Maximum number of Unicode scalar values to read.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of characters written, in `0..=count`. A value
+    /// below `count` indicates that the borrowed text was exhausted.
+    /// Destination indices count characters, not UTF-8 bytes.
+    ///
+    /// # Errors
+    ///
+    /// This in-memory implementation does not produce I/O errors.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `index + count` does not overflow and
+    /// that `index..index + count` is a valid range within `output`.
+    /// A zero-length request still requires a valid empty range.
     #[inline]
     unsafe fn read_unchecked(&mut self, output: &mut [char], index: usize, count: usize) -> Result<usize> {
         debug_assert!(
