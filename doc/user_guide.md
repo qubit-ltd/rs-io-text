@@ -174,6 +174,28 @@ single-step APIs for cancellation-sensitive protocols.
   consumed prefix. Concrete APIs can provide stronger guarantees; in
   particular, the append-limit rollback rules below still apply. Handle flush
   errors explicitly when buffered delivery matters.
+- One-shot `read_to_string_with_charset` and
+  `read_to_string_with_charset_limited` return no decoded prefix or temporary
+  decoder/unread state on failure, even though input may have advanced or been
+  read ahead. One-shot `write_str_with_charset` may already have delivered a
+  prefix; retrying the complete string can duplicate it. Its temporary writer
+  may also attempt to drain pending output on drop, without reporting drop-time
+  errors. Hold a `CharsetTextReader` or `CharsetTextWriter` explicitly when
+  recovery state is needed, and apply the `into_parts` rules below; neither
+  these methods nor the decoded-output limit provide input rollback.
+- Synchronous `BufferedTextWriter::write_str` and
+  `CharsetTextWriter::write_str` report zero-based main-stage input positions in
+  Rust `char` units, relative to that call, not UTF-8 bytes or the whole stream.
+  The charset adapter also adjusts the charset source's input-character index;
+  a generic encoder's opaque domain source keeps its own index semantics.
+  `write_line` encodes its body and line ending as separate calls, so each has
+  its own position origin.
+- For this crate's `AsyncCharsetTextWriter` and `AsyncUtf8TextWriter`, successful
+  encoder finalization also makes empty string and character-slice writes return
+  `InvalidInput`, through both inherent and `AsyncTextWriter` methods. Open
+  writers accept empty input without I/O. After finalization, omit empty writes
+  or check for empty input before calling; retry `finish_async` for pending
+  delivery instead of replaying text.
 - `input()` can be positioned beyond text already buffered by an async reader.
 - Synchronous buffered-writer `into_parts()` performs no I/O and returns `BufferedOutputRecovery`. `Pending` bytes were not reported as written; `Indeterminate` means a panicking inner write may have produced a prefix and must not be replayed automatically. Recovery does not call finish, and encoder lifecycle output not yet emitted may not be present in the returned buffer. Async writer `into_parts()` still returns its raw pending byte vector; `into_buffered_parts()` returns its existing buffer without copying, and `pending.readable()` is the pending window.
 - Use `read_to_string_limited`, `read_to_string_limited_async`, or

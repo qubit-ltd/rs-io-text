@@ -158,6 +158,22 @@ where
   已被消费；写入失败时，前缀可能已被接受或交付，重试整个字符串或整行可能造成重复。
   这些错误不报告已消费前缀。具体 API 可提供更强保证，尤其是下文的追加限额回滚规则
   仍然适用。需要确认缓冲交付时，应显式处理 flush 错误。
+- 一次性方法 `read_to_string_with_charset` 和
+  `read_to_string_with_charset_limited` 失败时不会返回已解码前缀，也不会交还临时
+  decoder 或未交付的缓冲状态；底层输入却可能已经前移或被预读。
+  `write_str_with_charset` 失败时可能已有前缀交付，整段重试会造成重复；临时 writer
+  析构时还可能尽力排空待写数据，而析构错误无法返回。需要保留恢复状态时，应显式持有
+  `CharsetTextReader` 或 `CharsetTextWriter`，并按下文的 `into_parts` 边界处理。
+  一次性调用和解码结果限额均不提供输入回滚。
+- 同步 `BufferedTextWriter::write_str` 和 `CharsetTextWriter::write_str` 的主编码阶段
+  输入位置从零开始，按本次调用的 Rust `char` 计数，不是 UTF-8 字节偏移或整个流的
+  累计位置。charset 适配器还会同步修正 charset source 的输入字符位置；泛型编码器的
+  不透明领域 source 保留其自身的位置语义。`write_line` 将正文和行结束符作为两次
+  独立调用编码，各自从零计数。
+- 本库的 `AsyncCharsetTextWriter` 和 `AsyncUtf8TextWriter` 在编码器结束成功后，
+  通过固有方法和 `AsyncTextWriter` 方法写入空字符串或空字符切片，也会返回
+  `InvalidInput`。开放状态的空写仍成功且不执行 I/O。调用方应省略结束后的空写，或在
+  调用前判断输入是否为空；尚有待交付数据时重试 `finish_async`，不要重放文本。
 - 异步 reader 的 `input()` 可能已越过其缓冲文本。
 - 同步 buffered writer 的 `into_parts()` 不执行 I/O，并返回 `BufferedOutputRecovery`。`Pending` 表示尚未被报告写出的字节；`Indeterminate` 表示底层写入 panic，可能产生前缀副作用，不应自动重放。恢复不会调用 finish，编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。异步 writer 的 `into_parts()` 仍返回原始待写字节向量；`into_buffered_parts()` 直接返回已有缓冲区而不复制，待写窗口是 `pending.readable()`。
 - 当需要限制解码结果时，使用 `read_to_string_limited`、
