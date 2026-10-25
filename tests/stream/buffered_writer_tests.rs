@@ -17,6 +17,7 @@ use qubit_codec::TranscodeFailure;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
 use qubit_codec_text::AsciiCodec;
+use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_codec_text::Utf8Codec;
@@ -60,6 +61,48 @@ impl Transcoder for PartialEncoder {
 }
 
 impl TranscodeEncoder for PartialEncoder {
+    type EncodeError = std::io::Error;
+}
+
+#[derive(Debug, Default)]
+struct MarkerUnencodableEncoder;
+
+impl Transcoder for MarkerUnencodableEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<std::io::Error, char>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[char],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        for (index, ch) in input.iter().enumerate().skip(input_index) {
+            if *ch == '#' {
+                return Err(TranscodeEncodeError::unencodable(index, *ch));
+            }
+            output[output_index + index - input_index] = *ch as u8;
+        }
+        let count = input.len() - input_index;
+        Ok(TranscodeProgress::complete(count, count))
+    }
+
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for MarkerUnencodableEncoder {
     type EncodeError = std::io::Error;
 }
 
@@ -534,6 +577,39 @@ fn test_buffered_writer_maps_encoder_errors_to_io_errors() {
         .expect_err("strict ASCII should reject non-ASCII characters");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_writer_reports_call_relative_main_error_index() {
+    let encoder = CharsetEncoder::with_policy(AsciiCodec, CharsetEncodePolicy::report())
+        .expect("strict ASCII encoder should be constructible");
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), encoder);
+    let text = format!("{}中", "A".repeat(300));
+
+    let error = writer.write_str(&text).expect_err("strict ASCII rejects 中");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    let encoded = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<TranscodeEncodeError<CharsetEncodeError, char>>())
+        .expect("preserve the transcode error type");
+    let domain = encoded.domain_error_ref().expect("main encoder error");
+    assert_eq!(Some(300), domain.input_index());
+    assert_eq!(Some('中' as u32), encoded.domain_ref().expect("domain source").value());
+}
+
+#[test]
+fn test_buffered_writer_offsets_unencodable_error_after_chunk() {
+    let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), MarkerUnencodableEncoder);
+
+    let error = writer
+        .write_str(&format!("{}#", "A".repeat(256)))
+        .expect_err("marker is not encodable");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    let encoded = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<TranscodeEncodeError<std::io::Error, char>>())
+        .expect("preserve the transcode error type");
+    assert_eq!(Some((256, Some(&'#'))), encoded.unencodable_ref());
 }
 
 #[test]

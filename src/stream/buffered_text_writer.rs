@@ -8,6 +8,8 @@
 use std::error::Error as StdError;
 use std::io;
 
+use qubit_codec::TranscodeDomainError;
+use qubit_codec::TranscodeEncodeError;
 use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeEncoder;
 use qubit_io::BufferedOutputRecovery;
@@ -30,6 +32,14 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// buffered by [`qubit_codec::TranscodeEncodeOutput`].
 /// Encoder reset is started lazily before the first non-empty write, or before
 /// finishing an empty stream.
+///
+/// Main-stage input-character errors from [`TextWriter::write_str`] identify
+/// zero-based Unicode scalar (`char`) positions relative to that call, and each
+/// call starts counting at zero. [`TextWriter::write_line`] encodes its body
+/// and line ending as separate string writes, so a body error is relative to
+/// the body and the ending has its own coordinate range. For custom encoders,
+/// this writer adjusts the outer transcode input index; an opaque domain error
+/// source retains its own index semantics.
 ///
 /// # Examples
 ///
@@ -245,20 +255,61 @@ where
         Ok(())
     }
 
-    /// Flushes one internal string-writing character chunk.
+    /// Flushes one internal string-writing character chunk and maps its input
+    /// positions to the enclosing string call.
     ///
     /// # Errors
     ///
     /// Returns encoding errors or I/O errors from the wrapped writer.
-    fn flush_char_chunk(&mut self) -> io::Result<()> {
+    fn flush_char_chunk<M>(&mut self, base: usize, map_domain: &mut M) -> io::Result<()>
+    where
+        M: FnMut(E::EncodeError, usize) -> E::EncodeError,
+    {
         if self.char_buffer.is_empty() {
             return Ok(());
         }
         let chars = std::mem::take(&mut self.char_buffer);
-        let result = self.encode_chars(chars.as_slice());
+        let result = (|| {
+            self.ensure_started()?;
+            let mut map_error = |error| encode_error_to_io(offset_main_encode_error(error, base, map_domain));
+            self.output
+                .transcode(&mut self.encoder, &mut map_error, &chars, 0, chars.len())?;
+            Ok(())
+        })();
         self.char_buffer = chars;
         self.char_buffer.clear();
         result
+    }
+
+    /// Encodes a string while mapping domain input positions to the string's
+    /// coordinate system.
+    ///
+    /// The mapper is called only for main-phase domain errors and receives the
+    /// chunk's base character index. Reset, finish, framework, capacity, and
+    /// output errors retain their original meaning.
+    ///
+    /// # Errors
+    ///
+    /// Returns the mapped encoding error or an I/O error from the wrapped
+    /// output.
+    pub(crate) fn write_str_with_domain_offset<M>(&mut self, text: &str, mut map_domain: M) -> io::Result<()>
+    where
+        M: FnMut(E::EncodeError, usize) -> E::EncodeError,
+    {
+        self.ensure_open()?;
+        if text.is_empty() {
+            return Ok(());
+        }
+        let mut base = 0_usize;
+        for ch in text.chars() {
+            self.char_buffer.push(ch);
+            if self.char_buffer.len() == DEFAULT_CHAR_CHUNK_CAPACITY {
+                let count = self.char_buffer.len();
+                self.flush_char_chunk(base, &mut map_domain)?;
+                base = base.saturating_add(count);
+            }
+        }
+        self.flush_char_chunk(base, &mut map_domain)
     }
 
     /// Finishes codec-owned output and flushes pending bytes.
@@ -316,17 +367,7 @@ where
     }
 
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
-        self.ensure_open()?;
-        if text.is_empty() {
-            return Ok(());
-        }
-        for ch in text.chars() {
-            self.char_buffer.push(ch);
-            if self.char_buffer.len() == DEFAULT_CHAR_CHUNK_CAPACITY {
-                self.flush_char_chunk()?;
-            }
-        }
-        self.flush_char_chunk()
+        self.write_str_with_domain_offset(text, |source, _| source)
     }
 
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
@@ -336,6 +377,34 @@ where
 
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.output.flush()
+    }
+}
+
+/// Adds a chunk's base character position to errors whose indices describe
+/// input characters, leaving lifecycle and framework failures unchanged.
+fn offset_main_encode_error<D, M>(
+    error: TranscodeEncodeError<D, char>,
+    base: usize,
+    map_domain: &mut M,
+) -> TranscodeEncodeError<D, char>
+where
+    M: FnMut(D, usize) -> D,
+{
+    match error {
+        TranscodeEncodeError::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable {
+            input_index: base.saturating_add(input_index),
+            value,
+        },
+        TranscodeEncodeError::Domain(TranscodeDomainError::Main {
+            source,
+            input_index,
+            input_consumed,
+        }) => TranscodeEncodeError::Domain(TranscodeDomainError::Main {
+            source: map_domain(source, base),
+            input_index: base.saturating_add(input_index),
+            input_consumed,
+        }),
+        other => other,
     }
 }
 

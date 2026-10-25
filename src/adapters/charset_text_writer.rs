@@ -9,6 +9,7 @@ use std::io;
 
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetEncodeError;
+use qubit_codec_text::CharsetEncodeErrorKind;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_codec_text::Utf8Codec;
@@ -24,6 +25,11 @@ use crate::TextWriter;
 /// This adapter is a charset-specific wrapper around [`BufferedTextWriter`]. It
 /// constructs the appropriate [`CharsetEncoder`] from the supplied codec and
 /// unmappable-character policy.
+///
+/// Main-stage input-character errors from each string write report zero-based
+/// Unicode scalar (`char`) positions relative to that call, starting at zero. A
+/// line body's error is relative to the body; the line ending is encoded as a
+/// separate write with its own position range.
 ///
 /// # Examples
 ///
@@ -269,16 +275,29 @@ where
 
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
-        self.writer.write_str(text)
+        self.writer
+            .write_str_with_domain_offset(text, offset_charset_input_error)
     }
 
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
-        self.writer.write_line(line)
+        let ending = self.line_ending();
+        self.write_str(line)?;
+        self.write_str(ending.as_str())
     }
 
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.writer.flush()
+    }
+}
+
+/// Offsets charset errors whose indices identify input characters.
+fn offset_charset_input_error(error: CharsetEncodeError, base: usize) -> CharsetEncodeError {
+    match error.kind() {
+        CharsetEncodeErrorKind::InvalidCodePoint { .. }
+        | CharsetEncodeErrorKind::UnmappableCharacter { .. }
+        | CharsetEncodeErrorKind::UnencodableValue => error.offset_by(base),
+        _ => error,
     }
 }

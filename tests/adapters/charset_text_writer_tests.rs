@@ -13,6 +13,7 @@ use std::num::NonZeroUsize;
 
 use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeEncodeError;
 use qubit_codec_text::AsciiCodec;
 use qubit_codec_text::Charset;
 use qubit_codec_text::CharsetCodec;
@@ -20,6 +21,7 @@ use qubit_codec_text::CharsetDecodeError;
 use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncodeResult;
+use qubit_codec_text::Latin1Codec;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::Output;
 use qubit_io_text::CharsetTextWriter;
@@ -175,6 +177,54 @@ fn test_write_rejects_unencodable_text_in_strict_mode() {
         .write_str("🙂")
         .expect_err("strict mode must reject unencodable text");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+fn assert_charset_main_index(error: &io::Error, expected: usize) {
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    let encoded = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<TranscodeEncodeError<CharsetEncodeError, char>>())
+        .expect("preserve the transcode error type");
+    let domain = encoded.domain_error_ref().expect("main charset failure");
+    assert_eq!(Some(expected), domain.input_index());
+    let source = encoded.domain_ref().expect("charset source");
+    assert_eq!(expected, source.index());
+    assert_eq!(Some('中' as u32), source.value());
+}
+
+#[test]
+fn test_write_str_reports_call_relative_character_index() {
+    for expected in [0, 255, 256, 300, 512] {
+        let mut writer = CharsetTextWriter::new(Vec::<u8>::new(), AsciiCodec, CharsetEncodePolicy::report());
+        let text = format!("{}中", "A".repeat(expected));
+        let error = writer.write_str(&text).expect_err("ASCII rejects 中");
+        assert_charset_main_index(&error, expected);
+    }
+}
+
+#[test]
+fn test_write_str_reports_character_index_after_multibyte_prefix() {
+    let mut writer = CharsetTextWriter::new(Vec::<u8>::new(), Latin1Codec, CharsetEncodePolicy::report());
+    let text = format!("{}中", "é".repeat(300));
+    let error = writer.write_str(&text).expect_err("Latin-1 rejects 中");
+    assert_charset_main_index(&error, 300);
+}
+
+#[test]
+fn test_write_str_reports_index_relative_to_each_call() {
+    let mut writer = CharsetTextWriter::new(Vec::<u8>::new(), AsciiCodec, CharsetEncodePolicy::report());
+    writer.write_str("prefix").expect("prefix is ASCII");
+    let text = format!("{}中", "A".repeat(300));
+    let error = writer.write_str(&text).expect_err("ASCII rejects 中");
+    assert_charset_main_index(&error, 300);
+}
+
+#[test]
+fn test_write_line_reports_body_character_index() {
+    let mut writer = CharsetTextWriter::new(Vec::<u8>::new(), AsciiCodec, CharsetEncodePolicy::report());
+    let line = format!("{}中", "A".repeat(300));
+    let error = writer.write_line(&line).expect_err("ASCII rejects 中");
+    assert_charset_main_index(&error, 300);
 }
 
 #[test]
