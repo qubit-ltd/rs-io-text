@@ -30,6 +30,26 @@ impl Read for FailingReader {
     }
 }
 
+struct OneShotReadFailure {
+    position: usize,
+}
+
+impl Read for OneShotReadFailure {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        if output.is_empty() {
+            return Ok(0);
+        }
+        if self.position == 2 {
+            return Err(io::Error::other("one-shot input failure"));
+        }
+        let bytes = b"ab";
+        let count = output.len().min(bytes.len() - self.position);
+        output[..count].copy_from_slice(&bytes[self.position..self.position + count]);
+        self.position += count;
+        Ok(count)
+    }
+}
+
 struct InputOnlyReader {
     bytes: Vec<u8>,
     position: usize,
@@ -232,6 +252,39 @@ fn test_new_propagates_reader_errors() {
     let error = reader.read_char().expect_err("reader errors must be propagated");
 
     assert_eq!(ErrorKind::Other, error.kind());
+}
+
+#[test]
+fn test_one_shot_read_error_leaves_input_consumed() {
+    let mut input = OneShotReadFailure { position: 0 };
+    let error = input
+        .read_to_string_with_charset(Utf8Codec, CharsetDecodePolicy::report())
+        .expect_err("second input read fails");
+
+    assert_eq!(ErrorKind::Other, error.kind());
+    assert_eq!(2, input.position);
+}
+
+#[test]
+fn test_one_shot_limited_read_error_leaves_input_consumed() {
+    let mut input = OneShotReadFailure { position: 0 };
+    let error = input
+        .read_to_string_with_charset_limited(Utf8Codec, CharsetDecodePolicy::report(), 8)
+        .expect_err("second input read fails");
+
+    assert_eq!(ErrorKind::Other, error.kind());
+    assert_eq!(2, input.position);
+}
+
+#[test]
+fn test_one_shot_limited_read_error_does_not_restore_input_position() {
+    let mut input = Cursor::new(b"abcdef".to_vec());
+    let error = input
+        .read_to_string_with_charset_limited(Utf8Codec, CharsetDecodePolicy::report(), 1)
+        .expect_err("decoded output exceeds the limit");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(input.position() > 1);
 }
 
 #[test]

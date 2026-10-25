@@ -41,6 +41,30 @@ impl Write for FailingWriter {
     }
 }
 
+#[derive(Default)]
+struct OneShotWriteFailure {
+    bytes: Vec<u8>,
+    calls: usize,
+}
+
+impl Write for OneShotWriteFailure {
+    fn write(&mut self, input: &[u8]) -> io::Result<usize> {
+        if input.is_empty() {
+            return Ok(0);
+        }
+        self.calls += 1;
+        if self.calls > 1 {
+            return Err(io::Error::new(ErrorKind::BrokenPipe, "one-shot output failure"));
+        }
+        self.bytes.push(input[0]);
+        Ok(1)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 struct OutputOnlyWriter {
     bytes: Vec<u8>,
@@ -177,6 +201,18 @@ fn test_write_rejects_unencodable_text_in_strict_mode() {
         .write_str("🙂")
         .expect_err("strict mode must reject unencodable text");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_one_shot_write_error_preserves_delivered_prefix() {
+    let mut output = OneShotWriteFailure::default();
+    let error = output
+        .write_str_with_charset("abc", Utf8Codec, CharsetEncodePolicy::report())
+        .expect_err("output fails after a prefix");
+
+    assert_eq!(ErrorKind::BrokenPipe, error.kind());
+    assert_eq!(b"a", output.bytes.as_slice());
+    assert!(output.calls >= 2);
 }
 
 fn assert_charset_main_index(error: &io::Error, expected: usize) {

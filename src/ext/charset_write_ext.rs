@@ -158,7 +158,17 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     /// # Errors
     ///
     /// Returns I/O errors from the wrapped writer or invalid-input errors from
-    /// charset encoding.
+    /// charset encoding. The writer may already have accepted or delivered a
+    /// prefix, and the error does not report complete input progress; retrying
+    /// the whole string may duplicate output. When the temporary writer is
+    /// dropped, it may make a best-effort attempt to drain buffered output and
+    /// cannot return any drain error. Therefore, this error does not guarantee
+    /// that no more output was produced. The normal path reports finalization
+    /// errors through `finish`. Keep a [`CharsetTextWriter`] and handle its
+    /// `into_parts` result according to the specific error when state must be
+    /// retained. `into_parts` is not a general rollback mechanism: it may not
+    /// include a codec's un-emitted tail, and an indeterminate error does not
+    /// make replay safe.
     fn write_str_with_charset<C>(&mut self, text: &str, codec: C, policy: CharsetEncodePolicy) -> io::Result<()>
     where
         C: CharsetCodec<Unit = u8>,

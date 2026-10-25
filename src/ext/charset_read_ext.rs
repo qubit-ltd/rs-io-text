@@ -91,7 +91,11 @@ pub trait CharsetReadExt: ByteInput + Sized {
     /// # Errors
     ///
     /// Returns I/O errors from the wrapped reader or invalid-data errors from
-    /// charset decoding.
+    /// charset decoding. An error does not return a decoded prefix, and the
+    /// wrapped input may already have been consumed or read ahead. The
+    /// temporary decoder and unread buffer are discarded, so the input cannot
+    /// be assumed to remain at its original position. Keep a
+    /// [`CharsetTextReader`] when its state must be retained across errors.
     fn read_to_string_with_charset<C>(&mut self, codec: C, policy: CharsetDecodePolicy) -> io::Result<String>
     where
         C: CharsetCodec<Unit = u8>,
@@ -119,7 +123,10 @@ pub trait CharsetReadExt: ByteInput + Sized {
     /// Returns I/O or charset-decoding errors. Returns
     /// [`io::ErrorKind::InvalidData`] when the decoded text exceeds
     /// `max_append_len`. The wrapped input can still be consumed or read ahead
-    /// before that error is returned.
+    /// before that error is returned. The limit applies to the UTF-8 byte
+    /// length of decoded output, not to raw input bytes, and an error does not
+    /// roll back input or return the temporary reader's decoder and unread
+    /// state. Keep a [`CharsetTextReader`] when that state must be retained.
     fn read_to_string_with_charset_limited<C>(
         &mut self,
         codec: C,
