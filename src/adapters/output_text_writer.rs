@@ -121,14 +121,16 @@ impl<'a> OutputTextWriter<'a> {
         self.output.as_ref()
     }
 
-    /// Returns a mutable reference to the wrapped output.
+    /// Returns a mutable reference to the currently wrapped character output.
     ///
-    /// The wrapped output may contain characters buffered by this writer.
-    /// Direct writes can be ordered before that pending text. Call
-    /// [`TextWriter::flush`] first when ordering matters.
+    /// For an originally unbuffered output, this reference points to the
+    /// automatically added [`BufferedOutput`]. Writes through this reference
+    /// follow the same output's buffering order; they do not bypass its pending
+    /// characters. Call [`TextWriter::flush`] when pending characters must be
+    /// delivered or delivery errors must be observed.
     ///
     /// # Returns
-    /// The wrapped output trait object.
+    /// The current wrapped output trait object, including any automatic buffer.
     #[must_use]
     #[inline(always)]
     pub fn get_mut(&mut self) -> &mut (dyn CharOutput + 'a) {
