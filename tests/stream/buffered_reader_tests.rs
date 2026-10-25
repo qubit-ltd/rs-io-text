@@ -571,6 +571,20 @@ impl Transcoder for NeedInputDecoder {
         Ok(TranscodeProgress::complete(5, 1))
     }
 
+    fn transcode_eof(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        TranscodeFailure::ensure_transcode_indices(input.len(), index, output.len(), output_index)?;
+        if input.len() == index {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        self.transcode(input, index, output, output_index)
+    }
+
     fn finish(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> {
         TranscodeFailure::ensure_output_index(output.len(), index)?;
         Ok(0)
