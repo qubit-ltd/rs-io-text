@@ -7,6 +7,7 @@
 // =============================================================================
 
 use std::future::Future;
+use std::future::poll_fn;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
@@ -116,6 +117,121 @@ impl AsyncTextWriter for PartialAsyncWriter {
 
     async fn finish_async(&mut self) -> Result<(), Self::Error> {
         Ok(())
+    }
+}
+
+/// Accepts one scalar per step and suspends once during the second step.
+struct SuspendingAsyncWriter {
+    output: String,
+    suffixes: Vec<String>,
+    second_polls: usize,
+    fail_second: bool,
+}
+
+impl SuspendingAsyncWriter {
+    fn new(fail_second: bool) -> Self {
+        Self {
+            output: String::new(),
+            suffixes: Vec::new(),
+            second_polls: 0,
+            fail_second,
+        }
+    }
+
+    /// Records one supplied suffix and accepts its first scalar after
+    /// suspension.
+    async fn write_one(&mut self, text: &str) -> Result<usize, WriteError> {
+        self.suffixes.push(text.to_owned());
+        if self.suffixes.len() == 2 {
+            let mut pending = true;
+            poll_fn(|cx| {
+                self.second_polls += 1;
+                if pending {
+                    pending = false;
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                } else {
+                    Poll::Ready(())
+                }
+            })
+            .await;
+            if self.fail_second {
+                return Err(WriteError);
+            }
+        }
+        let Some(ch) = text.chars().next() else {
+            return Ok(0);
+        };
+        self.output.push(ch);
+        Ok(ch.len_utf8())
+    }
+}
+
+impl AsyncTextWriter for SuspendingAsyncWriter {
+    type Error = WriteError;
+
+    async fn write_char_async(&mut self, ch: char) -> Result<(), Self::Error> {
+        self.output.push(ch);
+        Ok(())
+    }
+
+    async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
+        let text: String = chars.iter().copied().collect();
+        let bytes = self.write_one(&text).await?;
+        Ok(usize::from(bytes != 0))
+    }
+
+    async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
+        self.write_one(text).await
+    }
+
+    async fn write_line_fully_async(&mut self, _line: &str) -> Result<(), Self::Error> {
+        panic!("line writes are outside this test fixture")
+    }
+
+    async fn flush_async(&mut self) -> Result<(), Self::Error> {
+        panic!("flush is outside this test fixture")
+    }
+
+    async fn finish_async(&mut self) -> Result<(), Self::Error> {
+        panic!("finish is outside this test fixture")
+    }
+}
+
+/// Resumes the same future after exactly one observable suspension.
+fn resume_after_one_pending<F: Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut context = Context::from_waker(Waker::noop());
+    assert!(
+        matches!(future.as_mut().poll(&mut context), Poll::Pending),
+        "the default loop must suspend during its second write"
+    );
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(result) => result,
+        Poll::Pending => panic!("the second poll must complete this scripted future"),
+    }
+}
+
+/// Checks suffix progression for either character or UTF-8 byte counts.
+fn assert_default_write_resumes(use_chars: bool, fail_second: bool) {
+    let mut writer = SuspendingAsyncWriter::new(fail_second);
+    let result = if use_chars {
+        resume_after_one_pending(AsyncTextWriter::write_chars_fully_async(
+            &mut writer,
+            &['A', '中', '🙂'],
+        ))
+    } else {
+        resume_after_one_pending(AsyncTextWriter::write_str_fully_async(&mut writer, "A中🙂"))
+    };
+    assert_eq!(2, writer.second_polls);
+    if fail_second {
+        assert_eq!(Err(WriteError), result);
+        assert_eq!("A", writer.output);
+        assert_eq!(vec!["A中🙂", "中🙂"], writer.suffixes);
+    } else {
+        assert_eq!(Ok(()), result);
+        assert_eq!("A中🙂", writer.output);
+        assert_eq!(vec!["A中🙂", "中🙂", "🙂"], writer.suffixes);
     }
 }
 
@@ -269,6 +385,26 @@ fn test_async_text_read_defaults_cover_limits_and_errors() {
 #[test]
 fn test_async_text_write_default_line_ending() {
     assert_eq!(LineEnding::Lf, AsyncWriter.line_ending());
+}
+
+#[test]
+fn test_async_text_write_default_chars_resumes_after_pending() {
+    assert_default_write_resumes(true, false);
+}
+
+#[test]
+fn test_async_text_write_default_string_resumes_after_pending() {
+    assert_default_write_resumes(false, false);
+}
+
+#[test]
+fn test_async_text_write_default_chars_preserves_prefix_on_error_after_pending() {
+    assert_default_write_resumes(true, true);
+}
+
+#[test]
+fn test_async_text_write_default_string_preserves_prefix_on_error_after_pending() {
+    assert_default_write_resumes(false, true);
 }
 
 #[test]
