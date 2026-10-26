@@ -60,8 +60,30 @@ struct Stats {
     read_char_ops: usize,
     read_batch_ops: usize,
     line_ops: usize,
+    reader_eof: bool,
     finish_entries: usize,
     eof_tail_records: usize,
+}
+
+fn assert_text_read_result(expected: &str, actual: &str, reached_eof: bool) {
+    assert!(expected.starts_with(actual), "reader text is not a source prefix");
+    if reached_eof {
+        assert_eq!(actual, expected, "EOF text incomplete");
+    }
+}
+
+fn assert_record_read_result(expected: &[String], actual: &[String], reached_eof: bool) {
+    assert!(expected.starts_with(actual), "reader records are not a source prefix");
+    if reached_eof {
+        assert_eq!(actual, expected, "EOF records incomplete");
+    }
+}
+
+fn assert_rejected_record_count(expected: usize, actual: usize, reached_eof: bool) {
+    assert!(actual <= expected, "too many rejected records");
+    if reached_eof {
+        assert_eq!(actual, expected, "EOF rejected records incomplete");
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -498,6 +520,7 @@ fn run_reader(
                             records.push(line);
                             stats.eof_tail_records += 1;
                         }
+                        stats.reader_eof = true;
                         break 'reading;
                     }
                     Some(Err(error)) if is_fault(&error, FaultKind::Read) => stats.read_errors += 1,
@@ -508,7 +531,7 @@ fn run_reader(
                 panic!("poll budget exhausted in line reader");
             }
         }
-        assert!(expected.starts_with(&records));
+        assert_record_read_result(&expected, &records, stats.reader_eof);
         stats.pending = reader.input().stats.pending;
         stats.polls = polls;
     } else {
@@ -531,7 +554,10 @@ fn run_reader(
                             result.push(ch);
                             break;
                         }
-                        Some(Ok(None)) => break 'reading,
+                        Some(Ok(None)) => {
+                            stats.reader_eof = true;
+                            break 'reading;
+                        }
                         Some(Err(error)) if is_fault(&error, FaultKind::Read) => stats.read_errors += 1,
                         Some(Err(error)) => panic!("unexpected reader error: {error}"),
                     }
@@ -544,6 +570,7 @@ fn run_reader(
                         None => stats.cancelled += 1,
                         Some(Ok(0)) => {
                             result.extend(batch);
+                            stats.reader_eof = true;
                             break 'reading;
                         }
                         Some(Ok(_)) => {
@@ -562,7 +589,7 @@ fn run_reader(
                 panic!("poll budget exhausted in char reader");
             }
         }
-        assert!(text.starts_with(&result));
+        assert_text_read_result(text, &result, stats.reader_eof);
         stats.pending = reader.input().stats.pending;
         stats.polls = polls;
     }
@@ -594,7 +621,10 @@ fn run_reject_reader(text: &str, capacity: usize, events: Vec<Event>, endings: u
             match drive(reader.read_line_limited_async(&mut output, 0), &mut polls, cancel != 0) {
                 None => stats.cancelled += 1,
                 Some(Ok(true)) => panic!("zero limit unexpectedly accepted record"),
-                Some(Ok(false)) => break 'reading,
+                Some(Ok(false)) => {
+                    stats.reader_eof = true;
+                    break 'reading;
+                }
                 Some(Err(error)) if error.kind() == io::ErrorKind::InvalidData => {
                     assert_eq!(output, "seed:中");
                     seen += 1;
@@ -609,7 +639,7 @@ fn run_reject_reader(text: &str, capacity: usize, events: Vec<Event>, endings: u
             panic!("poll budget exhausted in reject reader");
         }
     }
-    assert!(seen <= expected_records.len());
+    assert_rejected_record_count(expected_records.len(), seen, stats.reader_eof);
     assert!(polls <= POLL_LIMIT, "poll budget exhausted in reject reader");
     stats.pending = reader.input().stats.pending;
     stats.polls = polls;
@@ -704,6 +734,9 @@ mod tests {
     use super::ScriptInput;
     use super::ScriptOutput;
     use super::Utf8Codec;
+    use super::assert_record_read_result;
+    use super::assert_rejected_record_count;
+    use super::assert_text_read_result;
     use super::block_on;
     use super::is_fault;
     use super::parse;
@@ -711,6 +744,53 @@ mod tests {
 
     #[derive(Default)]
     struct WakeCounter(AtomicUsize);
+
+    #[test]
+    #[should_panic(expected = "EOF text incomplete")]
+    fn test_eof_oracle_rejects_missing_text() {
+        assert_text_read_result("A", "", true);
+    }
+
+    #[test]
+    #[should_panic(expected = "EOF records incomplete")]
+    fn test_eof_oracle_rejects_missing_records() {
+        assert_record_read_result(&[String::from("A\n")], &[], true);
+    }
+
+    #[test]
+    #[should_panic(expected = "EOF rejected records incomplete")]
+    fn test_eof_oracle_rejects_missing_rejections() {
+        assert_rejected_record_count(1, 0, true);
+    }
+
+    #[test]
+    fn test_eof_oracle_accepts_complete_results_and_budget_prefixes() {
+        assert_text_read_result("A中", "A中", true);
+        assert_text_read_result("A中", "A", false);
+        let records = vec![String::from("A\r\n"), String::from("中")];
+        assert_record_read_result(&records, &records, true);
+        assert_record_read_result(&records, &records[..1], false);
+        assert_rejected_record_count(2, 2, true);
+        assert_rejected_record_count(2, 1, false);
+    }
+
+    #[test]
+    #[should_panic(expected = "reader text is not a source prefix")]
+    fn test_eof_oracle_rejects_non_prefix_text() {
+        assert_text_read_result("A", "B", false);
+    }
+
+    #[test]
+    #[should_panic(expected = "reader records are not a source prefix")]
+    fn test_eof_oracle_rejects_non_prefix_records() {
+        assert_record_read_result(&[String::from("A")], &[String::from("B")], false);
+    }
+
+    #[test]
+    #[should_panic(expected = "too many rejected records")]
+    fn test_eof_oracle_rejects_excess_rejection_count() {
+        assert_rejected_record_count(1, 2, false);
+    }
 
     impl std::task::Wake for WakeCounter {
         fn wake(self: Arc<Self>) {
@@ -899,24 +979,63 @@ mod tests {
         assert_eq!(finish_entry.events, 2);
         // Reader batches and lines receive pending/error events before drain.
         let chars = run_script(&[1, 0, 0, 1, 4, 1, 1, 1, 2, 3, 0, b'A', b'\n']);
+        assert!(chars.reader_eof);
         assert!(chars.cancelled > 0);
         assert!(chars.read_errors > 0);
         assert!(chars.read_batch_ops > 0);
         let single_char = run_script(&[1, 0, 0, 1, 4, 1, 0, 1, 2, 3, 0, b'A']);
+        assert!(single_char.reader_eof);
         assert!(single_char.cancelled > 0);
         assert!(single_char.read_errors > 0);
         assert!(single_char.read_char_ops > 0);
         let lines = run_script(&[2, 0, 0, 0, 4, 1, 1, 2, 0, 0, b'A', b'\r', b'\n', b'B', b'\r']);
+        assert!(lines.reader_eof);
         assert!(lines.cancelled > 0);
         assert!(lines.read_errors > 0);
         assert!(lines.line_ops > 0);
         let unterminated = run_script(&[2, 0, 0, 0, 0, 0, b't', b'a', b'i', b'l']);
+        assert!(unterminated.reader_eof);
         assert!(unterminated.line_ops >= 2);
         // Zero-limit line recovery uses a fixed CRLF set and has a following record.
         let rejected = run_script(&[3, 0, 2, 0, 4, 1, 1, 2, 0, 0, b'A', b'\r', b'\n', b'B', b'\r', b'\n']);
+        assert!(rejected.reader_eof);
         assert_eq!(rejected.rejected_records, 2);
         assert!(rejected.cancelled > 0);
         assert!(rejected.read_errors > 0);
+    }
+
+    #[test]
+    fn test_reader_eof_is_observed_in_each_mode() {
+        for scene in [1, 2, 3] {
+            assert!(run_script(&[scene, 0, 0, 0, 0, 0]).reader_eof);
+            assert!(run_script(&[scene, 0, 0, 0, 0, 0, b'A']).reader_eof);
+        }
+        let batch = run_script(&[1, 0, 0, 1, 0, 0, 1, b'A']);
+        assert!(batch.reader_eof);
+        assert!(batch.read_batch_ops > 0);
+        let tail = run_script(&[2, 0, 0, 0, 0, 0, b'A']);
+        assert!(tail.reader_eof);
+        assert_eq!(tail.line_ops, 2);
+    }
+
+    #[test]
+    fn test_reader_eof_on_last_budgeted_operation_is_still_eof() {
+        let mut input = vec![1, 0, 0, 0, 0, 0];
+        input.extend(std::iter::repeat_n(b'A', OP_LIMIT - 1));
+        let stats = run_script(&input);
+        assert_eq!(stats.operations, OP_LIMIT);
+        assert!(stats.reader_eof);
+    }
+
+    #[test]
+    fn test_reader_budget_does_not_imply_eof() {
+        for scene in [1, 2, 3] {
+            let mut input = vec![scene, 0, 0, 0, 0, 0];
+            input.extend(std::iter::repeat_n([b'A', b'\n'], OP_LIMIT + 1).flatten());
+            let stats = run_script(&input);
+            assert_eq!(stats.operations, OP_LIMIT);
+            assert!(!stats.reader_eof);
+        }
     }
 
     #[test]
