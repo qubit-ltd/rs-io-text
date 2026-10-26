@@ -31,7 +31,7 @@ streams without selecting an async runtime.
 
 ```toml
 [dependencies]
-qubit-io-text = "0.8"
+qubit-io-text = "0.9"
 qubit-io = "0.19"
 ```
 
@@ -65,7 +65,7 @@ directly in the consuming package:
 
 ```toml
 [dependencies]
-qubit-io-text = "0.8"
+qubit-io-text = "0.9"
 qubit-codec-text = "0.9"
 qubit-io = "0.19"
 ```

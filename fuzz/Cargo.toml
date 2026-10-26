@@ -17,8 +17,8 @@ cargo-fuzz = true
 libfuzzer-sys = "^0.4"
 qubit-io = "0.19"
 qubit-codec = { version = "0.17", features = ["io"] }
-qubit-codec-text = { path = "../../rs-codec-text", version = "0.9" }
-qubit-io-text = { path = ".." }
+qubit-codec-text = "0.9"
+qubit-io-text = { "version" = "0.9.0", "path" = ".." }
 
 [[bin]]
 name = "charset_stream"

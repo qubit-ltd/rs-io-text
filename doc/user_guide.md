@@ -4,7 +4,7 @@
 [API reference](https://docs.rs/qubit-io-text)
 
 This guide is for Rust applications that should work with Unicode text and
-lines instead of encoded bytes. It covers `qubit-io-text` 0.8, whose charset
+lines instead of encoded bytes. It covers `qubit-io-text` 0.9, whose charset
 algorithms come from `qubit-codec-text` and whose byte and character streams
 come from `qubit-io`.
 
@@ -38,7 +38,7 @@ reads the same bytes back as text.
 
 ```toml
 [dependencies]
-qubit-io-text = "0.8"
+qubit-io-text = "0.9"
 qubit-codec-text = "0.9"
 qubit-io = "0.19"
 ```
