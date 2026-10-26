@@ -450,6 +450,11 @@ fn run_raw_companion(payload: &[u8], header: &Header, ops: &[u8], events: &[Even
     }
 }
 
+/// Rejects a Report decode error when the reference input is valid UTF-8.
+fn assert_report_decode_error_expected(expected: &Result<String, usize>) {
+    assert!(expected.is_err(), "Report rejected valid UTF-8");
+}
+
 fn run_report_reader(
     source: &[u8],
     expected: Result<String, usize>,
@@ -483,6 +488,7 @@ fn run_report_reader(
             }
             Some(Err(error)) if is_fault(&error, FaultKind::Read) => stats.read_errors += 1,
             Some(Err(error)) if error.kind() == io::ErrorKind::InvalidData => {
+                assert_report_decode_error_expected(&expected);
                 observed_decode_error = true;
                 stats.read_char_ops += 1;
                 break;
@@ -1053,6 +1059,7 @@ mod tests {
     use super::Utf8Codec;
     use super::assert_record_read_result;
     use super::assert_rejected_record_count;
+    use super::assert_report_decode_error_expected;
     use super::assert_text_read_result;
     use super::block_on;
     use super::is_fault;
@@ -1063,6 +1070,23 @@ mod tests {
     use super::run_reject_reader_with;
     use super::run_report_reader;
     use super::run_script;
+
+    #[test]
+    #[should_panic(expected = "Report rejected valid UTF-8")]
+    fn test_report_decode_error_oracle_rejects_valid_reference() {
+        let expected = reference_utf8(b"A", 0);
+        assert!(expected.is_ok());
+        assert_report_decode_error_expected(&expected);
+    }
+
+    #[test]
+    fn test_report_decode_error_oracle_accepts_malformed_reference() {
+        for source in [b"A\xff".as_slice(), b"A\xe4\xb8"] {
+            let expected = reference_utf8(source, 0);
+            assert!(expected.is_err());
+            assert_report_decode_error_expected(&expected);
+        }
+    }
 
     #[derive(Default)]
     struct WakeCounter(AtomicUsize);
