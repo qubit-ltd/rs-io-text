@@ -196,6 +196,13 @@ shows line reads that preserve terminators.
   a generic encoder's opaque domain source keeps its own index semantics.
   `write_line` encodes its body and line ending as separate calls, so each has
   its own position origin.
+- For `AsyncCharsetTextWriter`, single-step encoding errors use zero-based Rust
+  `char` positions relative to the source slice or string suffix passed to that
+  call. Complete-write errors use positions relative to the original complete
+  call, regardless of internal chunks. A complete line encodes its body and
+  appended line ending separately, each starting at zero. These indices are
+  diagnostics, not safe retry cursors; complete writes can commit a prefix
+  before returning an error or being cancelled.
 - For this crate's `AsyncCharsetTextWriter` and `AsyncUtf8TextWriter`, successful
   encoder finalization also makes empty string and character-slice writes return
   `InvalidInput`, through both inherent and `AsyncTextWriter` methods. Open

@@ -13,7 +13,11 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec_text::AsciiCodec;
+use qubit_codec_text::CharsetEncodeError;
 use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::Latin1Codec;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::AsyncOutput;
 use qubit_io_text::AsyncCharsetTextWriter;
@@ -26,6 +30,42 @@ struct RecoveryOutput {
     bytes: Vec<u8>,
     writes: usize,
     flushes: usize,
+}
+
+#[derive(Default)]
+struct IndexOutput {
+    bytes: Vec<u8>,
+}
+
+impl AsyncOutput for IndexOutput {
+    type Item = u8;
+
+    unsafe fn poll_write_unchecked(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        input: &[u8],
+        index: usize,
+        count: usize,
+    ) -> Poll<io::Result<usize>> {
+        self.bytes.extend_from_slice(&input[index..index + count]);
+        Poll::Ready(Ok(count))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+fn assert_complete_main_index(error: &io::Error, expected: usize) {
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let typed = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<TranscodeEncodeError<CharsetEncodeError, char>>())
+        .expect("transcode error remains downcastable");
+    let context = typed.domain_error_ref().expect("charset main error");
+    let source = typed.domain_ref().expect("charset source remains available");
+    assert_eq!(Some('中' as u32), source.value());
+    assert_eq!((Some(expected), expected), (context.input_index(), source.index()));
 }
 
 impl AsyncOutput for RecoveryOutput {
@@ -61,6 +101,84 @@ fn complete<F: Future>(future: F) -> F::Output {
         Poll::Ready(result) => result,
         Poll::Pending => panic!("scripted output must not suspend"),
     }
+}
+
+#[test]
+fn test_complete_async_string_reports_call_character_index() {
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    let text = format!("{}中", "A".repeat(300));
+    let error = complete(writer.write_str_fully_async(&text)).expect_err("ASCII rejects 中");
+    assert_complete_main_index(&error, 300);
+}
+
+#[test]
+fn test_complete_async_string_reports_call_index_across_capacities() {
+    for capacity in [1, 2, 7, 8192] {
+        for index in [0, 255, 256, 300, 512] {
+            let text = format!("{}中", "A".repeat(index));
+            let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
+                IndexOutput::default(),
+                AsciiCodec,
+                CharsetEncodePolicy::report(),
+                capacity,
+            );
+            let error = complete(writer.write_str_fully_async(&text)).expect_err("ASCII rejects 中");
+            assert_complete_main_index(&error, index);
+        }
+    }
+
+    let text = format!("{}中", "A".repeat(300));
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    let error = complete(writer.write_str_fully_async(&text)).expect_err("ASCII rejects 中");
+    assert_complete_main_index(&error, 300);
+}
+
+#[test]
+fn test_complete_async_charset_writer_preserves_call_origin_for_other_entry_points() {
+    let text = format!("{}中", "A".repeat(300));
+
+    let mut chars = vec!['A'; 300];
+    chars.push('中');
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    let error = complete(writer.write_chars_fully_async(&chars)).expect_err("ASCII rejects 中");
+    assert_complete_main_index(&error, 300);
+
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    let error = complete(AsyncTextWriter::write_str_fully_async(&mut writer, &text))
+        .expect_err("ASCII rejects 中 through the trait");
+    assert_complete_main_index(&error, 300);
+
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    complete(writer.write_str_fully_async("prefix")).expect("ASCII accepts prefix");
+    let error = complete(writer.write_str_fully_async(&text)).expect_err("ASCII rejects 中");
+    assert_complete_main_index(&error, 300);
+
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), Latin1Codec, CharsetEncodePolicy::report());
+    let latin1_text = format!("{}中", "é".repeat(300));
+    let error = complete(writer.write_str_fully_async(&latin1_text)).expect_err("Latin-1 rejects 中");
+    assert_complete_main_index(&error, 300);
+
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    let error = complete(writer.write_line_fully_async(&text)).expect_err("ASCII rejects line body");
+    assert_complete_main_index(&error, 300);
+}
+
+#[test]
+fn test_async_string_single_step_error_uses_current_suffix_origin() {
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    let text = format!("{}中", "A".repeat(300));
+    let first = complete(writer.write_str_async(&text)).expect("first string step succeeds");
+    assert_eq!(256, first);
+    let error = complete(writer.write_str_async(&text[first..])).expect_err("ASCII rejects 中");
+    assert_complete_main_index(&error, 44);
+
+    let mut writer = AsyncCharsetTextWriter::new(IndexOutput::default(), AsciiCodec, CharsetEncodePolicy::report());
+    let mut chars = vec!['A'; 300];
+    chars.push('中');
+    let first = complete(writer.write_chars_async(&chars[..256])).expect("first character step succeeds");
+    assert_eq!(256, first);
+    let error = complete(writer.write_chars_async(&chars[first..])).expect_err("ASCII rejects 中");
+    assert_complete_main_index(&error, 44);
 }
 
 /// Checks that both complete-write trait methods reject a finalized writer.

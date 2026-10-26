@@ -9,9 +9,12 @@
 use std::io;
 
 use qubit_codec::AsyncTranscodeEncodeOutput;
+use qubit_codec::TranscodeDomainError;
+use qubit_codec::TranscodeEncodeError;
 use qubit_codec::Transcoder;
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetEncodeError;
+use qubit_codec_text::CharsetEncodeErrorKind;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_io::AsyncByteOutput;
@@ -380,7 +383,8 @@ where
     /// # Errors
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
-    /// writer has been finished.
+    /// writer has been finished. Main-stage encoding indices use Rust `char`
+    /// positions relative to the supplied character slice.
     ///
     /// # Cancellation safety
     ///
@@ -416,7 +420,7 @@ where
         if chars.is_empty() {
             return Ok(0);
         }
-        self.encode_chars_async(chars).await
+        self.encode_chars_async(chars, 0).await
     }
 
     /// Asynchronously writes an entire character slice.
@@ -430,6 +434,8 @@ where
     /// Returns encoding or output errors. A character prefix may already be
     /// committed when an error is returned. Returns an invalid-input error if
     /// the writer has been finished, including when `chars` is empty.
+    /// Main-stage encoding indices are relative to this complete call and use
+    /// Rust `char` positions; they do not report a safely retryable cursor.
     ///
     /// # Cancellation safety
     ///
@@ -440,7 +446,7 @@ where
         self.ensure_open()?;
         let mut index = 0;
         while index < chars.len() {
-            index += self.write_chars_async(&chars[index..]).await?;
+            index += self.encode_chars_async(&chars[index..], index).await?;
         }
         Ok(())
     }
@@ -458,7 +464,8 @@ where
     /// # Errors
     ///
     /// Returns encoding or output errors, or an invalid-input error after the
-    /// writer has been finished.
+    /// writer has been finished. Main-stage encoding indices are relative to
+    /// this supplied string suffix and use Rust `char` positions.
     ///
     /// # Cancellation safety
     ///
@@ -468,6 +475,16 @@ where
         self.ensure_open()?;
         if text.is_empty() {
             return Ok(0);
+        }
+        let (bytes, _) = self.write_str_step_async(text, 0).await?;
+        Ok(bytes)
+    }
+
+    /// Encodes one bounded string step and returns its committed byte and
+    /// character counts.
+    async fn write_str_step_async(&mut self, text: &str, base: usize) -> io::Result<(usize, usize)> {
+        if text.is_empty() {
+            return Ok((0, 0));
         }
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         let mut byte_ends = [0; DEFAULT_CHAR_CHUNK_CAPACITY];
@@ -480,8 +497,8 @@ where
                 break;
             }
         }
-        let consumed = self.write_chars_async(&chars[..char_count]).await?;
-        Ok(byte_ends[consumed - 1])
+        let consumed = self.encode_chars_async(&chars[..char_count], base).await?;
+        Ok((byte_ends[consumed - 1], consumed))
     }
 
     /// Asynchronously writes an entire UTF-8 Rust string through the selected
@@ -496,6 +513,8 @@ where
     /// Returns encoding or output errors. A UTF-8 prefix may already be
     /// committed when an error is returned. Returns an invalid-input error if
     /// the writer has been finished, including when `text` is empty.
+    /// Main-stage encoding indices are relative to this complete call and use
+    /// Rust `char` positions; they do not report a safely retryable cursor.
     ///
     /// # Cancellation safety
     ///
@@ -504,9 +523,12 @@ where
     /// API for cancellation-sensitive code.
     pub async fn write_str_fully_async(&mut self, text: &str) -> io::Result<()> {
         self.ensure_open()?;
-        let mut offset = 0;
-        while offset < text.len() {
-            offset += self.write_str_async(&text[offset..]).await?;
+        let mut byte_offset = 0;
+        let mut char_base = 0;
+        while byte_offset < text.len() {
+            let (bytes, chars) = self.write_str_step_async(&text[byte_offset..], char_base).await?;
+            byte_offset += bytes;
+            char_base += chars;
         }
         Ok(())
     }
@@ -519,7 +541,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns encoding or output errors.
+    /// Returns encoding or output errors. Main-stage encoding indices are
+    /// relative to the body or the appended line ending, which are encoded as
+    /// separate calls and each use Rust `char` positions from zero.
     ///
     /// # Cancellation safety
     ///
@@ -584,14 +608,48 @@ where
         Ok(())
     }
 
-    /// Encodes one character-slice progress step.
-    async fn encode_chars_async(&mut self, chars: &[char]) -> io::Result<usize> {
+    /// Encodes one character-slice progress step using the supplied call base.
+    async fn encode_chars_async(&mut self, chars: &[char], base: usize) -> io::Result<usize> {
         self.ensure_started_async().await?;
-        let mut map_error = encode_error_to_io;
+        let mut map_error = |error| encode_error_to_io(offset_main_encode_error(error, base));
         let progress = self
             .output
             .transcode_async(&mut self.encoder, &mut map_error, chars, 0, chars.len())
             .await?;
         Ok(progress.read())
+    }
+}
+
+/// Offsets input coordinates for charset errors in the main transcode stage.
+///
+/// Only input-related failures are shifted; lifecycle, output, and framework
+/// failures retain their original error and coordinate semantics.
+fn offset_main_encode_error(
+    error: TranscodeEncodeError<CharsetEncodeError, char>,
+    base: usize,
+) -> TranscodeEncodeError<CharsetEncodeError, char> {
+    match error {
+        TranscodeEncodeError::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable {
+            input_index: base.saturating_add(input_index),
+            value,
+        },
+        TranscodeEncodeError::Domain(TranscodeDomainError::Main {
+            source,
+            input_index,
+            input_consumed,
+        }) => {
+            let source = match source.kind() {
+                CharsetEncodeErrorKind::InvalidCodePoint { .. }
+                | CharsetEncodeErrorKind::UnmappableCharacter { .. }
+                | CharsetEncodeErrorKind::UnencodableValue => source.offset_by(base),
+                _ => source,
+            };
+            TranscodeEncodeError::Domain(TranscodeDomainError::Main {
+                source,
+                input_index: base.saturating_add(input_index),
+                input_consumed,
+            })
+        }
+        other => other,
     }
 }
