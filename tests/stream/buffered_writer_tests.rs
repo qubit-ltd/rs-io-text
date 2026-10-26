@@ -725,7 +725,10 @@ fn test_buffered_writer_reuses_string_path_after_empty_and_across_chunks() -> st
         panic!("unexpected indeterminate recovery")
     };
     assert!(pending.readable().is_empty());
-    assert_eq!(format!("前字{long_text}🙂后終").as_bytes(), cursor.into_inner().as_slice());
+    assert_eq!(
+        format!("前字{long_text}🙂后終").as_bytes(),
+        cursor.into_inner().as_slice()
+    );
     Ok(())
 }
 
@@ -745,7 +748,10 @@ fn test_buffered_writer_clears_string_staging_after_encode_error() -> std::io::R
         panic!("unexpected indeterminate recovery")
     };
     assert!(pending.readable().is_empty());
-    assert_eq!(format!("{}Z", "A".repeat(256)).as_bytes(), output.into_inner().as_slice());
+    assert_eq!(
+        format!("{}Z", "A".repeat(256)).as_bytes(),
+        output.into_inner().as_slice()
+    );
     Ok(())
 }
 

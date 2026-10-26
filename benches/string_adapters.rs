@@ -202,10 +202,7 @@ fn bench_streaming_charset(criterion: &mut Criterion, fixtures: &[(String, Strin
 fn line_fixtures() -> [(String, String); 4] {
     [
         (String::from("short_ascii"), String::from("hello 123")),
-        (
-            String::from("long_ascii"),
-            "ASCII payload 0123456789 ".repeat(256),
-        ),
+        (String::from("long_ascii"), "ASCII payload 0123456789 ".repeat(256)),
         (
             String::from("multilingual"),
             "English 中文 Ελληνικά العربية हिन्दी".repeat(16),
@@ -220,11 +217,8 @@ fn line_fixtures() -> [(String, String); 4] {
 const LINE_BUFFER_CAPACITY: usize = 8 * 1024;
 
 fn line_writer(output_capacity: usize, ending: LineEnding) -> Utf8TextWriter<Cursor<Vec<u8>>> {
-    Utf8TextWriter::with_capacity(
-        Cursor::new(Vec::with_capacity(output_capacity)),
-        LINE_BUFFER_CAPACITY,
-    )
-    .with_line_ending(ending)
+    Utf8TextWriter::with_capacity(Cursor::new(Vec::with_capacity(output_capacity)), LINE_BUFFER_CAPACITY)
+        .with_line_ending(ending)
 }
 
 fn completed_line_output(writer: Utf8TextWriter<Cursor<Vec<u8>>>) -> Vec<u8> {
@@ -248,24 +242,16 @@ fn bench_utf8_lines(criterion: &mut Criterion) {
         for (ending_name, ending) in endings {
             let expected = format!("{}{ending}", line, ending = ending.as_str()).into_bytes();
             let mut writer_line = line_writer(expected.len(), ending);
-            writer_line
-                .write_line(line)
-                .expect("valid UTF-8 line should write");
-            writer_line
-                .finish()
-                .expect("UTF-8 line writer should finish");
+            writer_line.write_line(line).expect("valid UTF-8 line should write");
+            writer_line.finish().expect("UTF-8 line writer should finish");
             let line_output = completed_line_output(writer_line);
 
             let mut split_writer = line_writer(expected.len(), ending);
-            split_writer
-                .write_str(line)
-                .expect("valid UTF-8 body should write");
+            split_writer.write_str(line).expect("valid UTF-8 body should write");
             split_writer
                 .write_str(ending.as_str())
                 .expect("UTF-8 line ending should write");
-            split_writer
-                .finish()
-                .expect("UTF-8 split writer should finish");
+            split_writer.finish().expect("UTF-8 split writer should finish");
             let split_output = completed_line_output(split_writer);
             assert_eq!(
                 line_output, expected,
@@ -282,43 +268,35 @@ fn bench_utf8_lines(criterion: &mut Criterion) {
 
             group.throughput(Throughput::Bytes(expected.len() as u64));
             let id = format!("{fixture_name}_{ending_name}");
-            group.bench_with_input(
-                BenchmarkId::new("write_line", &id),
-                line,
-                |bencher, line| {
-                    bencher.iter_batched(
-                        || line_writer(expected.len(), ending),
-                        |mut writer| {
-                            writer
-                                .write_line(black_box(line))
-                                .expect("valid UTF-8 line should write");
-                            writer.finish().expect("UTF-8 line writer should finish");
-                            black_box(completed_line_output(writer));
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                },
-            );
-            group.bench_with_input(
-                BenchmarkId::new("two_write_str", &id),
-                line,
-                |bencher, line| {
-                    bencher.iter_batched(
-                        || line_writer(expected.len(), ending),
-                        |mut writer| {
-                            writer
-                                .write_str(black_box(line))
-                                .expect("valid UTF-8 body should write");
-                            writer
-                                .write_str(ending.as_str())
-                                .expect("UTF-8 line ending should write");
-                            writer.finish().expect("UTF-8 split writer should finish");
-                            black_box(completed_line_output(writer));
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                },
-            );
+            group.bench_with_input(BenchmarkId::new("write_line", &id), line, |bencher, line| {
+                bencher.iter_batched(
+                    || line_writer(expected.len(), ending),
+                    |mut writer| {
+                        writer
+                            .write_line(black_box(line))
+                            .expect("valid UTF-8 line should write");
+                        writer.finish().expect("UTF-8 line writer should finish");
+                        black_box(completed_line_output(writer));
+                    },
+                    criterion::BatchSize::SmallInput,
+                );
+            });
+            group.bench_with_input(BenchmarkId::new("two_write_str", &id), line, |bencher, line| {
+                bencher.iter_batched(
+                    || line_writer(expected.len(), ending),
+                    |mut writer| {
+                        writer
+                            .write_str(black_box(line))
+                            .expect("valid UTF-8 body should write");
+                        writer
+                            .write_str(ending.as_str())
+                            .expect("UTF-8 line ending should write");
+                        writer.finish().expect("UTF-8 split writer should finish");
+                        black_box(completed_line_output(writer));
+                    },
+                    criterion::BatchSize::SmallInput,
+                );
+            });
         }
     }
     group.finish();
@@ -333,25 +311,19 @@ fn allocation_operations() -> [(&'static str, fn()); 7] {
         }),
         ("utf8_write_str", || {
             let mut writer = Utf8TextWriter::with_capacity(std::io::sink(), 16);
-            writer
-                .write_str("hello 中文")
-                .expect("UTF-8 string should write");
+            writer.write_str("hello 中文").expect("UTF-8 string should write");
             writer.finish().expect("UTF-8 writer should finish");
             black_box(writer);
         }),
         ("utf8_write_line", || {
             let mut writer = Utf8TextWriter::with_capacity(std::io::sink(), 16);
-            writer
-                .write_line("hello 中文")
-                .expect("UTF-8 line should write");
+            writer.write_line("hello 中文").expect("UTF-8 line should write");
             writer.finish().expect("UTF-8 writer should finish");
             black_box(writer);
         }),
         ("utf8_write_char", || {
             let mut writer = Utf8TextWriter::with_capacity(std::io::sink(), 16);
-            writer
-                .write_char('🦀')
-                .expect("UTF-8 character should write");
+            writer.write_char('🦀').expect("UTF-8 character should write");
             writer.finish().expect("UTF-8 writer should finish");
             black_box(writer);
         }),
@@ -362,9 +334,7 @@ fn allocation_operations() -> [(&'static str, fn()); 7] {
                 CharsetEncodePolicy::report(),
                 16,
             );
-            writer
-                .write_str("hello 中文")
-                .expect("charset string should write");
+            writer.write_str("hello 中文").expect("charset string should write");
             writer.finish().expect("charset writer should finish");
             black_box(writer);
         }),
@@ -391,9 +361,7 @@ fn allocation_operations() -> [(&'static str, fn()); 7] {
                 CharsetEncodePolicy::report(),
                 16,
             );
-            writer
-                .write_char('🦀')
-                .expect("charset character should write");
+            writer.write_char('🦀').expect("charset character should write");
             writer.finish().expect("charset writer should finish");
             black_box(writer);
         }),
@@ -417,9 +385,7 @@ fn bench_writer_allocation(criterion: &mut Criterion) {
     let operations = allocation_operations();
     for (name, operation) in operations {
         let (_, peak_bytes, allocations) = measure_peak_and_allocations(operation);
-        println!(
-            "allocation writer/{name}: successful_requests={allocations}, peak_bytes={peak_bytes}"
-        );
+        println!("allocation writer/{name}: successful_requests={allocations}, peak_bytes={peak_bytes}");
     }
 
     let mut group = criterion.benchmark_group("writer_allocation");
@@ -428,7 +394,7 @@ fn bench_writer_allocation(criterion: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
     for (name, operation) in allocation_operations() {
         group.bench_function(name, |bencher| {
-            bencher.iter(|| operation());
+            bencher.iter(&operation);
         });
     }
     group.finish();

@@ -100,8 +100,8 @@ where
     (result, peak)
 }
 
-/// Runs one single-threaded operation and returns peak live bytes and successful
-/// allocation requests made while measurement was enabled.
+/// Runs one single-threaded operation and returns peak live bytes and
+/// successful allocation requests made while measurement was enabled.
 pub fn measure_peak_and_allocations<F, T>(operation: F) -> (T, usize, usize)
 where
     F: FnOnce() -> T,

@@ -198,8 +198,7 @@ fn test_write_line_endings_empty_lines_and_long_mixed_text() -> io::Result<()> {
     let long_line = "中文🙂é".repeat(100);
     assert!(long_line.chars().count() > 256);
     let expected = format!("\n\r\n\r{long_line}首🙂尾\n");
-    let mut writer = Utf8TextWriter::with_capacity(Vec::new(), 8)
-        .with_line_ending(LineEnding::Lf);
+    let mut writer = Utf8TextWriter::with_capacity(Vec::new(), 8).with_line_ending(LineEnding::Lf);
     writer.write_line("")?;
     writer = writer.with_line_ending(LineEnding::CrLf);
     writer.write_line("")?;
@@ -234,7 +233,11 @@ fn test_write_line_after_finish_rejects_empty_and_non_empty_lines() -> io::Resul
 
 #[test]
 fn test_write_line_body_error_does_not_append_line_ending() {
-    let output = FailOnByteOnceOutput { bytes: Vec::new(), fail_on: b'!', failed: false };
+    let output = FailOnByteOnceOutput {
+        bytes: Vec::new(),
+        fail_on: b'!',
+        failed: false,
+    };
     let mut writer = Utf8TextWriter::with_capacity(output, 1);
     let body = "!".repeat(8 * 1024 + 1);
     let error = writer.write_line(&body).expect_err("body delivery should fail");
@@ -251,7 +254,11 @@ fn test_write_line_body_error_does_not_append_line_ending() {
 
 #[test]
 fn test_write_line_ending_write_flush_error_keeps_body_bytes() {
-    let output = FailOnByteOnceOutput { bytes: Vec::new(), fail_on: b'b', failed: false };
+    let output = FailOnByteOnceOutput {
+        bytes: Vec::new(),
+        fail_on: b'b',
+        failed: false,
+    };
     let mut writer = Utf8TextWriter::with_capacity(output, 1);
     let body = "b".repeat(8 * 1024 - 1);
     let error = writer
