@@ -22,6 +22,7 @@ use qubit_io_text::CharsetTextReader;
 use qubit_io_text::CharsetTextWriter;
 use qubit_io_text::TextReader;
 use qubit_io_text::TextWriter;
+use qubit_io_text_fuzz::multibyte_reference::fuzz_multibyte_reference;
 
 /// Bounds allocations when the target is invoked outside CI.
 const MAX_FUZZ_INPUT_LEN: usize = 4096;
@@ -34,6 +35,7 @@ fuzz_target!(|data: &[u8]| {
     fuzz_bounded_utf8_reads(data);
     fuzz_mixed_utf8_reads(data);
     fuzz_multibyte_round_trips(data);
+    fuzz_multibyte_reference(data);
 });
 
 /// Verifies strict decoding agrees with the standard UTF-8 validator for all

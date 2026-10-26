@@ -7,6 +7,9 @@ publish = false
 
 [workspace]
 
+[lib]
+doctest = false
+
 [package.metadata]
 cargo-fuzz = true
 
@@ -20,6 +23,13 @@ qubit-io-text = { path = ".." }
 [[bin]]
 name = "charset_stream"
 path = "fuzz_targets/charset_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "async_charset_state"
+path = "fuzz_targets/async_charset_state.rs"
 test = false
 doc = false
 bench = false
