@@ -158,4 +158,50 @@ Several intervals are wide, and Criterion reported outliers in multiple
 samples. CPU frequency scaling is enabled and the host was not isolated from
 other workloads. Results therefore establish the measured baseline and
 benchmark entry point; they do not justify a claim of a stable speedup by
-themselves. T3 must repeat the exact command and compare the same summaries.
+themselves. T3 repeated the exact command and compared the same summaries.
+
+## Optimized follow-up (IOT-001/IOT-002)
+
+- Optimized revision under measurement: `3eff52161b337d92459d6d80a6d661074163c2a5`.
+- The same locked Criterion command, release profile, 20 samples, 2-second
+  warm-up and 5-second measurement was run twice after the changes. Both runs
+  used the toolchain and host listed above. The host remained busy (load
+  averages around 14–26 were observed during the runs), and Criterion reported
+  multiple outliers. Treat these as samples from a shared host, not a controlled
+  throughput claim.
+- The allocator dry run reported the following in both optimized runs:
+
+| Operation | Before: successful requests / peak bytes | After: successful requests / peak bytes |
+| --- | ---: | ---: |
+| construct + finish | 2 / 1,040 | 1 / 16 |
+| UTF-8 `write_str` | 2 / 1,040 | 1 / 16 |
+| UTF-8 `write_line` | 3 / 1,056 | 1 / 16 |
+| UTF-8 direct character | 2 / 1,040 | 1 / 16 |
+| charset first `write_str` | 3 / 1,056 | 3 / 1,056 |
+| charset repeated `write_str` | 3 / 1,056 | 3 / 1,056 |
+| charset direct character | 2 / 1,040 | 1 / 16 |
+
+  The fast paths that do not stage characters now avoid the 1,024-byte
+  character buffer allocation. The first generic string write still performs
+  one character-buffer allocation, then reuses that buffer on the repeated
+  call; its total request count and peak bytes match the old constructor-time
+  allocation.
+
+| Fixture / LF | Before `write_line` estimate | After run 1 | After run 2 |
+| --- | ---: | ---: | ---: |
+| short ASCII | 2.2830 µs | 3.4818 µs | 1.7218 µs |
+| long ASCII | 45.121 µs | 9.9754 µs | 2.5082 µs |
+| multilingual | 4.7679 µs | 1.7201 µs | 1.0956 µs |
+
+  Corresponding explicit two-`write_str` estimates were 2.5061, 8.3962 and
+  1.2664 µs before optimization; 2.5783, 11.879 and 2.7785 µs in run 1; and
+  1.8702, 3.5284 and 1.3925 µs in run 2. Run-to-run variation and wide
+  intervals prevent a stable speedup conclusion, while the allocation counts
+  consistently confirm the intended fast-path savings. The optimized
+  `write_line` delegates its body and ending to the same UTF-8 `write_str`
+  path; the benchmark also checks equal output before timing.
+
+The optimized logs were saved during execution outside the repository. The
+numbers above are the recorded Criterion estimates and allocator dry-run
+counts; no benchmark result is inferred from a single median or presented as a
+guaranteed speedup.
