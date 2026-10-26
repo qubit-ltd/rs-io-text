@@ -17,6 +17,7 @@ use std::sync::atomic::Ordering;
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static CURRENT: AtomicUsize = AtomicUsize::new(0);
 static PEAK: AtomicUsize = AtomicUsize::new(0);
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
 
 /// A system allocator that can report peak live bytes for one operation.
 pub struct TrackingAllocator;
@@ -49,6 +50,9 @@ unsafe impl GlobalAlloc for TrackingAllocator {
         let pointer = unsafe { System.alloc(layout) };
         if !pointer.is_null() {
             Self::add(layout.size());
+            if ENABLED.load(Ordering::Relaxed) {
+                ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+            }
         }
         pointer
     }
@@ -58,6 +62,9 @@ unsafe impl GlobalAlloc for TrackingAllocator {
         let pointer = unsafe { System.alloc_zeroed(layout) };
         if !pointer.is_null() {
             Self::add(layout.size());
+            if ENABLED.load(Ordering::Relaxed) {
+                ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+            }
         }
         pointer
     }
@@ -73,6 +80,7 @@ unsafe impl GlobalAlloc for TrackingAllocator {
         // SAFETY: The request is forwarded unchanged to the system allocator.
         let new_pointer = unsafe { System.realloc(pointer, old_layout, new_size) };
         if !new_pointer.is_null() && ENABLED.load(Ordering::Relaxed) {
+            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
             if new_size >= old_layout.size() {
                 Self::add(new_size - old_layout.size());
             } else {
@@ -88,11 +96,23 @@ pub fn measure_peak<F, T>(operation: F) -> (T, usize)
 where
     F: FnOnce() -> T,
 {
+    let (result, peak, _) = measure_peak_and_allocations(operation);
+    (result, peak)
+}
+
+/// Runs one single-threaded operation and returns peak live bytes and successful
+/// allocation requests made while measurement was enabled.
+pub fn measure_peak_and_allocations<F, T>(operation: F) -> (T, usize, usize)
+where
+    F: FnOnce() -> T,
+{
     CURRENT.store(0, Ordering::Relaxed);
     PEAK.store(0, Ordering::Relaxed);
+    ALLOCATIONS.store(0, Ordering::Relaxed);
     ENABLED.store(true, Ordering::Relaxed);
     let result = operation();
     ENABLED.store(false, Ordering::Relaxed);
     let peak = PEAK.load(Ordering::Relaxed);
-    (result, peak)
+    let allocations = ALLOCATIONS.load(Ordering::Relaxed);
+    (result, peak, allocations)
 }

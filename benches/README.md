@@ -6,6 +6,31 @@ Run the owned string-adapter benchmark with:
 cargo bench --bench string_adapters -- --noplot
 ```
 
+Run the focused UTF-8 writer measurements with:
+
+```shell
+cargo bench --locked --bench string_adapters -- 'utf8_line|writer_allocation|streaming_charset_utf8' --noplot
+```
+
+The `utf8_line` group compares `write_line` with two explicit `write_str`
+calls for short and long ASCII, multilingual, and supplementary-plane text
+under LF, CRLF, and CR endings. Input construction and writer construction
+(including a preallocated output `Vec`) happen outside the timed routine. Both
+paths use the same output capacity and 8 KiB internal byte buffer; both finish
+the writer inside the timed routine. Throughput counts body bytes plus line
+ending bytes. Before timing, each pair is checked against the expected output.
+
+The `writer_allocation` group measures construction and finish, UTF-8 string,
+line, and character writes, and generic UTF-16LE first and repeated string
+writes, all using a sink and a fixed 16-byte internal buffer. Its single-thread
+dry run reports successful allocation requests and peak live bytes. The helper
+counts successful `alloc`, `alloc_zeroed`, and `realloc` requests only while
+measurement is enabled; input and output `Vec` allocations are outside these
+operations. Two empty dry runs check for residual counts. All new groups use
+the existing 20 samples, 2-second warm-up, and 5-second measurement settings.
+See [the 2026-10-26 baseline record](results/2026-10-26-utf8-writer-optimizations.md)
+for measured results and environment details.
+
 The timed measurements include all allocations performed by
 `CharsetStringEncoder::encode_str` and
 `CharsetStringDecoder::decode_to_string`. Before Criterion starts timing, the
