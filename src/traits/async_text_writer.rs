@@ -142,6 +142,18 @@ pub trait AsyncTextWriter {
     /// Returns an implementation-specific encoding or sink error. A prefix can
     /// already be committed when an error is returned.
     ///
+    /// # Cancellation safety
+    ///
+    /// The default implementation is not cancellation-safe. Earlier successful
+    /// steps can commit a source prefix, while cancelling this future discards
+    /// its internal character-index cursor (measured in characters by
+    /// [`Self::write_chars_async`]). Replaying the complete input can duplicate
+    /// that prefix. For cancellation-sensitive code, maintain the cursor in the
+    /// caller and advance it immediately after each successful single-step
+    /// call. The single-step method's cancellation and error guarantees
+    /// still depend on the concrete implementation. Overrides must document
+    /// their own cancellation guarantees.
+    ///
     /// # Panics
     ///
     /// Panics when [`Self::write_chars_async`] violates its nonzero-progress
@@ -174,6 +186,18 @@ pub trait AsyncTextWriter {
     ///
     /// Returns an implementation-specific encoding or sink error. A prefix can
     /// already be committed when an error is returned.
+    ///
+    /// # Cancellation safety
+    ///
+    /// The default implementation is not cancellation-safe. Earlier successful
+    /// steps can commit a source prefix, while cancelling this future discards
+    /// its internal UTF-8 byte-offset cursor (measured in bytes by
+    /// [`Self::write_str_async`]). Replaying the complete input can duplicate
+    /// that prefix. For cancellation-sensitive code, maintain the cursor in the
+    /// caller and advance it immediately after each successful single-step
+    /// call. The single-step method's cancellation and error guarantees
+    /// still depend on the concrete implementation. Overrides must document
+    /// their own cancellation guarantees.
     ///
     /// # Panics
     ///
