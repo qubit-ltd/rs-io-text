@@ -110,6 +110,10 @@ data. Retry synchronous `Pending` bytes only when safe for the surrounding
 protocol. `Indeterminate` means a panicking inner write may have committed a
 prefix, so do not replay it automatically. Recovery does not call finish, and
 encoder lifecycle output not yet emitted may be absent from the returned buffer.
+Async recovery has no corresponding indeterminate-delivery marker. If an inner
+I/O panic is caught, pending bytes may overlap an already delivered prefix;
+reconcile external side effects before retrying or replaying them. Recovery
+assumes inner I/O calls obey their normal return contracts.
 
 ## What It Provides
 

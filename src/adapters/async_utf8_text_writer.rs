@@ -25,6 +25,10 @@ use crate::LineEnding;
 /// text-writing methods reject input, including empty strings and character
 /// slices; retry [`AsyncCharsetTextWriter::finish_async`] to resume delivery
 /// after an output failure.
+/// The same recovery limitation applies after a caught inner I/O panic:
+/// pending bytes may overlap data already delivered. See
+/// [`AsyncCharsetTextWriter::into_buffered_parts`] before retrying or
+/// replaying.
 ///
 /// # Type Parameters
 ///

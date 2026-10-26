@@ -99,6 +99,7 @@ where
 writer 并重试 `finish()` 以完成交付；不要重放原始文本。编码器结束本身报错，不代表通常可以安全重试。同步 `finish()` 成功
 后，同步 `into_parts()` 会在不执行额外 I/O 的情况下取回 owned output 和 `BufferedOutputRecovery`。
 异步 `into_parts()` 仍返回原始待写字节向量；`into_buffered_parts()` 可直接取回已有的 `Buffer<u8>`，避免为待写字节新建 Vec 并复制。只把 `readable()` 返回的窗口当作待写数据。同步恢复得到的 `Pending` 仅在外围协议允许时重试；`Indeterminate` 表示底层写入 panic，可能已经产生前缀副作用，不能自动重放。恢复不会调用 finish；编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。
+异步恢复以底层 I/O 遵守正常返回合同为前提，且没有对应的不确定交付标记。捕获底层 I/O panic 后，待写字节可能与已经交付的前缀重叠；重试或重放前必须先核对外部副作用。
 
 ## 核心能力
 

@@ -264,10 +264,17 @@ where
     /// finish, the returned byte vector is empty. Calling this method first
     /// explicitly abandons encoder lifecycle output that has not been emitted
     /// while transferring already encoded bytes to the caller.
+    /// Recovery assumes that inner I/O calls obey their normal return
+    /// contracts. The asynchronous buffer does not track poisoning or
+    /// indeterminate delivery after an inner I/O panic. If such a panic is
+    /// caught, the returned pending bytes may overlap a prefix already
+    /// delivered. Reconcile external side effects before retrying or replaying
+    /// them.
     ///
     /// # Returns
     ///
-    /// Returns the wrapped output and pending bytes in logical write order.
+    /// Returns the wrapped output and the bytes pending after inner I/O calls
+    /// that obeyed their normal return contracts, in logical write order.
     #[must_use = "the returned output and pending bytes must be handled"]
     pub fn into_parts(self) -> (O, Vec<u8>) {
         let (output, pending) = self.into_buffered_parts();
@@ -277,11 +284,15 @@ where
     /// Recovers the output and its owned pending-byte buffer without copying.
     ///
     /// This method performs no I/O, allocation for a new pending buffer, or
-    /// encoder finalization. Use `pending.readable()` for bytes not yet
-    /// delivered; the backing storage may also contain a consumed prefix
-    /// and spare capacity. Call `finish_async` first for normal completion.
-    /// Otherwise, encoder lifecycle output that has not been emitted is
-    /// abandoned.
+    /// encoder finalization. Use `pending.readable()` for the logical pending
+    /// window; the backing storage may also contain a consumed prefix and
+    /// spare capacity. Recovery assumes that inner I/O calls obey their normal
+    /// return contracts. The asynchronous buffer does not track poisoning or
+    /// indeterminate delivery after an inner I/O panic. If such a panic is
+    /// caught, the returned pending bytes may overlap a prefix already
+    /// delivered. Reconcile external side effects before retrying or replaying
+    /// them. Call `finish_async` first for normal completion. Otherwise,
+    /// encoder lifecycle output that has not been emitted is abandoned.
     ///
     /// # Returns
     ///

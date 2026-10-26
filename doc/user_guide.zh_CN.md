@@ -154,6 +154,8 @@ where
 - 编码器结束成功后，writer 会拒绝新的文本，即使输出交付或 flush 返回错误。保留该
   writer 并重试 `finish`，以继续交付而不重复结束编码器；不要重放原始文本。编码器结束
   本身报错，不代表事务回滚或通常可以安全重试。
+  此重试建议针对正常返回的 I/O 错误。捕获底层 I/O panic 后，异步恢复没有不确定交付标记；
+  重试或重放前请参阅[恢复待写字节](#恢复待写字节)。
 - `CharsetStringDecoder::decode_to_string_into` 成功时追加文本；返回 `Err` 时目标字符串
   保留原内容。这不回滚 decoder 状态，也不覆盖 panic；流式 reader 有各自的前缀保留约定。
 - 同步文本操作不保证事务性。读取失败时，目标可能保留已经追加的前缀，输入也可能
@@ -181,7 +183,7 @@ where
   `InvalidInput`。开放状态的空写仍成功且不执行 I/O。调用方应省略结束后的空写，或在
   调用前判断输入是否为空；尚有待交付数据时重试 `finish_async`，不要重放文本。
 - 异步 reader 的 `input()` 可能已越过其缓冲文本。
-- 同步 buffered writer 的 `into_parts()` 不执行 I/O，并返回 `BufferedOutputRecovery`。`Pending` 表示尚未被报告写出的字节；`Indeterminate` 表示底层写入 panic，可能产生前缀副作用，不应自动重放。恢复不会调用 finish，编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。异步 writer 的 `into_parts()` 仍返回原始待写字节向量；`into_buffered_parts()` 直接返回已有缓冲区而不复制，待写窗口是 `pending.readable()`。
+- 同步 buffered writer 的 `into_parts()` 不执行 I/O，并返回 `BufferedOutputRecovery`。`Pending` 表示尚未被报告写出的字节；`Indeterminate` 表示底层写入 panic，可能产生前缀副作用，不应自动重放。恢复不会调用 finish，编码器尚未发出的生命周期尾部也可能不在返回的 buffer 中。异步 writer 的 `into_parts()` 仍返回原始待写字节向量；`into_buffered_parts()` 直接返回已有缓冲区而不复制，待写窗口是 `pending.readable()`。异步恢复以正常的底层 I/O 返回合同为前提，panic 后没有不确定交付标记；重试或重放前请参阅[恢复待写字节](#恢复待写字节)。
 - 当需要限制解码结果时，使用 `read_to_string_limited`、
   `read_to_string_limited_async` 或
   `read_to_string_with_charset_limited`。上限按该调用追加的 UTF-8 字节计算；
@@ -207,6 +209,12 @@ where
 调用 finish；发生错误后，仅在外围输出协议允许时处理 `pending.readable()`，不能重放已交付
 前缀。对于 `AsyncUtf8TextWriter`，可调用 `writer.into_inner().into_buffered_parts()`。
 只需要 `Vec<u8>` 的调用方可以继续使用 `into_parts()`。
+
+恢复语义以底层 I/O 遵守正常返回合同为前提。异步缓冲器不追踪底层 I/O panic 后的污染或
+不确定交付；捕获此类 panic 后，返回的待写字节可能包含已经交付的前缀。必须先核对外部
+副作用，再决定是否重试或重放。`pending.readable()` 用于定位缓冲区内的逻辑窗口，但窗口
+本身不能证明 panic 前这些字节均未交付。此 panic 限制不改变正常返回的 I/O 错误下的重试
+语义，也不表示取消会丢失已报告的进度。
 
 ```rust
 use qubit_codec_text::CharsetCodec;

@@ -170,6 +170,9 @@ shows line reads that preserve terminators.
   `finish` to continue delivery without finalizing again; do not replay the
   original text. An encoder-finalization error does not imply transactional
   rollback or general retry safety.
+  This retry guidance concerns normally returned I/O errors. After a caught
+  inner I/O panic, async recovery has no indeterminate-delivery marker; see
+  [Recovering pending bytes](#recovering-pending-bytes) before retrying or replaying.
 - `CharsetStringDecoder::decode_to_string_into` appends on success and retains
   the destination's original contents on `Err`. This does not roll back decoder
   state or cover panics; streaming readers have separate prefix-retention rules.
@@ -210,7 +213,7 @@ shows line reads that preserve terminators.
   or check for empty input before calling; retry `finish_async` for pending
   delivery instead of replaying text.
 - `input()` can be positioned beyond text already buffered by an async reader.
-- Synchronous buffered-writer `into_parts()` performs no I/O and returns `BufferedOutputRecovery`. `Pending` bytes were not reported as written; `Indeterminate` means a panicking inner write may have produced a prefix and must not be replayed automatically. Recovery does not call finish, and encoder lifecycle output not yet emitted may not be present in the returned buffer. Async writer `into_parts()` still returns its raw pending byte vector; `into_buffered_parts()` returns its existing buffer without copying, and `pending.readable()` is the pending window.
+- Synchronous buffered-writer `into_parts()` performs no I/O and returns `BufferedOutputRecovery`. `Pending` bytes were not reported as written; `Indeterminate` means a panicking inner write may have produced a prefix and must not be replayed automatically. Recovery does not call finish, and encoder lifecycle output not yet emitted may not be present in the returned buffer. Async writer `into_parts()` still returns its raw pending byte vector; `into_buffered_parts()` returns its existing buffer without copying, and `pending.readable()` is the pending window. Async recovery assumes normal inner I/O return contracts and has no indeterminate-delivery marker after a panic; see [Recovering pending bytes](#recovering-pending-bytes) before retrying or replaying pending data.
 - Use `read_to_string_limited`, `read_to_string_limited_async`, or
   `read_to_string_with_charset_limited` when decoded output needs a bound.
   The limit applies to UTF-8 bytes appended by that call; exceeding it
@@ -244,6 +247,16 @@ handle bytes from `pending.readable()` when the output protocol makes that safe.
 Never replay a prefix already delivered. For `AsyncUtf8TextWriter`, call
 `writer.into_inner().into_buffered_parts()`. Callers that prefer a `Vec<u8>` can
 keep using `into_parts()`.
+
+Recovery assumes that inner I/O calls obey their normal return contracts. The
+asynchronous buffer does not track poisoning or indeterminate delivery after
+an inner I/O panic. If such a panic is caught, the returned pending bytes may
+overlap a prefix already delivered. Reconcile external side effects before
+retrying or replaying them. `pending.readable()` identifies the logical window
+in the buffer, but its presence alone does not prove that these bytes were not
+delivered before a panic. These panic limits do not change retry behavior after
+normally returned I/O errors or the reported progress retained across
+cancellation.
 
 ```rust
 use qubit_codec_text::CharsetCodec;
