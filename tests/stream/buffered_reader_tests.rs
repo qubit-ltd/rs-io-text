@@ -6,10 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::cell::Cell;
 use std::io::Cursor;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::num::NonZeroUsize;
+use std::rc::Rc;
 
 use qubit_codec::CapacityError;
 use qubit_codec::TranscodeDecodeError;
@@ -478,6 +480,62 @@ impl TranscodeDecoder for ExpandingDecoder {
     type DecodeError = std::io::Error;
 }
 
+#[derive(Debug)]
+struct LargeOutputDecoder {
+    attempts: Rc<Cell<usize>>,
+}
+
+impl Transcoder for LargeOutputDecoder {
+    type Input = u8;
+    type Output = char;
+    type Error = TranscodeDecodeError<std::io::Error>;
+
+    fn max_transcode_output_len(&self, _: usize) -> Result<usize, CapacityError> {
+        Ok(64)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    fn reset(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> {
+        TranscodeFailure::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        if input_index == input.len() {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        self.attempts.set(self.attempts.get() + 1);
+        if output.len() - output_index < 64 {
+            return Ok(TranscodeProgress::new(
+                TranscodeStatus::need_output(NonZeroUsize::new(64).unwrap()),
+                0,
+                0,
+            ));
+        }
+        output[output_index..output_index + 64].fill('x');
+        Ok(TranscodeProgress::complete(1, 64))
+    }
+
+    fn finish(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> {
+        TranscodeFailure::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
+}
+
+impl TranscodeDecoder for LargeOutputDecoder {
+    type DecodeError = std::io::Error;
+}
+
 #[derive(Debug, Default)]
 struct NeedInputDecoder;
 
@@ -908,6 +966,23 @@ fn test_buffered_reader_preserves_need_output_for_expanding_decoder() -> std::io
     let mut output = String::new();
     assert_eq!(5, reader.read_to_string(&mut output)?);
     assert_eq!("xxxxx", output);
+    Ok(())
+}
+
+#[test]
+fn test_buffered_reader_satisfies_reported_output_requirement_on_next_attempt() -> std::io::Result<()> {
+    let attempts = Rc::new(Cell::new(0));
+    let decoder = LargeOutputDecoder {
+        attempts: Rc::clone(&attempts),
+    };
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![1]), decoder, 1);
+
+    assert_eq!(Some('x'), reader.read_char()?);
+    assert_eq!(2, attempts.get());
+    for _ in 1..64 {
+        assert_eq!(Some('x'), reader.read_char()?);
+    }
+    assert_eq!(None, reader.read_char()?);
     Ok(())
 }
 

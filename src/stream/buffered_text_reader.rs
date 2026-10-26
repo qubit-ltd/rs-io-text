@@ -382,8 +382,8 @@ where
                 return Ok(true);
             }
             match progress.status() {
-                TranscodeStatus::NeedOutput { .. } => {
-                    self.chars.resize(capacity.saturating_mul(2).max(capacity + 1), '\0');
+                TranscodeStatus::NeedOutput { required, .. } => {
+                    self.chars.resize(required.get(), '\0');
                     continue;
                 }
                 TranscodeStatus::Complete => continue,
