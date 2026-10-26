@@ -174,45 +174,6 @@ where
         COVERAGE_CAPACITY_FAIL_AFTER.with(|state| state.set(usize::MAX));
     }
 
-    /// Maps a transcode error in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_map_encode_error(
-        charset: Charset,
-        error: TranscodeEncodeError<CharsetEncodeError, char>,
-    ) -> CharsetEncodeError {
-        map_encode_error(charset, error)
-    }
-
-    /// Maps a chunk-local transcode error in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_map_chunk_encode_error(
-        charset: Charset,
-        error: TranscodeEncodeError<CharsetEncodeError, char>,
-        input_offset: usize,
-    ) -> CharsetEncodeError {
-        map_chunk_encode_error(charset, error, input_offset)
-    }
-
-    /// Maps an owned-buffer encoding error in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_map_owned_encode_error(charset: Charset, error: CharsetEncodeError) -> CharsetEncodeError {
-        map_owned_encode_error(charset, error)
-    }
-
-    /// Exercises owned output length arithmetic in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_ensure_owned_capacity(
-        charset: Charset,
-        output_index: usize,
-        required: usize,
-    ) -> Result<(), CharsetEncodeError> {
-        ensure_owned_capacity(&mut Vec::<u8>::new(), output_index, required, charset)
-    }
-
     /// Encodes a complete string into an owned output buffer.
     ///
     /// # Parameters
@@ -489,26 +450,6 @@ fn map_chunk_encode_error(
     }
 }
 
-/// Maps an impossible owned-buffer capacity miss to an overflow error.
-///
-/// # Parameters
-///
-/// - `charset`: Charset attached to the replacement overflow error.
-/// - `error`: Error produced while using a pre-sized owned buffer.
-///
-/// # Returns
-///
-/// Returns an output-length overflow for an impossible capacity miss, or the
-/// original error for every other error kind.
-#[cfg(coverage)]
-fn map_owned_encode_error(charset: Charset, error: CharsetEncodeError) -> CharsetEncodeError {
-    if matches!(error.kind(), CharsetEncodeErrorKind::BufferTooSmall { .. }) {
-        output_length_overflow(charset)
-    } else {
-        error
-    }
-}
-
 #[cfg(coverage)]
 thread_local! {
     static COVERAGE_RESERVE_FAIL_AFTER: Cell<usize> = const { Cell::new(usize::MAX) };
@@ -561,4 +502,95 @@ fn coverage_should_fail_reserve() -> bool {
 #[inline]
 fn output_length_overflow(charset: Charset) -> CharsetEncodeError {
     CharsetEncodeError::new(charset, CharsetEncodeErrorKind::OutputLengthOverflow, usize::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use qubit_codec::TranscodeDomainError;
+    use qubit_codec::TranscodeEncodeError;
+    use qubit_codec::TranscodeFailure;
+    use qubit_codec_text::Charset;
+    use qubit_codec_text::CharsetEncodeError;
+    use qubit_codec_text::CharsetEncodeErrorKind;
+
+    use super::ensure_owned_capacity;
+    use super::map_chunk_encode_error;
+    use super::map_encode_error;
+
+    #[test]
+    fn test_charset_string_encoder_maps_transcode_failure() {
+        let error = map_encode_error(
+            Charset::UTF_8,
+            TranscodeEncodeError::Failure(TranscodeFailure::insufficient_output(3, 2, 1)),
+        );
+
+        assert_eq!(
+            CharsetEncodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1,
+            },
+            error.kind(),
+        );
+        assert_eq!(3, error.index());
+    }
+
+    #[test]
+    fn test_charset_string_encoder_maps_unencodable_transcode_error() {
+        let error = map_encode_error(
+            Charset::UTF_8,
+            TranscodeEncodeError::Unencodable {
+                input_index: 3,
+                value: Some('中'),
+            },
+        );
+
+        assert_eq!(
+            CharsetEncodeErrorKind::UnmappableCharacter { value: '中' as u32 },
+            error.kind(),
+        );
+        assert_eq!(3, error.index());
+    }
+
+    #[test]
+    fn test_charset_string_encoder_maps_chunk_local_errors() {
+        let error = map_chunk_encode_error(
+            Charset::UTF_8,
+            TranscodeEncodeError::Unencodable {
+                input_index: 2,
+                value: Some('中'),
+            },
+            5,
+        );
+        assert_eq!(7, error.index());
+
+        let capacity_error = CharsetEncodeError::new(
+            Charset::UTF_8,
+            CharsetEncodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1,
+            },
+            3,
+        );
+        let error = map_chunk_encode_error(
+            Charset::UTF_8,
+            TranscodeEncodeError::Domain(TranscodeDomainError::main(capacity_error, 0)),
+            5,
+        );
+        assert_eq!(capacity_error, error);
+    }
+
+    #[test]
+    fn test_charset_string_encoder_reports_owned_length_addition_overflow() {
+        let mut output = vec![7_u8];
+        let error = ensure_owned_capacity(&mut output, usize::MAX, 1, Charset::UTF_8)
+            .expect_err("owned output length addition should overflow");
+
+        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
+        assert_eq!(output, vec![7]);
+
+        ensure_owned_capacity(&mut output, 1, 0, Charset::UTF_8).expect("satisfied capacity should succeed");
+        assert_eq!(output, vec![7]);
+        ensure_owned_capacity(&mut output, 1, 1, Charset::UTF_8).expect("small owned capacity should be reservable");
+        assert_eq!(output, vec![7, 0]);
+    }
 }

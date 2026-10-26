@@ -9,12 +9,6 @@ use core::num::NonZeroUsize;
 
 use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
-#[cfg(coverage)]
-use qubit_codec::TranscodeDomainError;
-#[cfg(coverage)]
-use qubit_codec::TranscodeEncodeError;
-#[cfg(coverage)]
-use qubit_codec::TranscodeFailure;
 use qubit_codec_text::AsciiCodec;
 use qubit_codec_text::Charset;
 use qubit_codec_text::CharsetCodec;
@@ -571,16 +565,10 @@ fn test_charset_string_encoder_encode_str_applies_default_policy() {
 
 #[cfg(coverage)]
 mod coverage_tests {
-
-    use super::Charset;
-    use super::CharsetEncodeError;
     use super::CharsetEncodeErrorKind;
     use super::CharsetStringEncoder;
     use super::EncodeFlushErrorCodec;
     use super::EncodeResetErrorCodec;
-    use super::TranscodeDomainError;
-    use super::TranscodeEncodeError;
-    use super::TranscodeFailure;
     use super::Utf8Codec;
 
     fn reset_coverage_hooks() {
@@ -759,102 +747,5 @@ mod coverage_tests {
         assert_eq!(1, written);
         assert_eq!(b'A', output[0]);
         reset_coverage_hooks();
-    }
-
-    #[test]
-    fn test_charset_string_encoder_maps_transcode_failure() {
-        let error = CharsetStringEncoder::<Utf8Codec>::coverage_map_encode_error(
-            Charset::UTF_8,
-            TranscodeEncodeError::Failure(TranscodeFailure::insufficient_output(3, 2, 1)),
-        );
-
-        assert_eq!(
-            CharsetEncodeErrorKind::BufferTooSmall {
-                required: 2,
-                available: 1,
-            },
-            error.kind(),
-        );
-        assert_eq!(3, error.index());
-    }
-
-    #[test]
-    fn test_charset_string_encoder_maps_unencodable_transcode_error() {
-        let error = CharsetStringEncoder::<Utf8Codec>::coverage_map_encode_error(
-            Charset::UTF_8,
-            TranscodeEncodeError::Unencodable {
-                input_index: 3,
-                value: Some('中'),
-            },
-        );
-
-        assert_eq!(
-            CharsetEncodeErrorKind::UnmappableCharacter { value: '中' as u32 },
-            error.kind(),
-        );
-        assert_eq!(3, error.index());
-    }
-
-    #[test]
-    fn test_charset_string_encoder_maps_owned_buffer_capacity_errors() {
-        let capacity_error = CharsetEncodeError::new(
-            Charset::UTF_8,
-            CharsetEncodeErrorKind::BufferTooSmall {
-                required: 2,
-                available: 1,
-            },
-            7,
-        );
-        let error = CharsetStringEncoder::<Utf8Codec>::coverage_map_owned_encode_error(Charset::UTF_8, capacity_error);
-        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
-
-        let domain_error = CharsetEncodeError::new(
-            Charset::UTF_8,
-            CharsetEncodeErrorKind::UnmappableCharacter { value: 0x100 },
-            3,
-        );
-        let error = CharsetStringEncoder::<Utf8Codec>::coverage_map_owned_encode_error(Charset::UTF_8, domain_error);
-        assert_eq!(domain_error, error);
-    }
-
-    #[test]
-    fn test_charset_string_encoder_maps_chunk_local_errors() {
-        let error = CharsetStringEncoder::<Utf8Codec>::coverage_map_chunk_encode_error(
-            Charset::UTF_8,
-            TranscodeEncodeError::Unencodable {
-                input_index: 2,
-                value: Some('中'),
-            },
-            5,
-        );
-        assert_eq!(7, error.index());
-
-        let capacity_error = CharsetEncodeError::new(
-            Charset::UTF_8,
-            CharsetEncodeErrorKind::BufferTooSmall {
-                required: 2,
-                available: 1,
-            },
-            3,
-        );
-        let error = CharsetStringEncoder::<Utf8Codec>::coverage_map_chunk_encode_error(
-            Charset::UTF_8,
-            TranscodeEncodeError::Domain(TranscodeDomainError::main(capacity_error, 0)),
-            5,
-        );
-        assert_eq!(capacity_error, error);
-    }
-
-    #[test]
-    fn test_charset_string_encoder_reports_owned_length_addition_overflow() {
-        let error = CharsetStringEncoder::<Utf8Codec>::coverage_ensure_owned_capacity(Charset::UTF_8, usize::MAX, 1)
-            .expect_err("owned output length addition should overflow");
-
-        assert_eq!(CharsetEncodeErrorKind::OutputLengthOverflow, error.kind());
-
-        CharsetStringEncoder::<Utf8Codec>::coverage_ensure_owned_capacity(Charset::UTF_8, 0, 0)
-            .expect("an already satisfied owned capacity should succeed");
-        CharsetStringEncoder::<Utf8Codec>::coverage_ensure_owned_capacity(Charset::UTF_8, 0, 1)
-            .expect("a small owned capacity should be reservable");
     }
 }

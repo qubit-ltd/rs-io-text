@@ -189,27 +189,6 @@ where
         COVERAGE_FORCE_FINISH_CAPACITY_ERROR.with(|state| state.set(true));
     }
 
-    /// Maps a transcode decode error in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_map_decode_error(
-        charset: Charset,
-        error: TranscodeDecodeError<CharsetDecodeError>,
-    ) -> CharsetDecodeError {
-        map_decode_error(charset, error)
-    }
-
-    /// Maps a finish-buffer decode error in coverage builds.
-    #[cfg(coverage)]
-    #[doc(hidden)]
-    pub fn coverage_map_finish_decode_error(
-        charset: Charset,
-        error: TranscodeDecodeError<CharsetDecodeError>,
-        output_offset: usize,
-    ) -> CharsetDecodeError {
-        map_finish_decode_error(charset, error, output_offset)
-    }
-
     /// Decodes a complete input slice into an owned [`String`].
     ///
     /// # Parameters
@@ -565,4 +544,42 @@ fn required_string_capacity(chars: &[char]) -> usize {
         capacity += ch.len_utf8();
     }
     capacity
+}
+
+#[cfg(test)]
+mod tests {
+    use qubit_codec::TranscodeDecodeError;
+    use qubit_codec::TranscodeDomainError;
+    use qubit_codec::TranscodeFailure;
+    use qubit_codec_text::Charset;
+    use qubit_codec_text::CharsetDecodeError;
+    use qubit_codec_text::CharsetDecodeErrorKind;
+
+    use super::map_decode_error;
+    use super::map_finish_decode_error;
+
+    #[test]
+    fn test_charset_string_decoder_maps_framework_and_finish_errors() {
+        let error = map_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::insufficient_output(3, 2, 1)),
+        );
+        assert_eq!(
+            CharsetDecodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1,
+            },
+            error.kind(),
+        );
+        assert_eq!(3, error.index());
+
+        let overflow =
+            CharsetDecodeError::new(Charset::UTF_8, CharsetDecodeErrorKind::OutputLengthOverflow, usize::MAX);
+        let error = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Domain(TranscodeDomainError::finish(overflow)),
+            7,
+        );
+        assert_eq!(overflow, error);
+    }
 }

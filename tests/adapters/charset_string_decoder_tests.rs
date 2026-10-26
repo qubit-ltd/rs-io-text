@@ -11,12 +11,6 @@ use core::num::NonZeroUsize;
 use qubit_codec::ByteOrder;
 use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
-#[cfg(coverage)]
-use qubit_codec::TranscodeDecodeError;
-#[cfg(coverage)]
-use qubit_codec::TranscodeDomainError;
-#[cfg(coverage)]
-use qubit_codec::TranscodeFailure;
 use qubit_codec_text::Charset;
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetDecodeError;
@@ -355,14 +349,8 @@ fn test_charset_string_decoder_decode_to_string_applies_incomplete_tail_policy()
 
 #[cfg(coverage)]
 mod coverage_tests {
-
-    use super::Charset;
-    use super::CharsetDecodeError;
     use super::CharsetDecodeErrorKind;
     use super::CharsetStringDecoder;
-    use super::TranscodeDecodeError;
-    use super::TranscodeDomainError;
-    use super::TranscodeFailure;
     use super::Utf8Codec;
 
     fn reset_coverage_hooks() {
@@ -477,31 +465,6 @@ mod coverage_tests {
 
         assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, error.kind());
         reset_coverage_hooks();
-    }
-
-    #[test]
-    fn test_charset_string_decoder_maps_framework_and_finish_errors() {
-        let error = CharsetStringDecoder::<Utf8Codec>::coverage_map_decode_error(
-            Charset::UTF_8,
-            TranscodeDecodeError::Failure(TranscodeFailure::insufficient_output(3, 2, 1)),
-        );
-        assert_eq!(
-            CharsetDecodeErrorKind::BufferTooSmall {
-                required: 2,
-                available: 1,
-            },
-            error.kind(),
-        );
-        assert_eq!(3, error.index());
-
-        let overflow =
-            CharsetDecodeError::new(Charset::UTF_8, CharsetDecodeErrorKind::OutputLengthOverflow, usize::MAX);
-        let error = CharsetStringDecoder::<Utf8Codec>::coverage_map_finish_decode_error(
-            Charset::UTF_8,
-            TranscodeDecodeError::Domain(TranscodeDomainError::finish(overflow)),
-            7,
-        );
-        assert_eq!(overflow, error);
     }
 }
 
