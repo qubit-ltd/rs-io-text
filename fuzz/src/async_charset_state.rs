@@ -51,6 +51,12 @@ struct Stats {
     cancelled: usize,
     finish_retries: usize,
     rejected_records: usize,
+    accepted_records: usize,
+    completed_records: usize,
+    nonzero_limits: usize,
+    cancellation_prefixes: usize,
+    over_limit_records: usize,
+    recovery_records: usize,
     polls: usize,
     operations: usize,
     events: usize,
@@ -79,6 +85,7 @@ fn assert_record_read_result(expected: &[String], actual: &[String], reached_eof
     }
 }
 
+#[cfg(test)]
 fn assert_rejected_record_count(expected: usize, actual: usize, reached_eof: bool) {
     assert!(actual <= expected, "too many rejected records");
     if reached_eof {
@@ -355,7 +362,14 @@ fn run_script(data: &[u8]) -> Stats {
             header.endings,
             header.cancel,
         ),
-        _ => run_reject_reader(&text, header.capacity, events, header.endings, header.cancel),
+        _ => run_reject_reader(
+            &text,
+            header.capacity,
+            &operations,
+            events,
+            header.endings,
+            header.cancel,
+        ),
     };
     stats.events = header.event_count.min(event_count);
     stats
@@ -597,7 +611,7 @@ fn run_reader(
     stats
 }
 
-fn run_reject_reader(text: &str, capacity: usize, events: Vec<Event>, endings: usize, cancel: u8) -> Stats {
+fn run_reject_reader(text: &str, capacity: usize, ops: &[u8], events: Vec<Event>, endings: usize, cancel: u8) -> Stats {
     let endings = line_ending_set(endings);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         ScriptInput::new(text.as_bytes().to_vec(), events),
@@ -607,43 +621,169 @@ fn run_reject_reader(text: &str, capacity: usize, events: Vec<Event>, endings: u
     )
     .with_line_endings(endings);
     let expected_records = text_records(text, endings);
-    let mut seen = 0;
     let mut stats = Stats::default();
     let mut polls = 0;
+    let mut record_index = 0;
     'reading: loop {
         if stats.line_ops >= OP_LIMIT {
             break;
         }
-        stats.line_ops += 1;
-        stats.operations += 1;
         let mut output = String::from("seed:中");
         loop {
-            match drive(reader.read_line_limited_async(&mut output, 0), &mut polls, cancel != 0) {
-                None => stats.cancelled += 1,
-                Some(Ok(true)) => panic!("zero limit unexpectedly accepted record"),
+            if stats.line_ops >= OP_LIMIT {
+                break 'reading;
+            }
+            stats.line_ops += 1;
+            stats.operations += 1;
+            if record_index == expected_records.len() {
+                match drive(reader.read_line_limited_async(&mut output, 0), &mut polls, cancel != 0) {
+                    Some(Ok(false)) => stats.reader_eof = true,
+                    Some(Err(error)) if is_fault(&error, FaultKind::Read) => {
+                        stats.read_errors += 1;
+                        continue;
+                    }
+                    None => {
+                        stats.cancelled += 1;
+                        continue;
+                    }
+                    other => panic!("unexpected result after reference records: {other:?}"),
+                }
+                break 'reading;
+            }
+            let record = &expected_records[record_index];
+            let limit = usize::from(ops.get(record_index).copied().unwrap_or(0)) % 33;
+            stats.nonzero_limits += usize::from(limit > 0);
+            let before = output.clone();
+            let delivered = output.strip_prefix("seed:中").expect("seed must survive");
+            assert!(record.starts_with(delivered), "delivered text is not a record prefix");
+            assert!(
+                record.is_char_boundary(delivered.len()),
+                "delivered prefix splits UTF-8"
+            );
+            let remaining = &record[delivered.len()..];
+            match drive(
+                reader.read_line_limited_async(&mut output, limit),
+                &mut polls,
+                cancel != 0,
+            ) {
+                None => {
+                    stats.cancelled += 1;
+                    validate_record_append(&before, &output, remaining, limit);
+                    if output.len() > before.len() {
+                        stats.cancellation_prefixes += 1;
+                    }
+                }
+                Some(Ok(true)) => {
+                    let appended = output
+                        .strip_prefix(&before)
+                        .expect("accepted output preserves prior target");
+                    assert_eq!(appended, remaining, "accepted record content differs");
+                    assert!(appended.len() <= limit, "accepted call exceeded its limit");
+                    stats.accepted_records += 1;
+                    stats.completed_records += 1;
+                    assert_record_completion(record_index, stats.completed_records);
+                    record_index += 1;
+                    output = String::from("seed:中");
+                }
                 Some(Ok(false)) => {
+                    validate_record_append(&before, &output, remaining, limit);
+                    let appended = output.strip_prefix("seed:中").expect("seed must survive");
+                    if record_index + 1 == expected_records.len() && appended == record {
+                        stats.accepted_records += 1;
+                        stats.completed_records += 1;
+                        assert_record_completion(record_index, stats.completed_records);
+                        record_index += 1;
+                    }
                     stats.reader_eof = true;
                     break 'reading;
                 }
                 Some(Err(error)) if error.kind() == io::ErrorKind::InvalidData => {
-                    assert_eq!(output, "seed:中");
-                    seen += 1;
-                    stats.rejected_records = seen;
-                    break;
+                    assert_eq!(output, before, "rejected call must roll back its target append");
+                    assert!(remaining.len() > limit, "record rejected without an oversized suffix");
+                    let rejected_before = stats.rejected_records;
+                    let completed_before = stats.completed_records;
+                    stats.over_limit_records += 1;
+                    stats.rejected_records += 1;
+                    stats.completed_records += 1;
+                    assert_rejection_progress(
+                        record_index,
+                        rejected_before,
+                        stats.rejected_records,
+                        completed_before,
+                        stats.completed_records,
+                    );
+                    record_index += 1;
+                    output = String::from("seed:中");
                 }
-                Some(Err(error)) if is_fault(&error, FaultKind::Read) => stats.read_errors += 1,
-                Some(Err(error)) => panic!("unexpected rejected-line error: {error}"),
+                Some(Err(error)) if is_fault(&error, FaultKind::Read) => {
+                    stats.read_errors += 1;
+                    validate_record_append(&before, &output, remaining, limit);
+                    let retained_prefix = output.strip_prefix("seed:中").is_some_and(|prefix| !prefix.is_empty());
+                    if retained_prefix || output.len() > before.len() {
+                        stats.recovery_records += 1;
+                    }
+                }
+                Some(Err(error)) => panic!("unexpected limited-line error: {error}"),
             }
         }
-        if polls > POLL_LIMIT {
-            panic!("poll budget exhausted in reject reader");
-        }
     }
-    assert_rejected_record_count(expected_records.len(), seen, stats.reader_eof);
+    if stats.reader_eof {
+        assert_eq!(record_index, expected_records.len());
+        assert_eq!(stats.accepted_records + stats.rejected_records, expected_records.len());
+        assert_eq!(stats.completed_records, expected_records.len());
+    } else {
+        assert!(stats.completed_records <= expected_records.len());
+    }
     assert!(polls <= POLL_LIMIT, "poll budget exhausted in reject reader");
     stats.pending = reader.input().stats.pending;
     stats.polls = polls;
     stats
+}
+
+fn validate_record_append(before: &str, actual: &str, remaining: &str, limit: usize) {
+    assert!(actual.starts_with(before), "target lost its prior contents");
+    let appended = &actual[before.len()..];
+    assert!(
+        remaining.starts_with(appended),
+        "new target text is not an unconsumed record prefix"
+    );
+    assert!(
+        remaining.is_char_boundary(appended.len()),
+        "new target text splits UTF-8"
+    );
+    assert!(appended.len() <= limit, "call exceeded its append limit");
+}
+
+fn assert_record_completion(record_index: usize, completed_records: usize) {
+    assert_eq!(
+        completed_records,
+        record_index + 1,
+        "duplicate or skipped reference-record completion"
+    );
+}
+
+fn assert_rejection_progress(
+    record_index: usize,
+    rejected_before: usize,
+    rejected_after: usize,
+    completed_before: usize,
+    completed_after: usize,
+) {
+    assert_eq!(
+        rejected_after,
+        rejected_before + 1,
+        "rejection count must increase exactly once for one record"
+    );
+    assert_eq!(
+        completed_after,
+        completed_before + 1,
+        "completion count must increase exactly once for one record"
+    );
+    assert_eq!(
+        completed_after,
+        record_index + 1,
+        "rejection advanced the wrong reference-record cursor"
+    );
 }
 
 fn line_ending_set(index: usize) -> LineEndingSet {
@@ -740,6 +880,7 @@ mod tests {
     use super::block_on;
     use super::is_fault;
     use super::parse;
+    use super::run_reject_reader;
     use super::run_script;
 
     #[derive(Default)]
@@ -1036,6 +1177,177 @@ mod tests {
             assert_eq!(stats.operations, OP_LIMIT);
             assert!(!stats.reader_eof);
         }
+    }
+
+    #[test]
+    fn limited_line_model_covers_limits_retries_recovery_and_eof() {
+        for (limit, accepted) in [(2, false), (3, true), (4, true)] {
+            let stats = run_reject_reader("a\r\n", 2, &[limit], vec![], 0, 0);
+            assert_eq!(stats.accepted_records == 1, accepted);
+            assert_eq!(stats.rejected_records == 1, !accepted);
+            assert!(stats.reader_eof);
+            assert_eq!(stats.nonzero_limits, 1);
+        }
+
+        let multibyte = run_reject_reader("中\nx\n", 2, &[2, 2], vec![], 1, 0);
+        assert_eq!(multibyte.rejected_records, 1);
+        assert_eq!(multibyte.accepted_records, 1);
+
+        let mixed = run_reject_reader("abcd\nx\nabcdef\ny\n", 2, &[3; 4], vec![], 1, 0);
+        assert_eq!(mixed.rejected_records, 2);
+        assert_eq!(mixed.accepted_records, 2);
+        assert!(mixed.reader_eof);
+
+        let cancelled = run_reject_reader("abcdef\n", 8, &[4], vec![Event::Ready(3), Event::Pending], 1, 1);
+        assert_eq!(cancelled.accepted_records, 1);
+        assert!(cancelled.cancelled > 0);
+        assert!(cancelled.cancellation_prefixes > 0);
+
+        let continued_cancel = run_reject_reader(
+            "abcdef\n",
+            8,
+            &[4],
+            vec![Event::Ready(3), Event::Pending, Event::Ready(1), Event::Pending],
+            1,
+            1,
+        );
+        assert_eq!(continued_cancel.accepted_records, 1);
+        assert!(continued_cancel.reader_eof);
+        assert!(continued_cancel.cancelled >= 2);
+        assert!(continued_cancel.cancellation_prefixes >= 2);
+
+        let rejected_then_next =
+            run_reject_reader("abcd\nx\n", 8, &[2, 2], vec![Event::Ready(3), Event::Pending], 1, 1);
+        assert_eq!(rejected_then_next.rejected_records, 1);
+        assert_eq!(rejected_then_next.accepted_records, 1);
+        assert!(rejected_then_next.over_limit_records > 0);
+
+        let error_recovery = run_reject_reader(
+            "abcdef\nx\n",
+            8,
+            &[4, 2],
+            vec![
+                Event::Ready(3),
+                Event::Pending,
+                Event::Error,
+                Event::Error,
+                Event::Ready(8),
+            ],
+            1,
+            1,
+        );
+        assert_eq!(error_recovery.rejected_records, 0);
+        assert_eq!(error_recovery.accepted_records, 2);
+        assert!(error_recovery.read_errors >= 2);
+        assert!(error_recovery.cancelled > 0);
+        assert!(error_recovery.cancellation_prefixes > 0);
+        assert!(error_recovery.recovery_records > 0);
+
+        let discard_errors = run_reject_reader(
+            "abcd\nx\n",
+            8,
+            &[2, 2],
+            vec![Event::Ready(3), Event::Error, Event::Error, Event::Ready(8)],
+            1,
+            0,
+        );
+        assert_eq!(discard_errors.rejected_records, 1);
+        assert_eq!(discard_errors.accepted_records, 1);
+        assert_eq!(discard_errors.completed_records, 2);
+        assert!(discard_errors.reader_eof);
+        assert!(discard_errors.read_errors >= 2);
+
+        let crlf_lookahead = run_reject_reader(
+            "ab\r\nx\n",
+            8,
+            &[4, 2],
+            vec![Event::Ready(3), Event::Pending, Event::Error, Event::Ready(8)],
+            0,
+            1,
+        );
+        assert_eq!(crlf_lookahead.rejected_records, 0);
+        assert_eq!(crlf_lookahead.accepted_records, 2);
+        assert!(crlf_lookahead.cancelled > 0);
+        assert!(crlf_lookahead.read_errors > 0);
+
+        assert!(run_reject_reader("", 1, &[], vec![], 1, 0).reader_eof);
+        let tail = run_reject_reader("tail", 1, &[4], vec![], 1, 0);
+        assert_eq!(tail.accepted_records, 1);
+        assert!(tail.reader_eof);
+        let mut many = String::new();
+        for _ in 0..OP_LIMIT - 1 {
+            many.push_str("x\n");
+        }
+        let eof_at_budget = run_reject_reader(&many, 1, &vec![2; OP_LIMIT], vec![], 1, 0);
+        assert_eq!(eof_at_budget.operations, OP_LIMIT);
+        assert!(eof_at_budget.reader_eof);
+        let mut many = String::new();
+        for _ in 0..OP_LIMIT + 1 {
+            many.push_str("x\n");
+        }
+        let budget_stop = run_reject_reader(&many, 1, &[2; OP_LIMIT], vec![], 1, 0);
+        assert_eq!(budget_stop.operations, OP_LIMIT);
+        assert!(!budget_stop.reader_eof);
+    }
+
+    #[test]
+    fn scene_three_uses_nonzero_operation_bytes_from_input() {
+        let mut data = vec![3, 0, 0, 4, 0, 0, 3, 3, 3, 3];
+        data.extend_from_slice(b"abcd\nx\nabcdef\ny\n");
+
+        let stats = run_script(&data);
+
+        assert_eq!(stats.rejected_records, 2);
+        assert_eq!(stats.accepted_records, 2);
+        assert!(stats.reader_eof);
+    }
+
+    #[test]
+    fn scene_three_missing_operation_bytes_default_to_zero() {
+        let mut data = vec![3, 0, 0, 0, 0, 0];
+        data.extend_from_slice(b"x\n");
+
+        let stats = run_script(&data);
+
+        assert_eq!(stats.rejected_records, 1);
+        assert_eq!(stats.accepted_records, 0);
+        assert!(stats.reader_eof);
+    }
+
+    #[test]
+    #[should_panic(expected = "new target text is not an unconsumed record prefix")]
+    fn limited_line_oracle_rejects_replaced_content() {
+        super::validate_record_append("seed:中", "seed:中x", "y\n", 4);
+    }
+
+    #[test]
+    #[should_panic(expected = "call exceeded its append limit")]
+    fn limited_line_oracle_rejects_excess_append() {
+        super::validate_record_append("seed:中", "seed:中ab", "ab\n", 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "target lost its prior contents")]
+    fn limited_line_oracle_rejects_bad_rollback() {
+        super::validate_record_append("seed:中a", "seed:中", "b\n", 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate or skipped reference-record completion")]
+    fn limited_line_oracle_rejects_duplicate_completion_count() {
+        super::assert_record_completion(0, 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "rejection count must increase exactly once for one record")]
+    fn limited_line_oracle_rejects_duplicate_rejection_of_same_record() {
+        super::assert_rejection_progress(0, 0, 2, 0, 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "EOF records incomplete")]
+    fn limited_line_oracle_rejects_missing_records() {
+        assert_record_read_result(&[String::from("x\n")], &[], true);
     }
 
     #[test]
