@@ -13,6 +13,7 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
+use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
 use qubit_io::AsyncInput;
@@ -46,6 +47,7 @@ fn decode_event(byte: u8) -> Event {
 struct Stats {
     pending: usize,
     read_errors: usize,
+    decode_errors: usize,
     write_errors: usize,
     flush_errors: usize,
     cancelled: usize,
@@ -75,6 +77,42 @@ fn assert_text_read_result(expected: &str, actual: &str, reached_eof: bool) {
     assert!(expected.starts_with(actual), "reader text is not a source prefix");
     if reached_eof {
         assert_eq!(actual, expected, "EOF text incomplete");
+    }
+}
+
+fn reference_utf8(bytes: &[u8], policy: u8) -> Result<String, usize> {
+    assert!(policy <= 2, "unknown UTF-8 reference policy");
+    let mut output = String::new();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        match std::str::from_utf8(&bytes[offset..]) {
+            Ok(valid) => {
+                output.push_str(valid);
+                break;
+            }
+            Err(error) => {
+                let valid_len = error.valid_up_to();
+                output.push_str(std::str::from_utf8(&bytes[offset..offset + valid_len]).unwrap());
+                let error_offset = offset + valid_len;
+                if policy == 0 {
+                    return Err(error_offset);
+                }
+                let invalid_len = error.error_len().unwrap_or(bytes.len() - error_offset);
+                if policy == 1 {
+                    output.push(char::REPLACEMENT_CHARACTER);
+                }
+                offset = error_offset + invalid_len;
+            }
+        }
+    }
+    Ok(output)
+}
+
+fn decode_policy(index: u8) -> CharsetDecodePolicy {
+    match index {
+        0 => CharsetDecodePolicy::report(),
+        1 => CharsetDecodePolicy::replace(CharsetDecodePolicy::DEFAULT_REPLACEMENT),
+        _ => CharsetDecodePolicy::ignore(),
     }
 }
 
@@ -348,7 +386,7 @@ fn run_script(data: &[u8]) -> Stats {
             &text,
             header.capacity,
             &operations,
-            events,
+            events.clone(),
             false,
             header.endings,
             header.cancel,
@@ -357,7 +395,7 @@ fn run_script(data: &[u8]) -> Stats {
             &text,
             header.capacity,
             &operations,
-            events,
+            events.clone(),
             true,
             header.endings,
             header.cancel,
@@ -366,12 +404,106 @@ fn run_script(data: &[u8]) -> Stats {
             &text,
             header.capacity,
             &operations,
-            events,
+            events.clone(),
             header.endings,
             header.cancel,
         ),
     };
     stats.events = header.event_count.min(event_count);
+    run_raw_companion(&payload, &header, &operations, &events);
+    stats
+}
+
+fn run_raw_companion(payload: &[u8], header: &Header, ops: &[u8], events: &[Event]) -> Stats {
+    let policy_index = (header.scene % 3) as u8;
+    let expected = reference_utf8(payload, policy_index);
+    if policy_index == 0 {
+        return run_report_reader(payload, expected, header.capacity, events.to_vec(), header.cancel);
+    }
+    let expected = expected.expect("replacement and ignore always produce text");
+    let mode = header.endings % 3;
+    let lines = mode == 1;
+    let limited = mode == 2;
+    if limited {
+        run_reject_reader_with(
+            payload,
+            &expected,
+            header.capacity,
+            ops,
+            events.to_vec(),
+            header.endings,
+            header.cancel,
+            decode_policy(policy_index),
+        )
+    } else {
+        run_reader_with(
+            payload,
+            &expected,
+            header.capacity,
+            ops,
+            events.to_vec(),
+            lines,
+            header.endings,
+            header.cancel,
+            decode_policy(policy_index),
+        )
+    }
+}
+
+fn run_report_reader(
+    source: &[u8],
+    expected: Result<String, usize>,
+    capacity: usize,
+    events: Vec<Event>,
+    cancel: u8,
+) -> Stats {
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
+        ScriptInput::new(source.to_vec(), events),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+        capacity,
+    );
+    let mut result = String::new();
+    let mut polls = 0;
+    let mut observed_decode_error = false;
+    let mut stats = Stats::default();
+    for _ in 0..OP_LIMIT {
+        stats.operations += 1;
+        match drive(reader.read_char_async(), &mut polls, cancel != 0) {
+            None => stats.cancelled += 1,
+            Some(Ok(Some(ch))) => {
+                stats.read_char_ops += 1;
+                result.push(ch);
+            }
+            Some(Ok(None)) => {
+                assert!(expected.is_ok(), "Report accepted malformed UTF-8");
+                assert_text_read_result(expected.as_ref().unwrap(), &result, true);
+                stats.reader_eof = true;
+                break;
+            }
+            Some(Err(error)) if is_fault(&error, FaultKind::Read) => stats.read_errors += 1,
+            Some(Err(error)) if error.kind() == io::ErrorKind::InvalidData => {
+                observed_decode_error = true;
+                stats.read_char_ops += 1;
+                break;
+            }
+            Some(Err(error)) => panic!("unexpected Report reader error: {error}"),
+        }
+    }
+    if let Err(error_offset) = expected {
+        let valid_prefix = std::str::from_utf8(&source[..error_offset]).unwrap();
+        assert!(
+            valid_prefix.starts_with(&result),
+            "Report delivered text beyond valid prefix"
+        );
+        if observed_decode_error {
+            stats.decode_errors = 1;
+        }
+    } else {
+        assert_text_read_result(expected.as_ref().unwrap(), &result, stats.reader_eof);
+    }
+    stats.pending = reader.input().stats.pending;
+    stats.polls = polls;
     stats
 }
 
@@ -501,11 +633,34 @@ fn run_reader(
     ending_index: usize,
     cancel: u8,
 ) -> Stats {
-    let source = text.as_bytes().to_vec();
+    run_reader_with(
+        text.as_bytes(),
+        text,
+        capacity,
+        ops,
+        events,
+        lines,
+        ending_index,
+        cancel,
+        CharsetDecodePolicy::report(),
+    )
+}
+
+fn run_reader_with(
+    source: &[u8],
+    expected_text: &str,
+    capacity: usize,
+    ops: &[u8],
+    events: Vec<Event>,
+    lines: bool,
+    ending_index: usize,
+    cancel: u8,
+    policy: CharsetDecodePolicy,
+) -> Stats {
     let reader = AsyncCharsetTextReader::new_with_buffer_capacity(
-        ScriptInput::new(source, events),
+        ScriptInput::new(source.to_vec(), events),
         Utf8Codec,
-        qubit_codec_text::CharsetDecodePolicy::report(),
+        policy,
         capacity,
     );
     let mut stats = Stats::default();
@@ -513,7 +668,7 @@ fn run_reader(
     if lines {
         let endings = line_ending_set(ending_index);
         let mut reader = reader.with_line_endings(endings);
-        let expected = text_records(text, endings);
+        let expected = text_records(expected_text, endings);
         let mut records = Vec::new();
         'reading: loop {
             if stats.line_ops >= OP_LIMIT {
@@ -603,7 +758,7 @@ fn run_reader(
                 panic!("poll budget exhausted in char reader");
             }
         }
-        assert_text_read_result(text, &result, stats.reader_eof);
+        assert_text_read_result(expected_text, &result, stats.reader_eof);
         stats.pending = reader.input().stats.pending;
         stats.polls = polls;
     }
@@ -612,11 +767,33 @@ fn run_reader(
 }
 
 fn run_reject_reader(text: &str, capacity: usize, ops: &[u8], events: Vec<Event>, endings: usize, cancel: u8) -> Stats {
+    run_reject_reader_with(
+        text.as_bytes(),
+        text,
+        capacity,
+        ops,
+        events,
+        endings,
+        cancel,
+        CharsetDecodePolicy::report(),
+    )
+}
+
+fn run_reject_reader_with(
+    source: &[u8],
+    text: &str,
+    capacity: usize,
+    ops: &[u8],
+    events: Vec<Event>,
+    endings: usize,
+    cancel: u8,
+    policy: CharsetDecodePolicy,
+) -> Stats {
     let endings = line_ending_set(endings);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
-        ScriptInput::new(text.as_bytes().to_vec(), events),
+        ScriptInput::new(source.to_vec(), events),
         Utf8Codec,
-        qubit_codec_text::CharsetDecodePolicy::report(),
+        policy,
         capacity,
     )
     .with_line_endings(endings);
@@ -880,7 +1057,11 @@ mod tests {
     use super::block_on;
     use super::is_fault;
     use super::parse;
+    use super::reference_utf8;
+    use super::run_reader_with;
     use super::run_reject_reader;
+    use super::run_reject_reader_with;
+    use super::run_report_reader;
     use super::run_script;
 
     #[derive(Default)]
@@ -913,6 +1094,133 @@ mod tests {
         assert_record_read_result(&records, &records[..1], false);
         assert_rejected_record_count(2, 2, true);
         assert_rejected_record_count(2, 1, false);
+    }
+
+    #[test]
+    fn reference_utf8_matches_known_policy_results() {
+        for policy in 0..=2 {
+            assert_eq!(reference_utf8(b"", policy), Ok(String::new()));
+            assert_eq!(reference_utf8(b"A\xe4\xb8\xad", policy), Ok("A中".to_owned()));
+        }
+        assert_eq!(reference_utf8(b"A\xffB", 0), Err(1));
+        assert_eq!(reference_utf8(b"A\xffB", 1), Ok("A\u{fffd}B".to_owned()));
+        assert_eq!(reference_utf8(b"A\xffB", 2), Ok("AB".to_owned()));
+        assert_eq!(reference_utf8(b"A\xe4\xb8", 0), Err(1));
+        assert_eq!(reference_utf8(b"A\xe4\xb8", 1), Ok("A\u{fffd}".to_owned()));
+        assert_eq!(reference_utf8(b"A\xe4\xb8", 2), Ok("A".to_owned()));
+        assert_eq!(reference_utf8(b"\xef\xbf\xbd\xff", 0), Err(3));
+        assert_eq!(
+            reference_utf8(b"\xef\xbf\xbd\xff", 1),
+            Ok("\u{fffd}\u{fffd}".to_owned())
+        );
+        assert_eq!(reference_utf8(b"\xef\xbf\xbd\xff", 2), Ok("\u{fffd}".to_owned()));
+        assert_eq!(reference_utf8(b"\r\xff\n", 0), Err(1));
+        assert_eq!(reference_utf8(b"\r\xff\n", 1), Ok("\r\u{fffd}\n".to_owned()));
+        assert_eq!(reference_utf8(b"\r\xff\n", 2), Ok("\r\n".to_owned()));
+        assert_eq!(
+            reference_utf8(b"A\xffB", 1).unwrap(),
+            String::from_utf8_lossy(b"A\xffB")
+        );
+    }
+
+    #[test]
+    fn raw_reader_companion_covers_policies_modes_endings_and_scheduler_events() {
+        let source = b"A\xff\xef\xbf\xbd\xe4\xb8\xad\r\xff\n\xe4\xb8";
+        for policy in [1_u8, 2] {
+            for mode in 0..3 {
+                for ending in 0..4 {
+                    let expected = reference_utf8(source, policy).unwrap();
+                    let events = vec![Event::Ready(1), Event::Pending, Event::Error, Event::Ready(2)];
+                    if mode == 2 {
+                        let stats = run_reject_reader_with(
+                            source,
+                            &expected,
+                            2,
+                            &[4; 64],
+                            events,
+                            ending,
+                            1,
+                            super::decode_policy(policy),
+                        );
+                        assert!(stats.reader_eof);
+                        assert!(stats.pending > 0 && stats.cancelled > 0 && stats.read_errors > 0);
+                    } else {
+                        let stats = run_reader_with(
+                            source,
+                            &expected,
+                            2,
+                            &[1; 64],
+                            events,
+                            mode == 1,
+                            ending,
+                            1,
+                            super::decode_policy(policy),
+                        );
+                        assert!(stats.reader_eof);
+                        assert!(stats.pending > 0 && stats.cancelled > 0 && stats.read_errors > 0);
+                    }
+                }
+            }
+        }
+        let expected = reference_utf8(b"\xe4\xb8", 1).unwrap();
+        assert_eq!(expected.len(), 3);
+        for (limit, rejected) in [(2, true), (3, false), (4, false)] {
+            let stats = run_reject_reader_with(
+                b"\xe4\xb8",
+                &expected,
+                1,
+                &[limit],
+                vec![],
+                1,
+                0,
+                super::decode_policy(1),
+            );
+            assert_eq!(stats.rejected_records, usize::from(rejected));
+            assert_eq!(stats.accepted_records, usize::from(!rejected));
+            assert!(stats.reader_eof);
+        }
+    }
+
+    #[test]
+    fn raw_malformed_limited_rejection_recovers_after_cancel_and_injected_error() {
+        let source = b"ab\xffcdefgh\nok\n";
+        for policy in [1_u8, 2] {
+            let expected = reference_utf8(source, policy).unwrap();
+            let events = vec![Event::Ready(8); 3]
+                .into_iter()
+                .chain([Event::Pending, Event::Error])
+                .chain([Event::Ready(8); 8])
+                .collect();
+            let stats = run_reject_reader_with(
+                source,
+                &expected,
+                2,
+                &[4, 8],
+                events,
+                1,
+                1,
+                super::decode_policy(policy),
+            );
+            assert_eq!(stats.rejected_records, 1);
+            assert_eq!(stats.accepted_records, 1);
+            assert_eq!(stats.completed_records, 2);
+            assert!(stats.cancelled > 0);
+            assert!(stats.read_errors > 0);
+            assert!(stats.reader_eof);
+        }
+    }
+
+    #[test]
+    fn report_raw_reader_observes_decode_error_without_retrying_it() {
+        let stats = run_report_reader(b"A\xffB", reference_utf8(b"A\xffB", 0), 1, vec![Event::Ready(1)], 0);
+        assert_eq!(stats.decode_errors, 1);
+        assert_eq!(stats.read_errors, 0);
+        assert_eq!(stats.read_char_ops, 2);
+        assert_eq!(stats.operations, 2);
+        assert!(!stats.reader_eof);
+
+        let stats = run_report_reader(b"A\xe4\xb8", reference_utf8(b"A\xe4\xb8", 0), 1, vec![], 0);
+        assert_eq!(stats.decode_errors, 1);
     }
 
     #[test]
