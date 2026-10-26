@@ -218,19 +218,20 @@ shows line reads that preserve terminators.
   length. The reader can still consume or read ahead in the underlying input,
   and the limit does not impose a raw input-byte bound.
 
-  For `read_line_limited` and `read_line_limited_async`, an oversized line is
-  consumed through its configured line ending before the error is returned, so
-  the next line read starts at the next logical record.
+  For `read_line_limited` and `read_line_limited_async`, the rejected line is
+  discarded through its configured line ending or EOF before the original
+  `InvalidData` limit error is returned. If an input error interrupts discarding,
+  it is returned first and the reader retains recovery state. Continue with a
+  line-reading method on the same reader; it resumes discarding with the original
+  limit and line-ending configuration, then reports the original `InvalidData`
+  once. The next line read starts at the next record.
 
 - An asynchronous line read cancelled before the append limit is exceeded can
   leave a successfully decoded prefix in its destination. Resume that read on
   the same reader without appending the prefix again; the limit counts bytes
   appended by each call, not the whole logical line. Once a line exceeds its
-  limit, the destination is rolled back. If cancellation or a temporary input
-  error interrupts discarding the rejected record, continue with a line-read
-  method on the same reader: it finishes discarding with the original limit and
-  line-ending configuration, then reports the original `InvalidData` error
-  once. An input error is reported first if it occurs during recovery. For
+  limit, the destination is rolled back. Cancellation while discarding the
+  rejected record also leaves recovery state for the next line-reading call. For
   input `abcdef\nok\n` with limit `4`, the rejected `abcdef\n` record is
   discarded, `InvalidData` is reported, and the next line read returns `ok\n`.
   This recovery does not apply to character reads or `into_parts`.
