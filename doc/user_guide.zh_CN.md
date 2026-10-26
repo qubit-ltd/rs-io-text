@@ -37,7 +37,7 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 ```toml
 [dependencies]
 qubit-io-text = "0.9"
-qubit-codec-text = "0.9"
+qubit-codec-text = "^0.9"
 qubit-io = "0.19"
 ```
 
