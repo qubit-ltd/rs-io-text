@@ -1039,7 +1039,6 @@ fn test_async_charset_reader_limited_reads_preserve_pending_order_and_endings() 
     Ok(())
 }
 
-#[cfg(coverage)]
 #[test]
 fn test_async_charset_reader_covers_limited_line_ending_branches() -> io::Result<()> {
     let mut reader = AsyncCharsetTextReader::new(

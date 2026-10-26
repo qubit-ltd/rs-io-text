@@ -8,9 +8,7 @@
 
 use qubit_io_text::LineEnding;
 use qubit_io_text::LineEndingSet;
-#[cfg(coverage)]
 use qubit_io_text::StrTextReader;
-#[cfg(coverage)]
 use qubit_io_text::TextLineReader;
 
 #[test]
@@ -43,7 +41,6 @@ fn test_line_ending_set_can_be_composed_and_reduced() {
     assert_eq!(LineEndingSet::CR, LineEndingSet::only(LineEnding::Cr));
 }
 
-#[cfg(coverage)]
 #[test]
 fn test_line_ending_reader_covers_cr_only_boundary() {
     let mut reader = StrTextReader::new("prefix\rtail").with_line_endings(LineEndingSet::CR);
