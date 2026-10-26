@@ -66,11 +66,22 @@ pub struct BufferedTextWriter<W, E>
 where
     W: ByteOutput,
 {
+    /// Owns the byte output and retains encoded bytes awaiting delivery.
     output: TranscodeEncodeOutput<W>,
+    /// Retains encoder state across reset, text conversion, and finalization.
     encoder: E,
+    /// Terminator appended by line-writing operations.
     line_ending: LineEnding,
+    /// Reusable staging storage for one string-writing character chunk.
+    /// Ordinary chunk returns clear it; it is not a recovery progress log.
     char_buffer: Vec<char>,
+    /// Records that the initial encoder reset returned successfully.
+    /// A failed reset is not guaranteed to leave encoder or output state
+    /// intact.
     started: bool,
+    /// Records successful buffering of encoder-finalization output.
+    /// Set before delivery and flush, so pending bytes may remain; retrying
+    /// finish completes delivery without finalizing the encoder again.
     finished: bool,
 }
 

@@ -226,7 +226,7 @@ where
 
 | 症状 | 首先检查 |
 | --- | --- |
-| 换行符不符合预期 | 调用 `write_line` 前在 writer 上配置 `LineEnding`。 |
+| 换行符不符合预期 | 行读取前在 reader 上配置 `LineEndingSet`；调用 `write_line` 前在 writer 上配置 `LineEnding`。 |
 | 解码拒绝数据 | 确认 codec，并有意选择 `CharsetDecodePolicy::report()` 或 `CharsetDecodePolicy::replace(...)` 及其替换字符。 |
 | 输出似乎不完整 | finish charset writer；仅 flush 不会结束 codec。 |
 | 失败后重试导致文本重复 | 同步错误不报告已接受的前缀；异步单步方法会返回成功进度。异步写入从返回的剩余后缀继续；必要时使用 framing 或幂等机制。 |

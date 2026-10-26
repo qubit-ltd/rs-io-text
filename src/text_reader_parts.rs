@@ -13,7 +13,9 @@ use qubit_io::Buffer;
 ///
 /// The input can be physically ahead of `unread_bytes`; consume the byte
 /// buffer before reading from `input`. Process `pending_chars` before reading
-/// more decoded text. The decoder is returned without being finalized.
+/// more decoded text. Decomposing a reader does not finalize its decoder.
+/// The returned decoder preserves its existing state and may already have
+/// been finalized at EOF; decomposition does not reset or reopen it.
 ///
 /// # Type Parameters
 ///

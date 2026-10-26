@@ -69,17 +69,29 @@ where
     I: AsyncByteInput,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Retains encoded bytes fetched ahead of the logical text position.
     input: AsyncTranscodeDecodeInput<I>,
+    /// Retains charset decoder state across encoded input boundaries.
     decoder: CharsetDecoder<C>,
+    /// Decoded storage whose unread window is `char_position..char_limit`.
     chars: Vec<char>,
+    /// Start of the unread decoded window, never greater than `char_limit`.
     char_position: usize,
+    /// End of the unread decoded window, never greater than `chars.len()`.
     char_limit: usize,
+    /// Terminators recognized by new line reads; rejected-line recovery keeps
+    /// the policy snapshot stored in `rejected_line`.
     line_endings: LineEndingSet,
+    /// Character logically preceding the unread decoded window, retained by
+    /// line-ending lookahead or append-limit handling.
     pending_char: Option<char>,
     /// Retains the original append limit and line-ending policy while an
     /// oversized line is being discarded across suspension or input errors.
     rejected_line: Option<(usize, LineEndingSet)>,
+    /// Records successful decoder reset, without promising rollback on error.
     started: bool,
+    /// Records successful decoder finalization; finalization output or a
+    /// retained character may still await delivery to the caller.
     finished: bool,
 }
 
