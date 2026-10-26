@@ -8,6 +8,7 @@
 
 use std::io::Error;
 use std::io::ErrorKind;
+use std::vec::IntoIter;
 
 use qubit_io::BufferedOutput;
 use qubit_io::CharOutput;
@@ -25,6 +26,39 @@ impl Output for FailingCharOutput {
 
     unsafe fn write_unchecked(&mut self, _input: &[char], _index: usize, _count: usize) -> std::io::Result<usize> {
         Err(Error::other("write failed"))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Injects short writes and errors without an automatic buffering wrapper.
+#[derive(Debug)]
+struct ScriptedCharOutput<'a> {
+    accepted: &'a mut String,
+    requests: &'a mut Vec<String>,
+    actions: IntoIter<Option<usize>>,
+}
+
+impl Output for ScriptedCharOutput<'_> {
+    type Item = char;
+
+    fn is_buffered(&self) -> bool {
+        true
+    }
+
+    unsafe fn write_unchecked(&mut self, input: &[char], index: usize, count: usize) -> std::io::Result<usize> {
+        let requested = &input[index..index + count];
+        self.requests.push(requested.iter().copied().collect());
+        match self.actions.next().expect("unexpected extra output request") {
+            Some(accepted) => {
+                assert!(accepted > 0 && accepted <= count, "invalid scripted progress");
+                self.accepted.extend(requested[..accepted].iter().copied());
+                Ok(accepted)
+            }
+            None => Err(Error::other("scripted write failure")),
+        }
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -197,4 +231,74 @@ fn test_write_str_flushes_full_character_chunks() -> std::io::Result<()> {
 
     assert_eq!(long_text, text);
     Ok(())
+}
+
+#[test]
+fn test_write_str_preserves_unicode_prefix_on_chunk_error() {
+    let text = "中🙂a".repeat(100);
+    let chars: Vec<char> = text.chars().collect();
+    let mut accepted = String::new();
+    let mut requests = Vec::new();
+    {
+        let output = ScriptedCharOutput {
+            accepted: &mut accepted,
+            requests: &mut requests,
+            actions: vec![Some(100), Some(156), Some(7), None].into_iter(),
+        };
+        let mut writer = OutputTextWriter::new(output);
+        let error = writer.write_str(&text).expect_err("second chunk must fail");
+        assert_eq!(ErrorKind::Other, error.kind());
+        assert_eq!("scripted write failure", error.to_string());
+    }
+    assert_eq!(chars[..263].iter().copied().collect::<String>(), accepted);
+    let expected: Vec<String> = [0..256, 100..256, 256..300, 263..300]
+        .into_iter()
+        .map(|range| chars[range].iter().copied().collect())
+        .collect();
+    assert_eq!(expected, requests, "short writes must advance character offsets");
+}
+
+#[test]
+fn test_write_line_does_not_append_ending_after_body_error() {
+    let text = "中🙂a".repeat(100);
+    let chars: Vec<char> = text.chars().collect();
+    let mut accepted = String::new();
+    let mut requests = Vec::new();
+    {
+        let output = ScriptedCharOutput {
+            accepted: &mut accepted,
+            requests: &mut requests,
+            actions: vec![Some(100), None].into_iter(),
+        };
+        let mut writer = OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
+        let error = writer.write_line(&text).expect_err("body must fail before CRLF");
+        assert_eq!(ErrorKind::Other, error.kind());
+        assert_eq!("scripted write failure", error.to_string());
+    }
+    assert_eq!(chars[..100].iter().copied().collect::<String>(), accepted);
+    let expected: Vec<String> = [0..256, 100..256]
+        .into_iter()
+        .map(|range| chars[range].iter().copied().collect())
+        .collect();
+    assert_eq!(expected, requests, "body failure must stop before the ending");
+}
+
+#[test]
+fn test_write_line_preserves_body_and_partial_crlf_on_ending_error() {
+    let text = "中🙂body";
+    let mut accepted = String::new();
+    let mut requests = Vec::new();
+    {
+        let output = ScriptedCharOutput {
+            accepted: &mut accepted,
+            requests: &mut requests,
+            actions: vec![Some(text.chars().count()), Some(1), None].into_iter(),
+        };
+        let mut writer = OutputTextWriter::new(output).with_line_ending(LineEnding::CrLf);
+        let error = writer.write_line(text).expect_err("LF must fail after accepted CR");
+        assert_eq!(ErrorKind::Other, error.kind());
+        assert_eq!("scripted write failure", error.to_string());
+    }
+    assert_eq!(format!("{text}\r"), accepted);
+    assert_eq!(vec![text.to_owned(), "\r\n".to_owned(), "\n".to_owned()], requests);
 }
