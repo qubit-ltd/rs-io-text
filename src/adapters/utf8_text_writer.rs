@@ -184,7 +184,8 @@ where
 
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
-        self.writer.write_line(line)
+        self.write_str(line)?;
+        self.write_str(self.line_ending().as_str())
     }
 
     #[inline]

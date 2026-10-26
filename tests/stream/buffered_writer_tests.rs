@@ -706,6 +706,30 @@ fn test_buffered_writer_retries_finish_after_flush_failure() -> std::io::Result<
 }
 
 #[test]
+fn test_buffered_writer_reuses_string_path_after_empty_and_across_chunks() -> std::io::Result<()> {
+    let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+        .expect("strict UTF-8 encoder should be constructible");
+    let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), encoder, 8);
+    writer.write_str("")?;
+    let long_text = "中🙂é".repeat(110);
+    assert!(long_text.chars().count() >= 300);
+    writer.write_str("前")?;
+    writer.write_char('字')?;
+    writer.write_str(&long_text)?;
+    writer.write_char('🙂')?;
+    writer.write_str("后終")?;
+    writer.finish()?;
+
+    let (cursor, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+        panic!("unexpected indeterminate recovery")
+    };
+    assert!(pending.readable().is_empty());
+    assert_eq!(format!("前字{long_text}🙂后終").as_bytes(), cursor.into_inner().as_slice());
+    Ok(())
+}
+
+#[test]
 #[should_panic(expected = "reset wrote beyond its bound")]
 fn test_buffered_writer_rejects_overreported_reset_output() {
     let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), OverreportedResetEncoder);

@@ -126,7 +126,7 @@ where
             output: TranscodeEncodeOutput::with_capacity(inner, capacity),
             encoder,
             line_ending: LineEnding::Lf,
-            char_buffer: Vec::with_capacity(DEFAULT_CHAR_CHUNK_CAPACITY),
+            char_buffer: Vec::new(),
             started: false,
             finished: false,
         }
@@ -310,6 +310,10 @@ where
         self.ensure_open()?;
         if text.is_empty() {
             return Ok(());
+        }
+        // Reserve the fixed chunk window on first use, then reuse it.
+        if self.char_buffer.capacity() < DEFAULT_CHAR_CHUNK_CAPACITY {
+            self.char_buffer.reserve_exact(DEFAULT_CHAR_CHUNK_CAPACITY);
         }
         let mut base = 0_usize;
         for ch in text.chars() {

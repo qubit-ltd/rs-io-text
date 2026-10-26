@@ -50,6 +50,31 @@ struct PanicOutput {
     bytes: Vec<u8>,
 }
 
+#[derive(Debug)]
+struct FailOnByteOnceOutput {
+    bytes: Vec<u8>,
+    fail_on: u8,
+    failed: bool,
+}
+
+impl Output for FailOnByteOnceOutput {
+    type Item = u8;
+
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> io::Result<usize> {
+        let bytes = &input[index..index + count];
+        if !self.failed && bytes.contains(&self.fail_on) {
+            self.failed = true;
+            return Err(io::Error::new(ErrorKind::BrokenPipe, "scripted write failure"));
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(count)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 impl Output for PanicOutput {
     type Item = u8;
 
@@ -166,4 +191,77 @@ fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
     let (inner, recovery) = writer.into_parts();
     assert_eq!(b"t", inner.bytes.as_slice());
     assert!(matches!(recovery, qubit_io::BufferedOutputRecovery::Indeterminate(_)));
+}
+
+#[test]
+fn test_write_line_endings_empty_lines_and_long_mixed_text() -> io::Result<()> {
+    let long_line = "中文🙂é".repeat(100);
+    assert!(long_line.chars().count() > 256);
+    let expected = format!("\n\r\n\r{long_line}首🙂尾\n");
+    let mut writer = Utf8TextWriter::with_capacity(Vec::new(), 8)
+        .with_line_ending(LineEnding::Lf);
+    writer.write_line("")?;
+    writer = writer.with_line_ending(LineEnding::CrLf);
+    writer.write_line("")?;
+    writer = writer.with_line_ending(LineEnding::Cr);
+    writer.write_line("")?;
+    writer = writer.with_line_ending(LineEnding::Lf);
+    writer.write_str(&long_line)?;
+    writer.write_char('首')?;
+    writer.write_str("🙂")?;
+    writer.write_line("尾")?;
+    writer.finish()?;
+
+    let (output, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+        panic!("unexpected indeterminate recovery")
+    };
+    assert!(pending.readable().is_empty());
+    assert_eq!(expected.as_bytes(), output.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_write_line_after_finish_rejects_empty_and_non_empty_lines() -> io::Result<()> {
+    let mut writer = Utf8TextWriter::new(Vec::new());
+    writer.write_str("done")?;
+    writer.finish()?;
+
+    assert_eq!(ErrorKind::InvalidInput, writer.write_line("").unwrap_err().kind());
+    assert_eq!(ErrorKind::InvalidInput, writer.write_line("later").unwrap_err().kind());
+    Ok(())
+}
+
+#[test]
+fn test_write_line_body_error_does_not_append_line_ending() {
+    let output = FailOnByteOnceOutput { bytes: Vec::new(), fail_on: b'!', failed: false };
+    let mut writer = Utf8TextWriter::with_capacity(output, 1);
+    let body = "!".repeat(8 * 1024 + 1);
+    let error = writer.write_line(&body).expect_err("body delivery should fail");
+    assert_eq!(ErrorKind::BrokenPipe, error.kind());
+    let (output, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+        panic!("unexpected indeterminate recovery")
+    };
+    let mut recovered = output.bytes;
+    recovered.extend_from_slice(pending.readable());
+    assert!(!recovered.contains(&b'\n'));
+    assert!(recovered.iter().all(|byte| *byte == b'!'));
+}
+
+#[test]
+fn test_write_line_ending_flush_error_keeps_body_bytes() {
+    let output = FailOnByteOnceOutput { bytes: Vec::new(), fail_on: b'\n', failed: false };
+    let mut writer = Utf8TextWriter::with_capacity(output, 1);
+    let body = "b".repeat(8 * 1024);
+    writer.write_line(&body).expect("body should be buffered successfully");
+    let error = writer.flush().expect_err("line-ending delivery should fail");
+    assert_eq!(ErrorKind::BrokenPipe, error.kind());
+    let (output, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+        panic!("unexpected indeterminate recovery")
+    };
+    let mut recovered = output.bytes;
+    recovered.extend_from_slice(pending.readable());
+    assert_eq!(format!("{body}\n").as_bytes(), recovered.as_slice());
 }
