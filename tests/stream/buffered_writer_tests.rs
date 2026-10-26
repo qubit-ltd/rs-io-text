@@ -730,6 +730,26 @@ fn test_buffered_writer_reuses_string_path_after_empty_and_across_chunks() -> st
 }
 
 #[test]
+fn test_buffered_writer_clears_string_staging_after_encode_error() -> std::io::Result<()> {
+    let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), MarkerUnencodableEncoder, 1);
+    let text = format!("{}#", "A".repeat(256));
+    let error = writer
+        .write_str(&text)
+        .expect_err("the marker should fail encoding after the first chunk");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+
+    writer.write_str("Z")?;
+    writer.finish()?;
+    let (output, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+        panic!("unexpected indeterminate recovery")
+    };
+    assert!(pending.readable().is_empty());
+    assert_eq!(format!("{}Z", "A".repeat(256)).as_bytes(), output.into_inner().as_slice());
+    Ok(())
+}
+
+#[test]
 #[should_panic(expected = "reset wrote beyond its bound")]
 fn test_buffered_writer_rejects_overreported_reset_output() {
     let mut writer = BufferedTextWriter::new(Cursor::new(Vec::new()), OverreportedResetEncoder);

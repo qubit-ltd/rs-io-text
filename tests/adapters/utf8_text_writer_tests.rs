@@ -250,12 +250,13 @@ fn test_write_line_body_error_does_not_append_line_ending() {
 }
 
 #[test]
-fn test_write_line_ending_flush_error_keeps_body_bytes() {
-    let output = FailOnByteOnceOutput { bytes: Vec::new(), fail_on: b'\n', failed: false };
+fn test_write_line_ending_write_flush_error_keeps_body_bytes() {
+    let output = FailOnByteOnceOutput { bytes: Vec::new(), fail_on: b'b', failed: false };
     let mut writer = Utf8TextWriter::with_capacity(output, 1);
-    let body = "b".repeat(8 * 1024);
-    writer.write_line(&body).expect("body should be buffered successfully");
-    let error = writer.flush().expect_err("line-ending delivery should fail");
+    let body = "b".repeat(8 * 1024 - 1);
+    let error = writer
+        .write_line(&body)
+        .expect_err("the line-ending write should surface its output flush failure");
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
     let (output, recovery) = writer.into_parts();
     let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
@@ -263,5 +264,5 @@ fn test_write_line_ending_flush_error_keeps_body_bytes() {
     };
     let mut recovered = output.bytes;
     recovered.extend_from_slice(pending.readable());
-    assert_eq!(format!("{body}\n").as_bytes(), recovered.as_slice());
+    assert_eq!(body.as_bytes(), recovered.as_slice());
 }
