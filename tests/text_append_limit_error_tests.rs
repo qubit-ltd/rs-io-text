@@ -22,11 +22,7 @@ fn test_limited_text_exposes_utf8_byte_limit() {
     let mut reader = Utf8TextReader::new(Cursor::new("中🙂".as_bytes()));
     let mut output = String::from("seed:");
     let error = reader.read_to_string_limited(&mut output, 3).unwrap_err();
-    let detail = error
-        .get_ref()
-        .unwrap()
-        .downcast_ref::<TextAppendLimitError>()
-        .unwrap();
+    let detail = error.get_ref().unwrap().downcast_ref::<TextAppendLimitError>().unwrap();
     assert_eq!(3, detail.max_append_len());
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
     assert_eq!("decoded text exceeds the 3-byte append limit", error.to_string());
@@ -75,15 +71,19 @@ fn test_invalid_encoding_and_unrelated_invalid_data_are_not_limit_errors() {
     let mut reader = Utf8TextReader::new(Cursor::new([0xff_u8]));
     let error = reader.read_char().unwrap_err();
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
-    assert!(error
-        .get_ref()
-        .unwrap()
-        .downcast_ref::<TextAppendLimitError>()
-        .is_none());
+    assert!(
+        error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<TextAppendLimitError>()
+            .is_none()
+    );
     let unrelated = io::Error::new(io::ErrorKind::InvalidData, "external invalid data");
-    assert!(unrelated
-        .get_ref()
-        .unwrap()
-        .downcast_ref::<TextAppendLimitError>()
-        .is_none());
+    assert!(
+        unrelated
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<TextAppendLimitError>()
+            .is_none()
+    );
 }
