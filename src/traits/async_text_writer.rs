@@ -248,11 +248,32 @@ pub trait AsyncTextWriter {
 
     /// Finishes the encoder and flushes pending output.
     ///
-    /// After successful completion, implementations can reject later text
-    /// writes because encoder finalization is terminal.
+    /// Encoder finalization may complete before all pending output has been
+    /// delivered or flushed. Therefore, an error or cancellation does not
+    /// imply that the writer is still open for text writes, and this method
+    /// does not guarantee that the encoder's state is rolled back.
     ///
     /// # Errors
     ///
-    /// Returns an implementation-specific encoder-finalization or sink error.
+    /// Returns an implementation-specific encoder-finalization or output
+    /// error. The writer's state after an error, including whether calling
+    /// this method again can make progress, depends on the implementation.
+    /// Callers must not assume they can continue writing or replay previously
+    /// supplied text.
+    ///
+    /// For example, after [`crate::AsyncCharsetTextWriter::finish_async`] has
+    /// finalized its encoder, an output-delivery error can be retried by
+    /// calling `finish_async` again on the same writer; text writes remain
+    /// rejected. This recovery behavior is specific to that implementation
+    /// and does not cover encoder-finalization errors in general.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling this future may already have finalized the encoder and
+    /// delivered a prefix of pending output. Whether the writer can be
+    /// resumed, and how, depends on the implementation. In particular, the
+    /// [`crate::AsyncCharsetTextWriter::finish_async`] implementation supports
+    /// retrying output delivery on the same writer after cancellation, but
+    /// this is not a general guarantee for all implementations.
     async fn finish_async(&mut self) -> Result<(), Self::Error>;
 }
