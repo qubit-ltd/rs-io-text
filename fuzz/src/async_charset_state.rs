@@ -13,14 +13,22 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
+use qubit_codec::ByteOrder;
+use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetDecodePolicy;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
+use qubit_codec_text::Utf16ByteCodec;
+use qubit_codec_text::Utf32ByteCodec;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 use qubit_io_text::AsyncCharsetTextReader;
 use qubit_io_text::AsyncCharsetTextWriter;
 use qubit_io_text::LineEndingSet;
+
+use crate::multibyte_policy_reference::ReferenceEncoding;
+use crate::multibyte_policy_reference::ReferenceText;
+use crate::multibyte_policy_reference::decode_reference;
 
 const INPUT_LIMIT: usize = 4096;
 const OP_LIMIT: usize = 64;
@@ -411,6 +419,7 @@ fn run_script(data: &[u8]) -> Stats {
     };
     stats.events = header.event_count.min(event_count);
     run_raw_companion(&payload, &header, &operations, &events);
+    run_multibyte_companion(&payload, &header, &operations, &events);
     stats
 }
 
@@ -418,7 +427,14 @@ fn run_raw_companion(payload: &[u8], header: &Header, ops: &[u8], events: &[Even
     let policy_index = (header.scene % 3) as u8;
     let expected = reference_utf8(payload, policy_index);
     if policy_index == 0 {
-        return run_report_reader(payload, expected, header.capacity, events.to_vec(), header.cancel);
+        return run_report_reader(
+            payload,
+            reference_text_utf8(payload, expected),
+            header.capacity,
+            events.to_vec(),
+            header.cancel,
+            Utf8Codec,
+        );
     }
     let expected = expected.expect("replacement and ignore always produce text");
     let mode = header.endings % 3;
@@ -434,6 +450,7 @@ fn run_raw_companion(payload: &[u8], header: &Header, ops: &[u8], events: &[Even
             header.endings,
             header.cancel,
             decode_policy(policy_index),
+            Utf8Codec,
         )
     } else {
         run_reader_with(
@@ -446,25 +463,100 @@ fn run_raw_companion(payload: &[u8], header: &Header, ops: &[u8], events: &[Even
             header.endings,
             header.cancel,
             decode_policy(policy_index),
+            Utf8Codec,
         )
     }
 }
 
-/// Rejects a Report decode error when the reference input is valid UTF-8.
-fn assert_report_decode_error_expected(expected: &Result<String, usize>) {
-    assert!(expected.is_err(), "Report rejected valid UTF-8");
+fn run_multibyte_companion(payload: &[u8], header: &Header, ops: &[u8], events: &[Event]) -> Stats {
+    let encoding = match header.scene % 4 {
+        0 => ReferenceEncoding::Utf16Le,
+        1 => ReferenceEncoding::Utf16Be,
+        2 => ReferenceEncoding::Utf32Le,
+        _ => ReferenceEncoding::Utf32Be,
+    };
+    let policy = decode_policy((header.endings % 3) as u8);
+    let expected = decode_reference(payload, encoding, policy);
+    let mode = usize::from(ops.first().copied().unwrap_or(0) % 3);
+    macro_rules! dispatch {
+        ($codec:expr) => {{
+            if header.endings % 3 == 0 {
+                run_report_reader(
+                    payload,
+                    expected,
+                    header.capacity,
+                    events.to_vec(),
+                    header.cancel,
+                    $codec,
+                )
+            } else if mode == 2 {
+                run_reject_reader_with(
+                    payload,
+                    &expected.text,
+                    header.capacity,
+                    ops,
+                    events.to_vec(),
+                    header.endings,
+                    header.cancel,
+                    policy,
+                    $codec,
+                )
+            } else {
+                run_reader_with(
+                    payload,
+                    &expected.text,
+                    header.capacity,
+                    ops,
+                    events.to_vec(),
+                    mode == 1,
+                    header.endings,
+                    header.cancel,
+                    policy,
+                    $codec,
+                )
+            }
+        }};
+    }
+    match encoding {
+        ReferenceEncoding::Utf16Le => dispatch!(Utf16ByteCodec::new(ByteOrder::LittleEndian)),
+        ReferenceEncoding::Utf16Be => dispatch!(Utf16ByteCodec::new(ByteOrder::BigEndian)),
+        ReferenceEncoding::Utf32Le => dispatch!(Utf32ByteCodec::new(ByteOrder::LittleEndian)),
+        ReferenceEncoding::Utf32Be => dispatch!(Utf32ByteCodec::new(ByteOrder::BigEndian)),
+    }
 }
 
-fn run_report_reader(
+/// Rejects a Report decode error when the reference input is valid UTF-8.
+#[cfg(test)]
+fn assert_report_decode_error_expected(expected: bool) {
+    assert!(expected, "Report rejected valid input");
+}
+
+fn reference_text_utf8(source: &[u8], expected: Result<String, usize>) -> ReferenceText {
+    match expected {
+        Ok(text) => ReferenceText {
+            text,
+            error_offset: None,
+        },
+        Err(offset) => ReferenceText {
+            text: std::str::from_utf8(&source[..offset])
+                .expect("valid UTF-8 prefix")
+                .to_owned(),
+            error_offset: Some(offset),
+        },
+    }
+}
+
+fn run_report_reader<C: CharsetCodec<Unit = u8>>(
     source: &[u8],
-    expected: Result<String, usize>,
+    expected: ReferenceText,
     capacity: usize,
     events: Vec<Event>,
     cancel: u8,
+    codec: C,
 ) -> Stats {
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         ScriptInput::new(source.to_vec(), events),
-        Utf8Codec,
+        codec,
         CharsetDecodePolicy::report(),
         capacity,
     );
@@ -481,14 +573,14 @@ fn run_report_reader(
                 result.push(ch);
             }
             Some(Ok(None)) => {
-                assert!(expected.is_ok(), "Report accepted malformed UTF-8");
-                assert_text_read_result(expected.as_ref().unwrap(), &result, true);
+                assert!(expected.error_offset.is_none(), "Report accepted malformed input");
+                assert_text_read_result(&expected.text, &result, true);
                 stats.reader_eof = true;
                 break;
             }
             Some(Err(error)) if is_fault(&error, FaultKind::Read) => stats.read_errors += 1,
             Some(Err(error)) if error.kind() == io::ErrorKind::InvalidData => {
-                assert_report_decode_error_expected(&expected);
+                assert!(expected.error_offset.is_some(), "Report rejected valid input");
                 observed_decode_error = true;
                 stats.read_char_ops += 1;
                 break;
@@ -496,17 +588,17 @@ fn run_report_reader(
             Some(Err(error)) => panic!("unexpected Report reader error: {error}"),
         }
     }
-    if let Err(error_offset) = expected {
-        let valid_prefix = std::str::from_utf8(&source[..error_offset]).unwrap();
+    if expected.error_offset.is_some() {
         assert!(
-            valid_prefix.starts_with(&result),
+            expected.text.starts_with(&result),
             "Report delivered text beyond valid prefix"
         );
+        assert!(!stats.reader_eof, "Report reached EOF after malformed input");
         if observed_decode_error {
             stats.decode_errors = 1;
         }
     } else {
-        assert_text_read_result(expected.as_ref().unwrap(), &result, stats.reader_eof);
+        assert_text_read_result(&expected.text, &result, stats.reader_eof);
     }
     stats.pending = reader.input().stats.pending;
     stats.polls = polls;
@@ -649,10 +741,11 @@ fn run_reader(
         ending_index,
         cancel,
         CharsetDecodePolicy::report(),
+        Utf8Codec,
     )
 }
 
-fn run_reader_with(
+fn run_reader_with<C: CharsetCodec<Unit = u8>>(
     source: &[u8],
     expected_text: &str,
     capacity: usize,
@@ -662,10 +755,11 @@ fn run_reader_with(
     ending_index: usize,
     cancel: u8,
     policy: CharsetDecodePolicy,
+    codec: C,
 ) -> Stats {
     let reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         ScriptInput::new(source.to_vec(), events),
-        Utf8Codec,
+        codec,
         policy,
         capacity,
     );
@@ -782,10 +876,11 @@ fn run_reject_reader(text: &str, capacity: usize, ops: &[u8], events: Vec<Event>
         endings,
         cancel,
         CharsetDecodePolicy::report(),
+        Utf8Codec,
     )
 }
 
-fn run_reject_reader_with(
+fn run_reject_reader_with<C: CharsetCodec<Unit = u8>>(
     source: &[u8],
     text: &str,
     capacity: usize,
@@ -794,11 +889,12 @@ fn run_reject_reader_with(
     endings: usize,
     cancel: u8,
     policy: CharsetDecodePolicy,
+    codec: C,
 ) -> Stats {
     let endings = line_ending_set(endings);
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         ScriptInput::new(source.to_vec(), events),
-        Utf8Codec,
+        codec,
         policy,
         capacity,
     )
@@ -1045,6 +1141,8 @@ mod tests {
     use super::AsyncCharsetTextWriter;
     use super::AsyncInput;
     use super::AsyncOutput;
+    use super::ByteOrder;
+    use super::CharsetDecodePolicy;
     use super::CharsetEncodePolicy;
     use super::Context;
     use super::EVENT_LIMIT;
@@ -1054,14 +1152,18 @@ mod tests {
     use super::OP_LIMIT;
     use super::Pin;
     use super::Poll;
+    use super::ReferenceEncoding;
     use super::ScriptInput;
     use super::ScriptOutput;
     use super::Utf8Codec;
+    use super::Utf16ByteCodec;
+    use super::Utf32ByteCodec;
     use super::assert_record_read_result;
     use super::assert_rejected_record_count;
     use super::assert_report_decode_error_expected;
     use super::assert_text_read_result;
     use super::block_on;
+    use super::decode_reference;
     use super::is_fault;
     use super::parse;
     use super::reference_utf8;
@@ -1072,11 +1174,11 @@ mod tests {
     use super::run_script;
 
     #[test]
-    #[should_panic(expected = "Report rejected valid UTF-8")]
+    #[should_panic(expected = "Report rejected valid input")]
     fn test_report_decode_error_oracle_rejects_valid_reference() {
         let expected = reference_utf8(b"A", 0);
         assert!(expected.is_ok());
-        assert_report_decode_error_expected(&expected);
+        assert_report_decode_error_expected(expected.is_err());
     }
 
     #[test]
@@ -1084,7 +1186,7 @@ mod tests {
         for source in [b"A\xff".as_slice(), b"A\xe4\xb8"] {
             let expected = reference_utf8(source, 0);
             assert!(expected.is_err());
-            assert_report_decode_error_expected(&expected);
+            assert_report_decode_error_expected(expected.is_err());
         }
     }
 
@@ -1165,6 +1267,7 @@ mod tests {
                             ending,
                             1,
                             super::decode_policy(policy),
+                            Utf8Codec,
                         );
                         assert!(stats.reader_eof);
                         assert!(stats.pending > 0 && stats.cancelled > 0 && stats.read_errors > 0);
@@ -1179,6 +1282,7 @@ mod tests {
                             ending,
                             1,
                             super::decode_policy(policy),
+                            Utf8Codec,
                         );
                         assert!(stats.reader_eof);
                         assert!(stats.pending > 0 && stats.cancelled > 0 && stats.read_errors > 0);
@@ -1198,6 +1302,7 @@ mod tests {
                 1,
                 0,
                 super::decode_policy(1),
+                Utf8Codec,
             );
             assert_eq!(stats.rejected_records, usize::from(rejected));
             assert_eq!(stats.accepted_records, usize::from(!rejected));
@@ -1224,26 +1329,278 @@ mod tests {
                 1,
                 1,
                 super::decode_policy(policy),
+                Utf8Codec,
             );
             assert_eq!(stats.rejected_records, 1);
             assert_eq!(stats.accepted_records, 1);
             assert_eq!(stats.completed_records, 2);
             assert!(stats.cancelled > 0);
             assert!(stats.read_errors > 0);
+            assert!(stats.recovery_records > 0);
+            assert!(stats.reader_eof);
+        }
+    }
+
+    #[test]
+    fn test_async_multibyte_policy_matrix() {
+        let capacity_values = [1, 2, 3, 4, 8];
+        let schedules = [
+            vec![Event::Ready(1), Event::Pending, Event::Error, Event::Ready(8)],
+            vec![Event::Ready(2), Event::Pending, Event::Ready(8)],
+        ];
+        let samples: [&[u8]; 4] = [
+            &[0x41, 0, 0x2d, 0x4e, 0x3d, 0xd8, 0x00, 0xde],
+            &[0x00, 0x41, 0x4e, 0x2d, 0xd8, 0x3d, 0xde, 0x00],
+            &[0x41, 0, 0, 0, 0x2d, 0x4e, 0, 0, 0x00, 0xf6, 0x01, 0],
+            &[0, 0, 0, 0x41, 0, 0, 0x4e, 0x2d, 0, 1, 0xf6, 0],
+        ];
+        for (encoding_index, encoding) in [
+            ReferenceEncoding::Utf16Le,
+            ReferenceEncoding::Utf16Be,
+            ReferenceEncoding::Utf32Le,
+            ReferenceEncoding::Utf32Be,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = samples[encoding_index];
+            let (malformed, tail, bom_replacement): (Vec<u8>, Vec<u8>, Vec<u8>) = match encoding {
+                ReferenceEncoding::Utf16Le => (
+                    vec![0, 0xdc, 0x41, 0],
+                    vec![0x41],
+                    vec![0xff, 0xfe, 0xfd, 0xff, 0x41, 0],
+                ),
+                ReferenceEncoding::Utf16Be => (vec![0xdc, 0, 0, 0x41], vec![0], vec![0xfe, 0xff, 0xff, 0xfd, 0, 0x41]),
+                ReferenceEncoding::Utf32Le => (
+                    vec![0xff, 0xff, 0xff, 0xff, 0x41, 0, 0, 0],
+                    vec![0x41, 0, 0],
+                    vec![0xff, 0xfe, 0, 0, 0xfd, 0xff, 0, 0, 0x41, 0, 0, 0],
+                ),
+                ReferenceEncoding::Utf32Be => (
+                    vec![0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0x41],
+                    vec![0, 0, 0x41],
+                    vec![0, 0, 0xfe, 0xff, 0, 0, 0xff, 0xfd, 0, 0, 0, 0x41],
+                ),
+            };
+            for policy_index in 0..3 {
+                let policy = super::decode_policy(policy_index);
+                for source in [
+                    source,
+                    malformed.as_slice(),
+                    tail.as_slice(),
+                    bom_replacement.as_slice(),
+                ] {
+                    for capacity in capacity_values {
+                        for events in schedules.clone() {
+                            for mode in 0..if policy_index == 0 { 1 } else { 3 } {
+                                let expected = decode_reference(source, encoding, policy);
+                                let expected_error = expected.error_offset.is_some();
+                                macro_rules! check_codec {
+                                    ($codec:expr) => {{
+                                        if policy_index == 0 {
+                                            let stats = run_report_reader(
+                                                source,
+                                                expected,
+                                                capacity,
+                                                events.clone(),
+                                                0,
+                                                $codec,
+                                            );
+                                            assert_eq!(stats.decode_errors, usize::from(expected_error));
+                                            assert!(stats.reader_eof || stats.decode_errors == 1);
+                                        } else if mode == 2 {
+                                            let stats = run_reject_reader_with(
+                                                source,
+                                                &expected.text,
+                                                capacity,
+                                                &[8; 64],
+                                                events.clone(),
+                                                0,
+                                                0,
+                                                policy,
+                                                $codec,
+                                            );
+                                            assert!(stats.reader_eof);
+                                        } else {
+                                            let stats = run_reader_with(
+                                                source,
+                                                &expected.text,
+                                                capacity,
+                                                &[if mode == 0 { 0 } else { 1 }; 64],
+                                                events.clone(),
+                                                mode == 1,
+                                                0,
+                                                0,
+                                                policy,
+                                                $codec,
+                                            );
+                                            assert!(stats.reader_eof);
+                                        }
+                                    }};
+                                }
+                                match encoding {
+                                    ReferenceEncoding::Utf16Le => {
+                                        check_codec!(Utf16ByteCodec::new(ByteOrder::LittleEndian))
+                                    }
+                                    ReferenceEncoding::Utf16Be => {
+                                        check_codec!(Utf16ByteCodec::new(ByteOrder::BigEndian))
+                                    }
+                                    ReferenceEncoding::Utf32Le => {
+                                        check_codec!(Utf32ByteCodec::new(ByteOrder::LittleEndian))
+                                    }
+                                    ReferenceEncoding::Utf32Be => {
+                                        check_codec!(Utf32ByteCodec::new(ByteOrder::BigEndian))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_async_multibyte_line_recovery() {
+        let cases: [(ReferenceEncoding, u8, Vec<u8>); 4] = [
+            (
+                ReferenceEncoding::Utf16Le,
+                0,
+                vec![
+                    0x61, 0, 0x62, 0, 0x0d, 0, 0, 0xdc, 0x0a, 0, 0x6f, 0, 0x6b, 0, 0x0d, 0, 0x0a, 0,
+                ],
+            ),
+            (
+                ReferenceEncoding::Utf16Be,
+                1,
+                vec![
+                    0, 0x61, 0, 0x62, 0, 0x0d, 0xdc, 0, 0, 0x0a, 0, 0x6f, 0, 0x6b, 0, 0x0d, 0, 0x0a,
+                ],
+            ),
+            (
+                ReferenceEncoding::Utf32Le,
+                2,
+                vec![
+                    0x61, 0, 0, 0, 0x62, 0, 0, 0, 0x0d, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x0a, 0, 0, 0, 0x6f, 0, 0, 0,
+                    0x6b, 0, 0, 0, 0x0d, 0, 0, 0, 0x0a, 0, 0, 0,
+                ],
+            ),
+            (
+                ReferenceEncoding::Utf32Be,
+                3,
+                vec![
+                    0, 0, 0, 0x61, 0, 0, 0, 0x62, 0, 0, 0, 0x0d, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0x0a, 0, 0, 0, 0x6f,
+                    0, 0, 0, 0x6b, 0, 0, 0, 0x0d, 0, 0, 0, 0x0a,
+                ],
+            ),
+        ];
+        for (encoding, kind, source) in cases {
+            let expected = decode_reference(&source, encoding, CharsetDecodePolicy::ignore());
+            assert_eq!(expected.text, "ab\r\nok\r\n");
+            let ready_count = if kind < 2 { 2 } else { 3 };
+            macro_rules! verify {
+                ($codec:expr) => {{
+                    let prefix_events = vec![Event::Ready(8); ready_count];
+                    let cancel_events = prefix_events
+                        .clone()
+                        .into_iter()
+                        .chain([Event::Pending, Event::Ready(8)])
+                        .collect();
+                    let cancel_stats = run_reject_reader_with(
+                        &source,
+                        &expected.text,
+                        1,
+                        &[1, 8],
+                        cancel_events,
+                        0,
+                        1,
+                        CharsetDecodePolicy::ignore(),
+                        $codec,
+                    );
+                    assert!(cancel_stats.cancelled > 0);
+                    let error_events = prefix_events
+                        .into_iter()
+                        .chain([Event::Error, Event::Ready(8)])
+                        .collect();
+                    let stats = run_reject_reader_with(
+                        &source,
+                        &expected.text,
+                        1,
+                        &[2, 8],
+                        error_events,
+                        0,
+                        0,
+                        CharsetDecodePolicy::ignore(),
+                        $codec,
+                    );
+                    assert!(stats.reader_eof);
+                    assert_eq!(
+                        stats.rejected_records, 1,
+                        "rejected count, accepted={}, completed={}, eof={}",
+                        stats.accepted_records, stats.completed_records, stats.reader_eof
+                    );
+                    assert_eq!(stats.accepted_records, 1, "accepted count");
+                    assert!(stats.read_errors > 0, "injected read error absent");
+                }};
+            }
+            match kind {
+                0 => verify!(Utf16ByteCodec::new(ByteOrder::LittleEndian)),
+                1 => verify!(Utf16ByteCodec::new(ByteOrder::BigEndian)),
+                2 => verify!(Utf32ByteCodec::new(ByteOrder::LittleEndian)),
+                _ => verify!(Utf32ByteCodec::new(ByteOrder::BigEndian)),
+            }
+        }
+    }
+
+    #[test]
+    fn test_async_multibyte_replace_newline_records() {
+        let source = [0, 0xdc, b'x', 0];
+        for replacement in ['\n', '\r'] {
+            let policy = CharsetDecodePolicy::replace(replacement);
+            let expected = decode_reference(&source, ReferenceEncoding::Utf16Le, policy);
+            assert_eq!(expected.text, format!("{replacement}x"));
+            let stats = run_reader_with(
+                &source,
+                &expected.text,
+                1,
+                &[0; 64],
+                vec![],
+                true,
+                0,
+                0,
+                policy,
+                Utf16ByteCodec::new(ByteOrder::LittleEndian),
+            );
             assert!(stats.reader_eof);
         }
     }
 
     #[test]
     fn report_raw_reader_observes_decode_error_without_retrying_it() {
-        let stats = run_report_reader(b"A\xffB", reference_utf8(b"A\xffB", 0), 1, vec![Event::Ready(1)], 0);
+        let source = b"A\xffB";
+        let stats = run_report_reader(
+            source,
+            super::reference_text_utf8(source, reference_utf8(source, 0)),
+            1,
+            vec![Event::Ready(1)],
+            0,
+            Utf8Codec,
+        );
         assert_eq!(stats.decode_errors, 1);
         assert_eq!(stats.read_errors, 0);
         assert_eq!(stats.read_char_ops, 2);
         assert_eq!(stats.operations, 2);
         assert!(!stats.reader_eof);
 
-        let stats = run_report_reader(b"A\xe4\xb8", reference_utf8(b"A\xe4\xb8", 0), 1, vec![], 0);
+        let source = b"A\xe4\xb8";
+        let stats = run_report_reader(
+            source,
+            super::reference_text_utf8(source, reference_utf8(source, 0)),
+            1,
+            vec![],
+            0,
+            Utf8Codec,
+        );
         assert_eq!(stats.decode_errors, 1);
     }
 
