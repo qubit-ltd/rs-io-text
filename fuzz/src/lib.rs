@@ -9,4 +9,5 @@
 //! Private state models used by fuzz targets and their unit tests.
 
 pub mod async_charset_state;
+mod multibyte_policy_reference;
 pub mod multibyte_reference;
