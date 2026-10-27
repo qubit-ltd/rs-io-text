@@ -491,6 +491,19 @@ where
         Ok(bytes)
     }
 
+    /// Limits string pre-conversion to the configured output capacity.
+    ///
+    /// This budget bounds the number of source characters converted before an
+    /// encode step; the output driver still decides how many it can commit.
+    fn string_step_char_limit(&self) -> usize {
+        let per_char = self
+            .encoder
+            .max_transcode_output_len(1)
+            .unwrap_or(1)
+            .max(1);
+        (self.output.capacity() / per_char).clamp(1, DEFAULT_CHAR_CHUNK_CAPACITY)
+    }
+
     /// Encodes one bounded string step and returns its committed byte and
     /// character counts.
     async fn write_str_step_async(&mut self, text: &str, base: usize) -> io::Result<(usize, usize)> {
@@ -499,12 +512,13 @@ where
         }
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         let mut byte_ends = [0; DEFAULT_CHAR_CHUNK_CAPACITY];
+        let char_limit = self.string_step_char_limit();
         let mut char_count = 0;
         for (byte_index, ch) in text.char_indices() {
             chars[char_count] = ch;
             byte_ends[char_count] = byte_index + ch.len_utf8();
             char_count += 1;
-            if char_count == DEFAULT_CHAR_CHUNK_CAPACITY {
+            if char_count == char_limit {
                 break;
             }
         }
@@ -534,14 +548,29 @@ where
     /// API for cancellation-sensitive code.
     pub async fn write_str_fully_async(&mut self, text: &str) -> io::Result<()> {
         self.ensure_open()?;
-        let mut byte_offset = 0;
-        let mut char_base = 0;
-        while byte_offset < text.len() {
-            let (bytes, chars) = self.write_str_step_async(&text[byte_offset..], char_base).await?;
-            byte_offset += bytes;
-            char_base += chars;
+        let mut source = text.chars();
+        let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
+        let mut base = 0_usize;
+        loop {
+            let mut count = 0;
+            while count < chars.len() {
+                let Some(ch) = source.next() else {
+                    break;
+                };
+                chars[count] = ch;
+                count += 1;
+            }
+            if count == 0 {
+                return Ok(());
+            }
+            let mut committed = 0;
+            while committed < count {
+                committed += self
+                    .encode_chars_async(&chars[committed..count], base + committed)
+                    .await?;
+            }
+            base += count;
         }
-        Ok(())
     }
 
     /// Asynchronously writes text followed by the configured line ending.

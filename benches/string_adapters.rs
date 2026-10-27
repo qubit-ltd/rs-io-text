@@ -10,8 +10,13 @@
 #[path = "support/tracking_allocator.rs"]
 mod tracking_allocator;
 
+use std::future::Future;
 use std::hint::black_box;
 use std::io::Cursor;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 use std::time::Duration;
 
 use criterion::BenchmarkId;
@@ -26,6 +31,8 @@ use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::Utf8Codec;
 use qubit_codec_text::Utf16ByteCodec;
 use qubit_codec_text::Utf32ByteCodec;
+use qubit_io::AsyncOutput;
+use qubit_io_text::AsyncUtf8TextWriter;
 use qubit_io_text::CharsetStringDecoder;
 use qubit_io_text::CharsetStringEncoder;
 use qubit_io_text::CharsetTextReader;
@@ -40,6 +47,41 @@ use crate::tracking_allocator::measure_peak_and_allocations;
 
 const FIXTURE_REPEAT: usize = 2_048;
 const SAMPLE_SIZE: usize = 20;
+
+/// Counts bytes accepted by an immediately ready asynchronous output.
+#[derive(Default)]
+struct ReadyCountingOutput {
+    bytes: usize,
+}
+
+impl AsyncOutput for ReadyCountingOutput {
+    type Item = u8;
+
+    unsafe fn poll_write_unchecked(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: &[u8],
+        _: usize,
+        count: usize,
+    ) -> Poll<std::io::Result<usize>> {
+        self.bytes += count;
+        Poll::Ready(Ok(count))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+/// Polls a future once; benchmark output is required to be immediately ready.
+fn complete_ready<F: Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut context = Context::from_waker(Waker::noop());
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(value) => value,
+        Poll::Pending => panic!("ready benchmark output must not suspend"),
+    }
+}
 
 fn fixtures() -> [(String, String); 3] {
     [
@@ -400,6 +442,68 @@ fn bench_writer_allocation(criterion: &mut Criterion) {
     group.finish();
 }
 
+/// Runs one asynchronous string path with identical writer and finish boundaries.
+fn run_async_string_path(path: &str, text: &str, chars: &[char], capacity: usize) -> usize {
+    let mut writer = AsyncUtf8TextWriter::with_capacity(ReadyCountingOutput::default(), capacity);
+    match path {
+        "full_string" => complete_ready(writer.write_str_fully_async(black_box(text)))
+            .expect("valid UTF-8 benchmark input"),
+        "step_string" => {
+            let mut offset = 0;
+            while offset < text.len() {
+                offset += complete_ready(writer.write_str_async(black_box(&text[offset..])))
+                    .expect("valid UTF-8 benchmark step");
+            }
+        }
+        "full_chars" => complete_ready(writer.write_chars_fully_async(black_box(chars)))
+            .expect("valid character benchmark input"),
+        _ => unreachable!("known asynchronous string benchmark path"),
+    }
+    complete_ready(writer.finish_async()).expect("UTF-8 benchmark writer should finish");
+    let (output, pending) = writer.into_inner().into_parts();
+    assert!(
+        pending.is_empty(),
+        "finished benchmark output has no pending bytes"
+    );
+    output.bytes
+}
+
+fn bench_async_string_windows(criterion: &mut Criterion) {
+    let fixtures = [
+        ("ascii", "a".repeat(8192)),
+        ("mixed", "A中🙂".repeat(2731)),
+        ("emoji", "🙂".repeat(8192)),
+    ];
+    let capacities = [4, 16, 8192];
+    let paths = ["full_string", "step_string", "full_chars"];
+    let mut group = criterion.benchmark_group("async_string_windows");
+    group.sample_size(SAMPLE_SIZE);
+    group.warm_up_time(Duration::from_secs(2));
+    group.measurement_time(Duration::from_secs(5));
+
+    for (fixture_name, text) in &fixtures {
+        let chars: Vec<char> = text.chars().collect();
+        for capacity in capacities {
+            for path in paths {
+                let bytes = run_async_string_path(path, text, &chars, capacity);
+                assert_eq!(
+                    text.len(),
+                    bytes,
+                    "benchmark output mismatch: {fixture_name}/{capacity}/{path}"
+                );
+                group.throughput(Throughput::Bytes(text.len() as u64));
+                let id = format!("{fixture_name}_{capacity}/{path}");
+                group.bench_function(BenchmarkId::new("utf8", id), |bencher| {
+                    bencher.iter(|| {
+                        black_box(run_async_string_path(path, text, &chars, capacity));
+                    });
+                });
+            }
+        }
+    }
+    group.finish();
+}
+
 fn bench_string_adapters(criterion: &mut Criterion) {
     let fixtures = fixtures();
     let utf16 = Utf16ByteCodec::new(ByteOrder::LittleEndian);
@@ -420,6 +524,7 @@ fn bench_string_adapters(criterion: &mut Criterion) {
     bench_streaming_charset(criterion, &fixtures);
     bench_utf8_lines(criterion);
     bench_writer_allocation(criterion);
+    bench_async_string_windows(criterion);
 }
 
 criterion_group!(benches, bench_string_adapters);

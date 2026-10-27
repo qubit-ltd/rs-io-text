@@ -114,7 +114,7 @@ fn test_complete_async_string_reports_call_character_index() {
 #[test]
 fn test_complete_async_string_reports_call_index_across_capacities() {
     for capacity in [1, 2, 7, 8192] {
-        for index in [0, 255, 256, 300, 512] {
+        for index in [0, 255, 256, 257, 300, 511, 512, 513] {
             let text = format!("{}中", "A".repeat(index));
             let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
                 IndexOutput::default(),
@@ -179,6 +179,71 @@ fn test_async_string_single_step_error_uses_current_suffix_origin() {
     assert_eq!(256, first);
     let error = complete(writer.write_chars_async(&chars[first..])).expect_err("ASCII rejects 中");
     assert_complete_main_index(&error, 44);
+}
+
+#[test]
+fn test_async_string_windows_preserve_unicode_output() -> io::Result<()> {
+    let text = "A中🙂".repeat(300);
+    for capacity in [4, 16, 8192] {
+        let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
+            IndexOutput::default(),
+            Utf8Codec,
+            CharsetEncodePolicy::report(),
+            capacity,
+        );
+        complete(writer.write_str_fully_async(&text))?;
+        complete(writer.finish_async())?;
+        let (output, pending) = writer.into_parts();
+        assert_eq!(text.as_bytes(), output.bytes.as_slice());
+        assert!(pending.is_empty());
+    }
+    Ok(())
+}
+
+#[test]
+fn test_async_string_single_steps_preserve_unicode_boundaries() -> io::Result<()> {
+    let text = "A中🙂".repeat(300);
+    for capacity in [4, 16, 8192] {
+        let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
+            IndexOutput::default(),
+            Utf8Codec,
+            CharsetEncodePolicy::report(),
+            capacity,
+        );
+        let mut offset = 0;
+        while offset < text.len() {
+            let consumed = complete(writer.write_str_async(&text[offset..]))?;
+            assert!(consumed > 0);
+            assert!(consumed <= text.len() - offset);
+            assert!(text.is_char_boundary(offset + consumed));
+            offset += consumed;
+        }
+        complete(writer.finish_async())?;
+        let (output, pending) = writer.into_parts();
+        assert_eq!(text.as_bytes(), output.bytes.as_slice());
+        assert!(pending.is_empty());
+
+        let mut writer = AsyncCharsetTextWriter::new_with_buffer_capacity(
+            IndexOutput::default(),
+            Utf8Codec,
+            CharsetEncodePolicy::report(),
+            capacity,
+        );
+        let mut offset = 0;
+        while offset < text.len() {
+            let consumed =
+                complete(AsyncTextWriter::write_str_async(&mut writer, &text[offset..]))?;
+            assert!(consumed > 0);
+            assert!(consumed <= text.len() - offset);
+            assert!(text.is_char_boundary(offset + consumed));
+            offset += consumed;
+        }
+        complete(writer.finish_async())?;
+        let (output, pending) = writer.into_parts();
+        assert_eq!(text.as_bytes(), output.bytes.as_slice());
+        assert!(pending.is_empty());
+    }
+    Ok(())
 }
 
 /// Checks that both complete-write trait methods reject a finalized writer.
