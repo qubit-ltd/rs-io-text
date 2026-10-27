@@ -355,7 +355,7 @@ fn parse(data: &[u8]) -> (Header, Vec<u8>, Vec<Event>, Vec<u8>) {
             scene: usize::from(header[0] % 4),
             raw_mode: usize::from((header[0] >> 2) % 3),
             capacity: usize::from(header[1] % 8 + 1),
-            endings: usize::from(header[2] % 4),
+            endings: usize::from(header[2] % 4 + 4 * ((header[2] / 12) % 2)),
             multibyte_policy: (header[2] >> 2) % 3,
             event_count,
             cancel: header[5],
@@ -907,9 +907,9 @@ fn run_reject_reader_with<C: CharsetCodec<Unit = u8>>(
     let mut stats = Stats::default();
     let mut polls = 0;
     let mut record_index = 0;
-    'reading: loop {
+    'reading: {
         if stats.line_ops >= OP_LIMIT {
-            break;
+            break 'reading;
         }
         let mut output = String::from("seed:中");
         loop {
@@ -1074,7 +1074,15 @@ fn line_ending_set(index: usize) -> LineEndingSet {
         0 => LineEndingSet::ALL,
         1 => LineEndingSet::LF,
         2 => LineEndingSet::CRLF,
-        _ => LineEndingSet::CR,
+        3 => LineEndingSet::CR,
+        4 => LineEndingSet::ALL
+            .without(qubit_io_text::LineEnding::Lf)
+            .without(qubit_io_text::LineEnding::CrLf)
+            .without(qubit_io_text::LineEnding::Cr),
+        5 => LineEndingSet::LF.with(qubit_io_text::LineEnding::CrLf),
+        6 => LineEndingSet::LF.with(qubit_io_text::LineEnding::Cr),
+        7 => LineEndingSet::CRLF.with(qubit_io_text::LineEnding::Cr),
+        _ => panic!("invalid line-ending set index: {index}"),
     }
 }
 
@@ -1154,6 +1162,7 @@ mod tests {
     use super::Event;
     use super::FaultKind;
     use super::INPUT_LIMIT;
+    use super::LineEndingSet;
     use super::OP_LIMIT;
     use super::Pin;
     use super::Poll;
@@ -1177,13 +1186,14 @@ mod tests {
     use super::run_reject_reader_with;
     use super::run_report_reader;
     use super::run_script;
+    use super::text_records;
 
     #[test]
     fn test_companion_selectors_reach_independent_dimensions() {
         let mut raw = BTreeSet::new();
         let mut multibyte = BTreeSet::new();
         for first in 0_u8..16 {
-            for third in 0_u8..16 {
+            for third in 0_u8..24 {
                 for mode in 0_u8..3 {
                     let data = [first, 0, third, 1, 0, 0, mode];
                     let (header, operations, events, payload) = parse(&data);
@@ -1199,8 +1209,209 @@ mod tests {
                 }
             }
         }
-        assert_eq!(raw.len(), 3 * 3 * 4);
-        assert_eq!(multibyte.len(), 4 * 3 * 3 * 4);
+        assert_eq!(raw.len(), 3 * 3 * 8);
+        assert_eq!(multibyte.len(), 4 * 3 * 3 * 8);
+    }
+
+    #[test]
+    fn test_line_ending_selector_reaches_all_sets() {
+        let endings = (0_u8..=u8::MAX)
+            .map(|third| {
+                let data = [0, 0, third, 0, 0, 0];
+                parse(&data).0.endings
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(endings, (0..8).collect());
+    }
+
+    #[test]
+    fn test_line_ending_selector_preserves_layout_and_policies() {
+        let mut combinations = BTreeSet::new();
+        for third in 0_u8..=u8::MAX {
+            let data = [7, 3, third, 5, 6, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0xcc];
+            let (header, operations, events, payload) = parse(&data);
+            let expected_endings = usize::from(third % 4 + 4 * ((third / 12) % 2));
+            assert_eq!(header.endings, expected_endings);
+            assert_eq!(header.multibyte_policy, (third >> 2) % 3);
+            assert_eq!(header.scene, 3);
+            assert_eq!(header.raw_mode, 1);
+            assert_eq!(header.capacity, 4);
+            assert_eq!(header.event_count, 6);
+            assert_eq!(header.cancel, 9);
+            assert_eq!(operations, vec![1, 2, 3, 4, 5]);
+            assert_eq!(events.len(), 6);
+            assert_eq!(payload, [0xcc]);
+        }
+        for ending in 0_u8..8 {
+            for policy in 0_u8..3 {
+                let third = 12 * (ending / 4) + 4 * policy + ending % 4;
+                let (header, _, _, _) = parse(&[0, 0, third, 0, 0, 0]);
+                assert_eq!(header.endings, usize::from(ending));
+                combinations.insert((header.endings, header.multibyte_policy));
+            }
+        }
+        assert_eq!(combinations.len(), 8 * 3);
+        for third in 0_u8..12 {
+            assert_eq!(parse(&[0, 0, third, 0, 0, 0]).0.endings, usize::from(third % 4));
+        }
+    }
+
+    #[test]
+    fn test_reference_records_all_line_ending_sets() {
+        use qubit_io_text::LineEnding;
+        let sets = [
+            LineEndingSet::ALL,
+            LineEndingSet::LF,
+            LineEndingSet::CRLF,
+            LineEndingSet::CR,
+            LineEndingSet::ALL
+                .without(LineEnding::Lf)
+                .without(LineEnding::CrLf)
+                .without(LineEnding::Cr),
+            LineEndingSet::LF.with(LineEnding::CrLf),
+            LineEndingSet::LF.with(LineEnding::Cr),
+            LineEndingSet::CRLF.with(LineEnding::Cr),
+        ];
+        let expected: [&[&str]; 8] = [
+            &["a\r\n", "b\r", "c\n", "尾\r"],
+            &["a\r\n", "b\rc\n", "尾\r"],
+            &["a\r\n", "b\rc\n尾\r"],
+            &["a\r", "\nb\r", "c\n尾\r"],
+            &["a\r\nb\rc\n尾\r"],
+            &["a\r\n", "b\rc\n", "尾\r"],
+            &["a\r", "\n", "b\r", "c\n", "尾\r"],
+            &["a\r\n", "b\r", "c\n尾\r"],
+        ];
+        for index in 0..8 {
+            let expected = expected[index].iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+            assert_eq!(text_records("a\r\nb\rc\n尾\r", sets[index]), expected, "set {index}");
+        }
+    }
+
+    #[test]
+    fn test_async_line_scenarios_cover_all_sets_with_scheduled_events() {
+        let source = "a\r\nb\rc\n尾\r".as_bytes();
+        let events = vec![Event::Ready(1), Event::Pending, Event::Error, Event::Ready(8)];
+        for ending in 0..8 {
+            let expected =
+                super::text_records(std::str::from_utf8(source).unwrap(), super::line_ending_set(ending)).concat();
+            let normal = run_reader_with(
+                source,
+                &expected,
+                2,
+                &[1; 64],
+                events.clone(),
+                true,
+                ending,
+                1,
+                super::decode_policy(1),
+                Utf8Codec,
+            );
+            assert!(normal.reader_eof, "set {ending}");
+            assert!(
+                normal.pending > 0 && normal.cancelled > 0 && normal.read_errors > 0,
+                "set {ending}"
+            );
+
+            let limited = run_reject_reader_with(
+                source,
+                &expected,
+                2,
+                &[3; 64],
+                events.clone(),
+                ending,
+                1,
+                super::decode_policy(1),
+                Utf8Codec,
+            );
+            assert!(limited.reader_eof, "set {ending}");
+            assert!(
+                limited.pending > 0 && limited.cancelled > 0 && limited.read_errors > 0,
+                "set {ending}"
+            );
+            assert_eq!(
+                limited.completed_records,
+                limited.accepted_records + limited.rejected_records
+            );
+        }
+    }
+
+    #[test]
+    fn test_multibyte_companions_read_lines_with_all_sets() {
+        let cases: [(ReferenceEncoding, &[u8]); 4] = [
+            (ReferenceEncoding::Utf16Le, &[b'A', 0, b'\n', 0, b'B', 0, b'\r', 0]),
+            (ReferenceEncoding::Utf16Be, &[0, b'A', 0, b'\n', 0, b'B', 0, b'\r']),
+            (
+                ReferenceEncoding::Utf32Le,
+                &[b'A', 0, 0, 0, b'\n', 0, 0, 0, b'B', 0, 0, 0, b'\r', 0, 0, 0],
+            ),
+            (
+                ReferenceEncoding::Utf32Be,
+                &[0, 0, 0, b'A', 0, 0, 0, b'\n', 0, 0, 0, b'B', 0, 0, 0, b'\r'],
+            ),
+        ];
+        let events = vec![Event::Ready(1), Event::Pending, Event::Error, Event::Ready(8)];
+        for (encoding, source) in cases {
+            let expected = decode_reference(source, encoding, CharsetDecodePolicy::ignore());
+            assert_eq!(expected.text, "A\nB\r");
+            for ending in 0..8 {
+                let stats = match encoding {
+                    ReferenceEncoding::Utf16Le => run_reader_with(
+                        source,
+                        &expected.text,
+                        2,
+                        &[1; 64],
+                        events.clone(),
+                        true,
+                        ending,
+                        1,
+                        CharsetDecodePolicy::ignore(),
+                        Utf16ByteCodec::new(ByteOrder::LittleEndian),
+                    ),
+                    ReferenceEncoding::Utf16Be => run_reader_with(
+                        source,
+                        &expected.text,
+                        2,
+                        &[1; 64],
+                        events.clone(),
+                        true,
+                        ending,
+                        1,
+                        CharsetDecodePolicy::ignore(),
+                        Utf16ByteCodec::new(ByteOrder::BigEndian),
+                    ),
+                    ReferenceEncoding::Utf32Le => run_reader_with(
+                        source,
+                        &expected.text,
+                        2,
+                        &[1; 64],
+                        events.clone(),
+                        true,
+                        ending,
+                        1,
+                        CharsetDecodePolicy::ignore(),
+                        Utf32ByteCodec::new(ByteOrder::LittleEndian),
+                    ),
+                    ReferenceEncoding::Utf32Be => run_reader_with(
+                        source,
+                        &expected.text,
+                        2,
+                        &[1; 64],
+                        events.clone(),
+                        true,
+                        ending,
+                        1,
+                        CharsetDecodePolicy::ignore(),
+                        Utf32ByteCodec::new(ByteOrder::BigEndian),
+                    ),
+                };
+                assert!(stats.reader_eof, "{encoding:?}, set {ending}");
+                assert!(
+                    stats.pending > 0 && stats.cancelled > 0 && stats.read_errors > 0,
+                    "{encoding:?}, set {ending}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1208,10 +1419,10 @@ mod tests {
         for scene in 0_u8..4 {
             for raw_mode in 0_u8..3 {
                 for policy in 0_u8..3 {
-                    for endings in 0_u8..4 {
+                    for endings in 0_u8..8 {
                         for mode in 0_u8..3 {
                             let first = scene | (raw_mode << 2);
-                            let third = endings | (policy << 2);
+                            let third = 12 * (endings / 4) + 4 * policy + endings % 4;
                             let mut data = vec![first, 1, third, 64, 0, 0];
                             data.extend([16_u8; 64]);
                             data[6] = mode;
@@ -1305,7 +1516,7 @@ mod tests {
         let source = b"A\xff\xef\xbf\xbd\xe4\xb8\xad\r\xff\n\xe4\xb8";
         for policy in [1_u8, 2] {
             for mode in 0..3 {
-                for ending in 0..4 {
+                for ending in 0..8 {
                     let expected = reference_utf8(source, policy).unwrap();
                     let events = vec![Event::Ready(1), Event::Pending, Event::Error, Event::Ready(2)];
                     if mode == 2 {
