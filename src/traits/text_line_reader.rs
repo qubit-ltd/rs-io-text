@@ -28,6 +28,12 @@ use crate::TextReader;
 pub trait TextLineReader: TextReader {
     /// Reads one line into `output`.
     ///
+    /// The default implementation ends a line only at LF and preserves that
+    /// LF and any preceding CR. A standalone CR does not end a line. Override
+    /// this method to recognize standalone CR or another configurable
+    /// line-ending policy. Built-in readers override it to provide their
+    /// documented line-ending sets.
+    ///
     /// # Parameters
     /// - `output`: Destination string. The line is appended to existing
     ///   content.

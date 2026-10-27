@@ -673,6 +673,22 @@ fn test_default_read_line_preserves_terminator_and_eof() {
 }
 
 #[test]
+fn test_default_line_reader_lf_boundary() {
+    let mut reader = SequenceTextReader::new("a\rb\r\nc\nlast");
+    let mut output = String::from("prefix:");
+    assert_eq!(reader.read_line(&mut output), Ok(true));
+    assert_eq!(output, "prefix:a\rb\r\n");
+    output.clear();
+    assert_eq!(reader.read_line(&mut output), Ok(true));
+    assert_eq!(output, "c\n");
+    output.clear();
+    assert_eq!(reader.read_line(&mut output), Ok(true));
+    assert_eq!(output, "last");
+    assert_eq!(reader.read_line(&mut output), Ok(false));
+    assert_eq!(output, "last");
+}
+
+#[test]
 fn test_read_chars_propagates_read_errors() {
     let mut reader = FailingTextReader;
     let mut chars = Vec::new();
