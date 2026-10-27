@@ -341,5 +341,23 @@ started during sampling. The control path showed clear drift (for example,
 `ascii_16/full_chars` was 24.169 µs vs 19.406 µs paired old, and
 `ascii_8192/full_chars` was 13.470 µs vs 5.979 µs paired old). It was
 interrupted around 06:57 UTC with exit code 130 and is excluded in full. No
-competing processes were stopped. A complete optimized run remains pending a
-period with stable paired control measurements.
+competing processes were stopped. At that point, another complete optimized
+run remained pending; later focused measurements and the final acceptance
+decision are recorded below.
+
+## Final acceptance
+
+The user accepted this optimization on 2026-10-27 based on the measured
+small-capacity complete-string improvements. In the paired 27-ID comparison,
+`full_string` latency decreased by 91.8% / 95.8% / 97.1% at capacity 4 and
+85.0% / 93.8% / 94.9% at capacity 16 for ASCII / mixed Unicode / emoji.
+Unchanged `full_chars` controls for the capacity-4 cases remained close between
+the paired runs, supporting that these large reductions are attributable to the
+string path change.
+
+Acceptance records the user's judgment that the optimization is successful.
+The default-capacity ASCII single-step result remains inconclusive: repeated
+focused runs showed 86.0% and 90.5% drift in the unchanged ASCII `full_chars`
+control, beyond the plan's ±10% stability threshold. This limitation is retained
+for future performance investigations and does not reverse the accepted
+small-capacity complete-string result.
