@@ -496,7 +496,13 @@ fn test_async_charset_writer_small_capacity_write_cancellation_preserves_bytes()
     let output = ChunkedAsyncOutput::new(4, true);
     let mut writer =
         AsyncCharsetTextWriter::new_with_buffer_capacity(output, Utf8Codec, CharsetEncodePolicy::report(), 4);
-    assert_eq!(4, complete(writer.write_str_async("abcd"))?);
+    let text = "abcd";
+    let mut offset = 0;
+    while offset < text.len() {
+        let consumed = complete(writer.write_str_async(&text[offset..]))?;
+        assert!(consumed > 0);
+        offset += consumed;
+    }
     let mut context = test_context();
     {
         let mut future = Box::pin(writer.write_char_async('e'));
@@ -513,7 +519,7 @@ fn test_async_charset_writer_small_capacity_error_does_not_consume_new_char() ->
     let output = ChunkedAsyncOutput::new(4, false).with_write_error(io::ErrorKind::BrokenPipe);
     let mut writer =
         AsyncCharsetTextWriter::new_with_buffer_capacity(output, Utf8Codec, CharsetEncodePolicy::report(), 4);
-    assert_eq!(4, complete(writer.write_str_async("abcd"))?);
+    assert_eq!(4, complete(writer.write_chars_async(&['a', 'b', 'c', 'd']))?);
     assert_eq!(
         io::ErrorKind::BrokenPipe,
         complete(writer.write_char_async('e')).unwrap_err().kind()
@@ -1198,9 +1204,8 @@ fn test_async_charset_reader_into_parts_preserves_unreturned_characters() -> io:
 #[test]
 fn test_async_charset_reader_parts_preserve_chars_bytes_and_source() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("abc🙂tail".as_bytes().to_vec(), 4, false);
-    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
-        input, Utf8Codec, CharsetDecodePolicy::report(), 4,
-    );
+    let mut reader =
+        AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 4);
     assert_eq!(Some('a'), complete(reader.read_char_async())?);
     let mut parts = reader.into_parts();
     assert_eq!(4, parts.input.position);
@@ -1233,9 +1238,8 @@ fn test_async_charset_reader_parts_preserve_chars_bytes_and_source() -> io::Resu
 #[test]
 fn test_async_charset_reader_parts_preserve_partial_input_after_cancel() {
     let input = ChunkedAsyncInput::new("🙂tail".as_bytes().to_vec(), 1, false);
-    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
-        input, Utf8Codec, CharsetDecodePolicy::report(), 4,
-    );
+    let mut reader =
+        AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 4);
     let mut future = Box::pin(reader.read_char_async());
     let mut context = Context::from_waker(Waker::noop());
     assert!(future.as_mut().poll(&mut context).is_pending());
