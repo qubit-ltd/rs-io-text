@@ -25,6 +25,7 @@ mod line_ending;
 mod line_ending_set;
 pub mod prelude;
 mod stream;
+mod text_append_limit_error;
 mod text_reader_parts;
 mod traits;
 
@@ -53,6 +54,7 @@ pub use line_ending_set::LineEndingSet;
 pub use stream::BufferedTextReader;
 pub use stream::BufferedTextWriter;
 pub use text_reader_parts::TextReaderParts;
+pub use text_append_limit_error::TextAppendLimitError;
 pub use traits::AsyncTextLineReader;
 pub use traits::AsyncTextReader;
 pub use traits::AsyncTextWriter;

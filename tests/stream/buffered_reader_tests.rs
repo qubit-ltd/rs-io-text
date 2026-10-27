@@ -27,6 +27,7 @@ use qubit_codec_text::Utf8Codec;
 use qubit_io_text::BufferedTextReader;
 use qubit_io_text::LineEnding;
 use qubit_io_text::LineEndingSet;
+use qubit_io_text::TextAppendLimitError;
 use qubit_io_text::TextLineReader;
 use qubit_io_text::TextReader;
 
@@ -372,6 +373,15 @@ fn test_rejected_line_retries_repeated_errors_and_reports_original_limit_once() 
     assert_eq!(ErrorKind::WouldBlock, reader.read_line(&mut output).unwrap_err().kind());
     let error = reader.read_line(&mut output).unwrap_err();
     assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(
+        4,
+        error
+            .get_ref()
+            .expect("limit error source")
+            .downcast_ref::<TextAppendLimitError>()
+            .expect("structured append limit error")
+            .max_append_len()
+    );
     assert!(error.to_string().contains("4-byte append limit"));
     assert_eq!("seed:", output);
     assert!(reader.read_line(&mut output)?);

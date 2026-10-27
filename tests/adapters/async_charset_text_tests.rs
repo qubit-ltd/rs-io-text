@@ -42,6 +42,7 @@ use qubit_io_text::AsyncUtf8TextReader;
 use qubit_io_text::AsyncUtf8TextWriter;
 use qubit_io_text::LineEnding;
 use qubit_io_text::LineEndingSet;
+use qubit_io_text::TextAppendLimitError;
 
 fn assert_async_reader<T>()
 where
@@ -940,6 +941,15 @@ fn test_rejected_line_survives_cancellation() -> io::Result<()> {
     assert_eq!("seed:", output);
     let error = complete(reader.read_line_limited_async(&mut output, 4)).unwrap_err();
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(
+        4,
+        error
+            .get_ref()
+            .expect("limit error source")
+            .downcast_ref::<TextAppendLimitError>()
+            .expect("structured append limit error")
+            .max_append_len()
+    );
     assert_eq!("seed:", output);
     assert!(complete(reader.read_line_limited_async(&mut output, 4))?);
     assert_eq!("seed:ok\n", output);
@@ -1052,6 +1062,15 @@ fn test_rejected_line_keeps_original_limit_when_resumed_unbounded() -> io::Resul
     drop(future);
     let error = complete(reader.read_line_async(&mut output)).unwrap_err();
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(
+        4,
+        error
+            .get_ref()
+            .expect("limit error source")
+            .downcast_ref::<TextAppendLimitError>()
+            .expect("structured append limit error")
+            .max_append_len()
+    );
     assert!(error.to_string().contains("4-byte append limit"));
     assert!(complete(reader.read_line_async(&mut output))?);
     assert_eq!("ok\n", output);

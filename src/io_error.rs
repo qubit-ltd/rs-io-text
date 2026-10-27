@@ -11,6 +11,8 @@ use std::io;
 
 use qubit_codec::CapacityError;
 
+use crate::TextAppendLimitError;
+
 /// Converts a decoder or decoder-contract error into a text I/O error.
 #[must_use]
 pub(crate) fn decode_error_to_io<E>(error: E) -> io::Error
@@ -40,6 +42,6 @@ pub(crate) fn capacity_error_to_io(error: CapacityError) -> io::Error {
 pub(crate) fn text_append_limit_error(max_append_len: usize) -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidData,
-        format!("decoded text exceeds the {max_append_len}-byte append limit"),
+        TextAppendLimitError::new(max_append_len),
     )
 }
