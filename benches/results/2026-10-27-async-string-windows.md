@@ -225,6 +225,43 @@ interval is wide. Report the default-capacity ASCII step result as unresolved
 and the performance gate as not accepted; do not treat the ratio alone as a
 passing benchmark.
 
+### Final focused pair (external load; performance not accepted)
+
+At the user's direction, one more focused old/new pair ran without waiting for
+external work to stop. Both sides used this filter and Criterion configuration:
+
+```text
+cargo bench --locked --bench string_adapters -- 'async_string_windows/utf8/(ascii|mixed|emoji)_8192/(step_string|full_chars)' --noplot
+```
+
+The old side used source `f006f63` and target
+`/tmp/rs-io-text-t1-focused-old-target-20261027`; it ran from 07:46:44 to
+07:47:33 UTC and exited 0. The optimized side used the T1 source at `7a4abac`
+and target `/tmp/rs-io-text-t1-corrected-target-20261027`; it ran from
+07:47:42 to 07:48:31 UTC and exited 0. Each side measured six IDs using 20
+samples, a 2-second warm-up, and a 5-second measurement per ID. The runs were
+serial. They were intentionally run despite external host activity, as
+authorized; no per-ID process-load snapshot was collected during these two
+intervals, so the `full_chars` paths are the available in-run controls.
+
+| ID | Old estimate (95% CI) | Optimized estimate (95% CI) | Old → optimized |
+| --- | ---: | ---: | ---: |
+| ascii_8192/step_string | 19.943 µs (19.790–20.112) | 27.193 µs (27.055–27.316) | +36.4% |
+| ascii_8192/full_chars | 6.210 µs (6.189–6.227) | 11.831 µs (11.769–11.905) | +90.5% |
+| mixed_8192/step_string | 44.768 µs (44.673–44.890) | 42.117 µs (41.924–42.327) | −5.9% |
+| mixed_8192/full_chars | 17.082 µs (16.987–17.179) | 17.055 µs (17.006–17.117) | −0.2% |
+| emoji_8192/step_string | 60.425 µs (59.709–61.681) | 49.787 µs (49.609–49.977) | −17.6% |
+| emoji_8192/full_chars | 21.597 µs (21.541–21.648) | 21.687 µs (21.603–21.771) | +0.4% |
+
+The ASCII control shifted by about +90.5%, far outside the plan's ±10%
+stability threshold. Mixed and emoji controls stayed within 1%, but that does
+not compensate for the ASCII control drift. The normalized step/control ratio
+changed from 3.21 to 2.30 for ASCII, 2.62 to 2.47 for mixed Unicode, and 2.80
+to 2.30 for emoji. Because the ASCII control is unstable, this pair does not
+establish a reliable default-capacity ASCII regression or improvement; the
+performance objective remains unaccepted. Do not interpret the mixed/emoji
+timings or the normalized ratios as a pass.
+
 The first paired after-run using the shared target was invalid: Cargo printed
 `Finished` without `Compiling qubit-io-text`, and its small-capacity string
 timings matched the old implementation. That run was interrupted (exit code
