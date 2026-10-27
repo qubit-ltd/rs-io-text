@@ -23,6 +23,7 @@ use qubit_io_text::CharsetTextWriter;
 use qubit_io_text::TextReader;
 use qubit_io_text::TextWriter;
 use qubit_io_text_fuzz::multibyte_reference::fuzz_multibyte_reference;
+use qubit_io_text_fuzz::report_decode_error::is_report_input_error;
 
 /// Bounds allocations when the target is invoked outside CI.
 const MAX_FUZZ_INPUT_LEN: usize = 4096;
@@ -56,7 +57,10 @@ fn fuzz_strict_utf8(data: &[u8]) {
                 result.expect("valid UTF-8 must decode in strict mode");
                 assert_eq!(expected, output);
             }
-            Err(_) => assert!(result.is_err()),
+            Err(_) => {
+                let error = result.expect_err("invalid UTF-8 must fail in strict mode");
+                assert!(is_report_input_error(&error, Utf8Codec.charset()), "{error:?}");
+            }
         }
     }
 }

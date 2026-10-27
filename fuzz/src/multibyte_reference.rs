@@ -18,6 +18,8 @@ use qubit_codec_text::Utf32ByteCodec;
 use qubit_io_text::CharsetTextReader;
 use qubit_io_text::TextReader;
 
+use crate::report_decode_error::is_report_input_error;
+
 /// An input that caps each underlying read to exercise arbitrary byte splits.
 struct ShortReadInput {
     inner: Cursor<Vec<u8>>,
@@ -100,7 +102,7 @@ impl Encoding {
                         let error = reader
                             .read_to_string(&mut actual)
                             .expect_err("invalid or truncated fixed-width input must fail");
-                        assert_eq!(io::ErrorKind::InvalidData, error.kind());
+                        assert!(is_report_input_error(&error, codec.charset()), "{error:?}");
                     }
                 }
             }

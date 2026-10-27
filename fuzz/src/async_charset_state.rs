@@ -29,6 +29,7 @@ use qubit_io_text::LineEndingSet;
 use crate::multibyte_policy_reference::ReferenceEncoding;
 use crate::multibyte_policy_reference::ReferenceText;
 use crate::multibyte_policy_reference::decode_reference;
+use crate::report_decode_error::is_report_input_error;
 
 const INPUT_LIMIT: usize = 4096;
 const OP_LIMIT: usize = 64;
@@ -529,12 +530,6 @@ fn run_multibyte_companion(payload: &[u8], header: &Header, ops: &[u8], events: 
     }
 }
 
-/// Rejects a Report decode error when the reference input is valid UTF-8.
-#[cfg(test)]
-fn assert_report_decode_error_expected(expected: bool) {
-    assert!(expected, "Report rejected valid input");
-}
-
 fn reference_text_utf8(source: &[u8], expected: Result<String, usize>) -> ReferenceText {
     match expected {
         Ok(text) => ReferenceText {
@@ -558,6 +553,7 @@ fn run_report_reader<C: CharsetCodec<Unit = u8>>(
     cancel: u8,
     codec: C,
 ) -> Stats {
+    let charset = codec.charset();
     let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
         ScriptInput::new(source.to_vec(), events),
         codec,
@@ -585,6 +581,10 @@ fn run_report_reader<C: CharsetCodec<Unit = u8>>(
             Some(Err(error)) if is_fault(&error, FaultKind::Read) => stats.read_errors += 1,
             Some(Err(error)) if error.kind() == io::ErrorKind::InvalidData => {
                 assert!(expected.error_offset.is_some(), "Report rejected valid input");
+                assert!(
+                    is_report_input_error(&error, charset),
+                    "unexpected Report reader error: {error:?}"
+                );
                 observed_decode_error = true;
                 stats.read_char_ops += 1;
                 break;
@@ -1151,6 +1151,11 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
+    use qubit_codec::TranscodeDecodeError;
+    use qubit_codec_text::Charset;
+    use qubit_codec_text::CharsetDecodeError;
+    use qubit_codec_text::CharsetDecodeErrorKind;
+
     use super::AsyncCharsetTextWriter;
     use super::AsyncInput;
     use super::AsyncOutput;
@@ -1174,10 +1179,10 @@ mod tests {
     use super::Utf32ByteCodec;
     use super::assert_record_read_result;
     use super::assert_rejected_record_count;
-    use super::assert_report_decode_error_expected;
     use super::assert_text_read_result;
     use super::block_on;
     use super::decode_reference;
+    use super::io;
     use super::is_fault;
     use super::parse;
     use super::reference_utf8;
@@ -1187,6 +1192,7 @@ mod tests {
     use super::run_report_reader;
     use super::run_script;
     use super::text_records;
+    use crate::report_decode_error::is_report_input_error;
 
     #[test]
     fn test_companion_selectors_reach_independent_dimensions() {
@@ -1439,16 +1445,32 @@ mod tests {
     #[should_panic(expected = "Report rejected valid input")]
     fn test_report_decode_error_oracle_rejects_valid_reference() {
         let expected = reference_utf8(b"A", 0);
-        assert!(expected.is_ok());
-        assert_report_decode_error_expected(expected.is_err());
+        let source = CharsetDecodeError::new(Charset::UTF_8, CharsetDecodeErrorKind::malformed(0xff), 0);
+        let error = io::Error::new(io::ErrorKind::InvalidData, TranscodeDecodeError::domain_main(source, 0));
+        assert!(
+            expected.is_err() && is_report_input_error(&error, Charset::UTF_8),
+            "Report rejected valid input"
+        );
     }
 
     #[test]
     fn test_report_decode_error_oracle_accepts_malformed_reference() {
-        for source in [b"A\xff".as_slice(), b"A\xe4\xb8"] {
-            let expected = reference_utf8(source, 0);
-            assert!(expected.is_err());
-            assert_report_decode_error_expected(expected.is_err());
+        for input in [b"A\xff".as_slice(), b"A\xe4\xb8"] {
+            let expected = reference_utf8(input, 0);
+            let kind = if input.ends_with(&[0xff]) {
+                CharsetDecodeErrorKind::malformed(0xff)
+            } else {
+                CharsetDecodeErrorKind::IncompleteSequence {
+                    required: 3,
+                    available: 2,
+                }
+            };
+            let source = CharsetDecodeError::new(Charset::UTF_8, kind, 1);
+            let error = io::Error::new(io::ErrorKind::InvalidData, TranscodeDecodeError::domain_main(source, 1));
+            assert!(
+                expected.is_err() && is_report_input_error(&error, Charset::UTF_8),
+                "Report rejected valid input"
+            );
         }
     }
 

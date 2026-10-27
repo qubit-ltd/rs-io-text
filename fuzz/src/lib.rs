@@ -11,3 +11,4 @@
 pub mod async_charset_state;
 mod multibyte_policy_reference;
 pub mod multibyte_reference;
+pub mod report_decode_error;
