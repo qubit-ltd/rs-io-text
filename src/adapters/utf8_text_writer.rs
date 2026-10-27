@@ -44,6 +44,8 @@ pub struct Utf8TextWriter<O>
 where
     O: ByteOutput,
 {
+    /// Owns the output, pending bytes, and encoder lifecycle delegated to the
+    /// charset writer.
     writer: CharsetTextWriter<O, Utf8Codec>,
 }
 

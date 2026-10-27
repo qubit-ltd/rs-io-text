@@ -42,6 +42,8 @@ pub struct Utf8TextReader<I>
 where
     I: ByteInput,
 {
+    /// Retains UTF-8 decoding and unread-input state through the shared charset
+    /// reader.
     reader: CharsetTextReader<I, Utf8Codec>,
 }
 

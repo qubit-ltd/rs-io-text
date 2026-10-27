@@ -54,6 +54,8 @@ pub struct CharsetStringDecoder<C>
 where
     C: CharsetCodec,
 {
+    /// Owns the charset codec and decode policy used for each closed input
+    /// conversion.
     decoder: CharsetDecoder<C>,
 }
 

@@ -56,6 +56,8 @@ where
     I: ByteInput,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Owns the byte input, decoder state, and unread text buffers delegated to
+    /// the streaming layer.
     reader: BufferedTextReader<I, CharsetDecoder<C>>,
 }
 
