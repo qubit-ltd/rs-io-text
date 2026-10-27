@@ -20,9 +20,11 @@ use crate::LineEnding;
 ///
 /// This convenience wrapper fixes the codec to UTF-8 while preserving the
 /// buffering, cancellation, finalization, and state-recovery behavior
-/// of [`AsyncCharsetTextWriter`]. Methods of the wrapped writer are available
-/// through [`Deref`] and [`DerefMut`]. After encoder finalization succeeds, all
-/// text-writing methods reject input, including empty strings and character
+/// of [`AsyncCharsetTextWriter`]. Methods of the wrapped writer that borrow it
+/// are available through [`Deref`] and [`DerefMut`]. To consume the writer and
+/// recover its parts, call `into_inner().into_parts()` or
+/// `into_inner().into_buffered_parts()`. After encoder finalization succeeds,
+/// all text-writing methods reject input, including empty strings and character
 /// slices; retry [`AsyncCharsetTextWriter::finish_async`] to resume delivery
 /// after an output failure.
 /// The same recovery limitation applies after a caught inner I/O panic:

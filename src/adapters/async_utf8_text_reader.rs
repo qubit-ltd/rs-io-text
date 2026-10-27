@@ -21,8 +21,9 @@ use crate::LineEndingSet;
 ///
 /// This convenience wrapper fixes the codec to UTF-8 while preserving the
 /// policy, buffering, cancellation, and state-recovery behavior of
-/// [`AsyncCharsetTextReader`]. Methods of the wrapped reader are available
-/// through [`Deref`] and [`DerefMut`].
+/// [`AsyncCharsetTextReader`]. Methods of the wrapped reader that borrow it are
+/// available through [`Deref`] and [`DerefMut`]. To consume the reader and
+/// recover its parts, call `into_inner().into_parts()`.
 ///
 /// # Type Parameters
 ///
