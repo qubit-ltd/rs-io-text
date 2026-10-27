@@ -531,6 +531,10 @@ where
         if !self.fill_chars()? {
             return Ok(None);
         }
+        // SAFETY: `fill_chars()` returned true, so `char_position < char_limit`.
+        // The decode driver validates transcode output counts and checks reset
+        // and finish bounds; the corresponding storage is available before each
+        // call. Thus `char_limit <= chars.len()`, and this index is in bounds.
         let ch = unsafe { UncheckedSlice::read(self.chars.as_slice(), self.char_position) };
         self.char_position += 1;
         Ok(Some(ch))
