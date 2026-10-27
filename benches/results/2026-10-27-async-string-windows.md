@@ -262,6 +262,54 @@ establish a reliable default-capacity ASCII regression or improvement; the
 performance objective remains unaccepted. Do not interpret the mixed/emoji
 timings or the normalized ratios as a pass.
 
+### Repeat focused pair (external load; performance not accepted)
+
+At the user's direction, a further old/new pair ran serially without waiting
+for host activity to stop. Both sides used the same six-ID command and
+Criterion settings as the prior focused pair:
+
+```text
+cargo bench --locked --bench string_adapters -- 'async_string_windows/utf8/(ascii|mixed|emoji)_8192/(step_string|full_chars)' --noplot
+```
+
+The old source was `f006f63`, built in
+`/data/working/qubit/rust-common/.worktrees/rs-io-text/t1-redo-old-20261027`
+with target `/tmp/rs-io-text-t1-redo-old-target-20261027`. Its no-run build
+completed successfully at 08:05:04 UTC; sampling ran 08:05:39–08:06:28 UTC and
+exited 0. The optimized source was integration commit `f415dbc`, built in
+`/data/working/qubit/rust-common/.worktrees/rs-io-text/t1-redo-optimized-20261027`
+with target `/tmp/rs-io-text-t1-redo-optimized-target-20261027`. Its no-run
+build completed successfully at 08:05:32 UTC; sampling ran 08:06:35–08:07:24
+UTC and exited 0. Both builds compiled `qubit-io-text` from the stated source
+worktree. Each side measured 20 samples, a 2-second warm-up, and a 5-second
+measurement per ID.
+
+External activity was present throughout. At old-side start, load was
+8.78/7.48/7.32 and an external `rustc` process used about 215% CPU. Midway,
+load was 11.02/8.17/7.56 with an external style-review Python process at 53.5%,
+Cargo build at 28.5%, and a test process at 25%. At optimized-side start, load
+was 9.68/8.06/7.53 with an external analysis process at 99.8% and the Python
+review at 54.2%. Midway through that side, load was 7.99/7.90/7.50 and the
+Python review used 53.8%; no external Cargo or Rust compiler appeared in that
+top-process snapshot.
+
+| ID | Old estimate (95% CI) | Optimized estimate (95% CI) | Old → optimized |
+| --- | ---: | ---: | ---: |
+| ascii_8192/step_string | 21.533 µs (19.985–23.433) | 27.238 µs (27.157–27.317) | +26.5% |
+| ascii_8192/full_chars | 6.355 µs (6.124–6.598) | 11.823 µs (11.765–11.883) | +86.0% |
+| mixed_8192/step_string | 49.463 µs (48.121–51.184) | 42.792 µs (42.461–43.118) | −13.5% |
+| mixed_8192/full_chars | 18.735 µs (18.097–19.425) | 17.419 µs (17.279–17.565) | −7.0% |
+| emoji_8192/step_string | 59.806 µs (59.641–60.032) | 50.970 µs (50.711–51.407) | −14.8% |
+| emoji_8192/full_chars | 21.857 µs (21.754–21.979) | 22.107 µs (21.876–22.390) | +1.1% |
+
+The ASCII control shifted by 86.0%, failing the plan's ±10% stability
+threshold. Mixed and emoji controls shifted by −7.0% and +1.1%, respectively;
+the ASCII control failure and observed host activity make this pair unsuitable
+for performance acceptance. Step/control ratios were 3.39 → 2.30 for ASCII,
+2.64 → 2.46 for mixed Unicode, and 2.74 → 2.31 for emoji. Although the
+normalized ratios fell, the control drift prevents attributing that change to
+the implementation. Performance acceptance remains incomplete.
+
 The first paired after-run using the shared target was invalid: Cargo printed
 `Finished` without `Compiling qubit-io-text`, and its small-capacity string
 timings matched the old implementation. That run was interrupted (exit code
