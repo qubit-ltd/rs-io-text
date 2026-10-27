@@ -110,6 +110,25 @@ fn test_async_utf8_text_reader_forwards_all_async_read_methods() -> io::Result<(
 }
 
 #[test]
+fn test_async_utf8_text_reader_parts_preserve_chars_bytes_and_source() -> io::Result<()> {
+    let mut reader = AsyncUtf8TextReader::with_capacity(
+        ReadyInput::new("abc🙂tail"), CharsetDecodePolicy::report(), 4,
+    );
+    assert_eq!(Some('a'), complete(reader.read_char_async())?);
+    let parts = reader.into_inner().into_parts();
+    assert_eq!(4, parts.input.position);
+    assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
+    assert_eq!([0xf0], parts.unread_bytes.readable());
+
+    let mut bytes = parts.unread_bytes.readable().to_vec();
+    bytes.extend_from_slice(&parts.input.bytes[parts.input.position..]);
+    let mut restored: String = parts.pending_chars.into_iter().collect();
+    restored.push_str(std::str::from_utf8(&bytes).expect("valid UTF-8 remainder"));
+    assert_eq!("bc🙂tail", restored);
+    Ok(())
+}
+
+#[test]
 fn test_async_utf8_text_reader_resumes_rejected_line_before_next_record() -> io::Result<()> {
     let mut reader = AsyncUtf8TextReader::new(ReadyInput::new("abcdef\nok\n"));
     let mut output = String::from("seed:");

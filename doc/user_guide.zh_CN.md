@@ -174,7 +174,8 @@ where
   decoder 或未交付的缓冲状态；底层输入却可能已经前移或被预读。
   `write_str_with_charset` 失败时可能已有前缀交付，整段重试会造成重复；临时 writer
   析构时还可能尽力排空待写数据，而析构错误无法返回。需要保留恢复状态时，应显式持有
-  `CharsetTextReader` 或 `CharsetTextWriter`，并按下文的 `into_parts` 边界处理。
+  `CharsetTextReader` 或 `CharsetTextWriter`，并按[读端](#恢复未读文本)或
+  [写端](#恢复待写字节)的 `into_parts` 边界处理。
   一次性调用和解码结果限额均不提供输入回滚。
 - 同步 `BufferedTextWriter::write_str` 和 `CharsetTextWriter::write_str` 的主编码阶段
   输入位置从零开始，按本次调用的 Rust `char` 计数，不是 UTF-8 字节偏移或整个流的
@@ -208,7 +209,7 @@ where
   中，下一次行读取也会继续恢复。
   例如输入 `abcdef\nok\n`、限额为 `4` 时，`abcdef\n` 会被丢弃并报告
   `InvalidData`，下一次读取才返回 `ok\n`。字符读取和 `into_parts` 不会自动恢复这项
-  行恢复。
+  行恢复。读端 `into_parts` 的独立交接方式见[恢复未读文本](#恢复未读文本)。
 
 ### 恢复待写字节
 
@@ -235,6 +236,45 @@ where
     C: CharsetCodec<Unit = u8>,
 {
     writer.into_buffered_parts()
+}
+```
+
+### 恢复未读文本
+
+当应用需要接管 reader 已经预读的文本时，可使用 reader 的 `into_parts()`。下面已返回
+给调用方的字符 `a` 由调用方持有，不属于剩余状态。先处理 `pending_chars`，再处理
+`unread_bytes.readable()` 和底层输入中尚未读取的字节；多字节字符可能跨越这两个字节
+片段，因此应将它们连续拼接并作为同一字节流解码。
+
+本示例仅适用于已知有效的 UTF-8 输入，且没有额外 codec 状态。一般 charset 应保留返回的
+decoder，并仅在其生命周期允许时继续驱动；它可能已经启动，已经结束的 decoder 不能通过
+拆解重新打开。不要把这些片段交给可能会延迟 reset codec 的新 buffered reader。拆解不会
+回滚解码错误，也不会恢复被拒绝行的丢弃状态；遇到这些情况时应继续使用原 reader。
+
+```rust
+use std::io;
+use std::io::Cursor;
+use std::io::Read;
+
+use qubit_io_text::TextReader;
+use qubit_io_text::Utf8TextReader;
+
+fn main() -> io::Result<()> {
+    let mut reader = Utf8TextReader::with_capacity(
+        Cursor::new("abc🙂tail".as_bytes().to_vec()), 4,
+    );
+    assert_eq!(Some('a'), reader.read_char()?);
+    let mut parts = reader.into_parts();
+    assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
+    assert_eq!([0xf0], parts.unread_bytes.readable());
+    let mut remaining: String = parts.pending_chars.into_iter().collect();
+    let mut bytes = parts.unread_bytes.readable().to_vec();
+    parts.input.read_to_end(&mut bytes)?;
+    let tail = std::str::from_utf8(&bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    remaining.push_str(tail);
+    assert_eq!("bc🙂tail", remaining);
+    Ok(())
 }
 ```
 

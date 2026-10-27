@@ -201,7 +201,8 @@ shows line reads that preserve terminators.
   prefix; retrying the complete string can duplicate it. Its temporary writer
   may also attempt to drain pending output on drop, without reporting drop-time
   errors. Hold a `CharsetTextReader` or `CharsetTextWriter` explicitly when
-  recovery state is needed, and apply the `into_parts` rules below; neither
+  recovery state is needed, and apply the [reader](#recovering-unread-text) or
+  [writer](#recovering-pending-bytes) `into_parts` rules below; neither
   these methods nor the decoded-output limit provide input rollback.
 - Synchronous `BufferedTextWriter::write_str` and
   `CharsetTextWriter::write_str` report zero-based main-stage input positions in
@@ -248,7 +249,8 @@ shows line reads that preserve terminators.
   rejected record also leaves recovery state for the next line-reading call. For
   input `abcdef\nok\n` with limit `4`, the rejected `abcdef\n` record is
   discarded, `InvalidData` is reported, and the next line read returns `ok\n`.
-  This recovery does not apply to character reads or `into_parts`.
+  This recovery does not apply to character reads or reader `into_parts`; see
+  [Recovering unread text](#recovering-unread-text) for that separate handoff.
 
 ### Recovering pending bytes
 
@@ -281,6 +283,50 @@ where
     C: CharsetCodec<Unit = u8>,
 {
     writer.into_buffered_parts()
+}
+```
+
+### Recovering unread text
+
+Use reader `into_parts()` when the application must take ownership of text that
+the reader has already read ahead. The character already returned (`a` below)
+belongs to the caller and is not part of the remaining state. Process
+`pending_chars` first, then `unread_bytes.readable()` followed by bytes still in
+the underlying input; a multibyte character can cross that boundary, so keep
+those byte fragments together and decode them as one stream.
+
+This example is limited to known valid UTF-8 with no additional codec state.
+For a general charset, retain the returned decoder and continue driving it only
+while its lifecycle permits; it may already be started, and a finalized decoder
+cannot be reopened by decomposition. Do not put the fragments in a new buffered
+reader that may lazily reset a codec. Decomposition does not roll back decoding
+errors or resume the discard state for a rejected line. Keep the original
+reader for those cases.
+
+```rust
+use std::io;
+use std::io::Cursor;
+use std::io::Read;
+
+use qubit_io_text::TextReader;
+use qubit_io_text::Utf8TextReader;
+
+fn main() -> io::Result<()> {
+    let mut reader = Utf8TextReader::with_capacity(
+        Cursor::new("abc🙂tail".as_bytes().to_vec()), 4,
+    );
+    assert_eq!(Some('a'), reader.read_char()?);
+    let mut parts = reader.into_parts();
+    assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
+    assert_eq!([0xf0], parts.unread_bytes.readable());
+    let mut remaining: String = parts.pending_chars.into_iter().collect();
+    let mut bytes = parts.unread_bytes.readable().to_vec();
+    parts.input.read_to_end(&mut bytes)?;
+    let tail = std::str::from_utf8(&bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    remaining.push_str(tail);
+    assert_eq!("bc🙂tail", remaining);
+    Ok(())
 }
 ```
 

@@ -1196,6 +1196,61 @@ fn test_async_charset_reader_into_parts_preserves_unreturned_characters() -> io:
 }
 
 #[test]
+fn test_async_charset_reader_parts_preserve_chars_bytes_and_source() -> io::Result<()> {
+    let input = ChunkedAsyncInput::new("abc🙂tail".as_bytes().to_vec(), 4, false);
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
+        input, Utf8Codec, CharsetDecodePolicy::report(), 4,
+    );
+    assert_eq!(Some('a'), complete(reader.read_char_async())?);
+    let mut parts = reader.into_parts();
+    assert_eq!(4, parts.input.position);
+    assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
+    assert_eq!([0xf0], parts.unread_bytes.readable());
+
+    let mut bytes = parts.unread_bytes.readable().to_vec();
+    bytes.extend_from_slice(&parts.input.bytes[parts.input.position..]);
+    let mut restored: String = parts.pending_chars.into_iter().collect();
+    restored.push_str(std::str::from_utf8(&bytes).expect("valid UTF-8 remainder"));
+    assert_eq!("bc🙂tail", restored);
+
+    let mut chars = ['\0'; 16];
+    let progress = parts
+        .decoder
+        .transcode_eof(&bytes, 0, &mut chars, 0)
+        .expect("the returned decoder remains started");
+    assert_eq!(bytes.len(), progress.read());
+    assert_eq!("🙂tail", chars[..progress.written()].iter().collect::<String>());
+    assert_eq!(
+        0,
+        parts
+            .decoder
+            .finish(&mut chars, 0)
+            .expect("finish the retained decoder")
+    );
+    Ok(())
+}
+
+#[test]
+fn test_async_charset_reader_parts_preserve_partial_input_after_cancel() {
+    let input = ChunkedAsyncInput::new("🙂tail".as_bytes().to_vec(), 1, false);
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(
+        input, Utf8Codec, CharsetDecodePolicy::report(), 4,
+    );
+    let mut future = Box::pin(reader.read_char_async());
+    let mut context = Context::from_waker(Waker::noop());
+    assert!(future.as_mut().poll(&mut context).is_pending());
+    drop(future);
+
+    let parts = reader.into_parts();
+    assert_eq!(1, parts.input.position);
+    assert_eq!([0xf0], parts.unread_bytes.readable());
+    assert!(parts.pending_chars.is_empty());
+    let mut bytes = parts.unread_bytes.readable().to_vec();
+    bytes.extend_from_slice(&parts.input.bytes[parts.input.position..]);
+    assert_eq!("🙂tail", std::str::from_utf8(&bytes).expect("retained UTF-8 tail"));
+}
+
+#[test]
 fn test_async_charset_reader_compacts_partial_tail_across_pending_reads() -> io::Result<()> {
     let input = ChunkedAsyncInput::new("A中".as_bytes().to_vec(), 3, true);
     let mut reader =

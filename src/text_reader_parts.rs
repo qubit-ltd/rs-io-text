@@ -27,15 +27,27 @@ use qubit_io::Buffer;
 ///
 /// ```
 /// use std::io::Cursor;
+/// use qubit_io_text::TextReader;
 ///
 /// use qubit_codec_text::{CharsetDecodePolicy, CharsetDecoder, Utf8Codec};
 /// use qubit_io_text::{BufferedTextReader, TextReaderParts};
 ///
 /// let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-/// let reader = BufferedTextReader::new(Cursor::new(b"hello".to_vec()), decoder);
+/// let mut reader = BufferedTextReader::with_capacity(
+///     Cursor::new("abc🙂tail".as_bytes().to_vec()), decoder, 4,
+/// );
+/// assert_eq!(Some('a'), reader.read_char()?);
 /// let parts: TextReaderParts<_, _> = reader.into_parts();
-/// assert!(parts.unread_bytes.is_empty());
-/// assert!(parts.pending_chars.is_empty());
+/// assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
+/// assert_eq!([0xf0], parts.unread_bytes.readable());
+/// let mut bytes = parts.unread_bytes.readable().to_vec();
+/// use std::io::Read;
+/// let mut input = parts.input;
+/// input.read_to_end(&mut bytes)?;
+/// let mut restored: String = parts.pending_chars.into_iter().collect();
+/// restored.push_str(std::str::from_utf8(&bytes)?);
+/// assert_eq!("bc🙂tail", restored);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[must_use = "all returned reader state must be handled"]
 #[derive(Debug)]

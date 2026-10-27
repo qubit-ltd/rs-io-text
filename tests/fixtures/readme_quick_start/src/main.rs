@@ -78,6 +78,8 @@ fn main() -> std::io::Result<()> {
     user_guide_examples::readme_chinese::run()?;
     user_guide_examples::guide_english::run()?;
     user_guide_examples::guide_chinese::run()?;
+    user_guide_examples::reader_recovery_english::run()?;
+    user_guide_examples::reader_recovery_chinese::run()?;
     let output = complete(user_guide_examples::readme_async_english::run(RecordingAsyncOutput::default()))?;
     assert_eq!(b"hello\n", output.bytes.as_slice());
     assert!(output.flushed);

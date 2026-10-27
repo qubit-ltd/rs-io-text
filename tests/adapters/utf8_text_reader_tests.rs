@@ -209,6 +209,23 @@ fn test_utf8_text_reader_into_parts_preserves_unreturned_characters() -> std::io
 }
 
 #[test]
+fn test_utf8_text_reader_parts_preserve_chars_bytes_and_source() -> io::Result<()> {
+    let mut reader = Utf8TextReader::with_capacity(Cursor::new("abc🙂tail".as_bytes().to_vec()), 4);
+    assert_eq!(Some('a'), reader.read_char()?);
+    let mut parts = reader.into_parts();
+    assert_eq!(4, parts.input.position());
+    assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
+    assert_eq!([0xf0], parts.unread_bytes.readable());
+
+    let mut bytes = parts.unread_bytes.readable().to_vec();
+    parts.input.read_to_end(&mut bytes)?;
+    let mut restored: String = parts.pending_chars.into_iter().collect();
+    restored.push_str(std::str::from_utf8(&bytes).expect("valid UTF-8 remainder"));
+    assert_eq!("bc🙂tail", restored);
+    Ok(())
+}
+
+#[test]
 fn test_read_char_covers_utf8_widths_and_eof() -> std::io::Result<()> {
     let input = Cursor::new("aé中🙂".as_bytes().to_vec());
     let mut reader = Utf8TextReader::new(input);

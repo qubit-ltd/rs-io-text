@@ -19,6 +19,8 @@ fn main() {
         ("README.zh_CN.md", "## 快速开始：编码一条 UTF-8 文本消息", "readme_chinese"),
         ("doc/user_guide.md", "## Core Workflow", "guide_english"),
         ("doc/user_guide.zh_CN.md", "## 核心流程", "guide_chinese"),
+        ("doc/user_guide.md", "### Recovering unread text", "reader_recovery_english"),
+        ("doc/user_guide.zh_CN.md", "### 恢复未读文本", "reader_recovery_chinese"),
     ] {
         let path = project.join(file);
         println!("cargo:rerun-if-changed={}", path.display());

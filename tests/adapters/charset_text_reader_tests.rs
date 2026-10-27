@@ -233,6 +233,40 @@ fn test_charset_text_reader_into_parts_preserves_unreturned_characters() -> std:
 }
 
 #[test]
+fn test_charset_text_reader_parts_preserve_chars_bytes_and_source() -> io::Result<()> {
+    let mut reader = CharsetTextReader::new_with_buffer_capacity(
+        Cursor::new("abc🙂tail".as_bytes().to_vec()), Utf8Codec, CharsetDecodePolicy::report(), 4,
+    );
+    assert_eq!(Some('a'), reader.read_char()?);
+    let mut parts = reader.into_parts();
+    assert_eq!(4, parts.input.position());
+    assert_eq!(['b', 'c'], parts.pending_chars.as_slice());
+    assert_eq!([0xf0], parts.unread_bytes.readable());
+
+    let mut bytes = parts.unread_bytes.readable().to_vec();
+    parts.input.read_to_end(&mut bytes)?;
+    let mut restored: String = parts.pending_chars.into_iter().collect();
+    restored.push_str(std::str::from_utf8(&bytes).expect("valid UTF-8 remainder"));
+    assert_eq!("bc🙂tail", restored);
+
+    let mut chars = ['\0'; 16];
+    let progress = parts
+        .decoder
+        .transcode_eof(&bytes, 0, &mut chars, 0)
+        .expect("the returned decoder remains started");
+    assert_eq!(bytes.len(), progress.read());
+    assert_eq!("🙂tail", chars[..progress.written()].iter().collect::<String>());
+    assert_eq!(
+        0,
+        parts
+            .decoder
+            .finish(&mut chars, 0)
+            .expect("finish the retained decoder")
+    );
+    Ok(())
+}
+
+#[test]
 fn test_read_chars_after_decoding() -> std::io::Result<()> {
     let mut reader = CharsetTextReader::new(
         Cursor::new("中文".as_bytes().to_vec()),
