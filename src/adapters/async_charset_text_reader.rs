@@ -593,8 +593,11 @@ where
     ///
     /// # Returns
     ///
-    /// Returns `true` when at least one character was appended, or `false`
-    /// when the reader was already at EOF.
+    /// Returns `true` when this call appended at least one character, or
+    /// `false` when this call reached EOF without appending. After a cancelled
+    /// call or an input error that the caller has determined is recoverable,
+    /// `false` can coexist with a prefix retained in `output`; deliver that
+    /// current line once before clearing `output`.
     ///
     /// # Errors
     ///
@@ -607,6 +610,11 @@ where
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded line prefix. Resume on the same reader
     /// and do not append that prefix a second time.
+    /// A resumed call returning `false` only means it appended no characters
+    /// before reaching EOF; it does not mean `output` is empty. Deliver any
+    /// retained current-line prefix once. Propagate input or decoding errors
+    /// unless the caller independently knows that continuing is safe; this
+    /// method does not retry errors.
     ///
     /// If the line has already exceeded its limit, resume with a line-reading
     /// method on the same reader. The reader completes discarding the rejected
@@ -694,7 +702,10 @@ where
     /// # Returns
     ///
     /// Returns `true` when a line or final unterminated line was read, or
-    /// `false` at EOF with no text appended.
+    /// `false` at EOF when this call appended no text. After a cancelled call
+    /// or an input error that the caller has determined is recoverable,
+    /// `false` can coexist with a prefix retained in `output`; deliver that
+    /// current line once before clearing `output`.
     ///
     /// # Errors
     ///
@@ -718,6 +729,10 @@ where
     /// policy, then reports `InvalidData` once. That recovery call does not
     /// change its output. A later line-read call can then read the next record.
     /// Character reads and `into_parts` do not resume rejected-line recovery.
+    /// If a resumed call reaches EOF and returns `false`, `output` can still
+    /// contain the retained prefix; deliver it once. For a rejected line,
+    /// continue using a line-read method on the same reader to finish its
+    /// discard; the unlimited-line recovery example does not cover that case.
     pub async fn read_line_limited_async(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
         self.read_line_async_impl(output, Some(max_append_len)).await
     }

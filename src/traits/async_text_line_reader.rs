@@ -40,6 +40,13 @@ use super::AsyncTextReader;
 ///     Ok(lines)
 /// }
 /// ```
+///
+/// This loop covers consecutive successful calls, not cancellation or error
+/// recovery. Recovery behavior depends on the concrete reader; for example,
+/// see [`AsyncCharsetTextReader::read_line_async`]. When resuming, inspect the
+/// accumulated destination even if the next call returns `false`.
+///
+/// [`AsyncCharsetTextReader::read_line_async`]: crate::AsyncCharsetTextReader::read_line_async
 #[allow(async_fn_in_trait)]
 pub trait AsyncTextLineReader: AsyncTextReader {
     /// Reads one line into `output`.

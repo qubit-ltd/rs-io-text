@@ -11,11 +11,30 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
+use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 use qubit_io_text::LineEnding;
 use qubit_io_text::TextWriter;
+use qubit_io_text::AsyncUtf8TextReader;
 use qubit_io_text::Utf8TextWriter;
 include!(concat!(env!("OUT_DIR"), "/user_guide_examples.rs"));
+
+/// Supplies EOF to verify delivery of a previously retained line prefix.
+struct EofAsyncInput;
+
+impl AsyncInput for EofAsyncInput {
+    type Item = u8;
+
+    unsafe fn poll_read_unchecked(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _output: &mut [u8],
+        _index: usize,
+        _count: usize,
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(0))
+    }
+}
 
 /// Records the output of the executable documentation examples.
 #[derive(Default)]
@@ -92,5 +111,31 @@ fn main() -> std::io::Result<()> {
     let output = complete(user_guide_examples::guide_async_chinese::run(RecordingAsyncOutput::default()))?;
     assert_eq!(b"subject: status\r\n", output.bytes.as_slice());
     assert!(output.flushed);
+    for prefix in ["", "tail"] {
+        let expected = (!prefix.is_empty()).then(|| prefix.to_owned());
+        let mut reader = AsyncUtf8TextReader::new(EofAsyncInput);
+        let mut line = prefix.to_owned();
+        let actual = complete(user_guide_examples::line_resume_english::resume_line(
+            &mut reader, &mut line,
+        ))?;
+        assert_eq!(expected, actual, "English recovery example");
+        assert!(line.is_empty(), "delivered prefix must be removed");
+        assert_eq!(None, complete(user_guide_examples::line_resume_english::resume_line(
+            &mut reader, &mut line,
+        ))?);
+    }
+    for prefix in ["", "tail"] {
+        let expected = (!prefix.is_empty()).then(|| prefix.to_owned());
+        let mut reader = AsyncUtf8TextReader::new(EofAsyncInput);
+        let mut line = prefix.to_owned();
+        let actual = complete(user_guide_examples::line_resume_chinese::resume_line(
+            &mut reader, &mut line,
+        ))?;
+        assert_eq!(expected, actual, "Chinese recovery example");
+        assert!(line.is_empty(), "delivered prefix must be removed");
+        assert_eq!(None, complete(user_guide_examples::line_resume_chinese::resume_line(
+            &mut reader, &mut line,
+        ))?);
+    }
     Ok(())
 }

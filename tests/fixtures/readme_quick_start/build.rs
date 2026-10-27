@@ -46,6 +46,18 @@ fn main() {
             "\npub(crate) async fn run(output: crate::RecordingAsyncOutput) -> std::io::Result<crate::RecordingAsyncOutput> {{ {function}(output).await }}\n}}\n"
         ));
     }
+    for (file, heading, name) in [
+        ("doc/user_guide.md", "## Resuming an interrupted line read", "line_resume_english"),
+        ("doc/user_guide.zh_CN.md", "## 恢复中断的行读取", "line_resume_chinese"),
+    ] {
+        let path = project.join(file);
+        println!("cargo:rerun-if-changed={}", path.display());
+        let markdown = fs::read_to_string(&path).expect("read line recovery example");
+        let code = extract_core(&markdown, heading);
+        generated.push_str(&format!("pub mod {name} {{\n"));
+        generated.push_str(code);
+        generated.push_str("\n}\n");
+    }
     generated.push_str("}\n");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));
     fs::write(output.join("user_guide_examples.rs"), generated).expect("write generated guide examples");

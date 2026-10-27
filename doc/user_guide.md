@@ -348,3 +348,36 @@ not own charset algorithms.
 - [README](../README.md) and [中文 README](../README.zh_CN.md)
 - [中文用户指南](user_guide.zh_CN.md)
 - [API reference](https://docs.rs/qubit-io-text)
+
+## Resuming an interrupted line read
+
+Use this pattern only after the caller has decided that resuming the read is
+safe. `line` must contain only the prefix of the current record that has not
+yet been delivered; it must not contain arbitrary initial text or a record
+already returned to the caller. A false return describes this call's progress,
+so EOF can still leave a retained prefix to deliver. The example propagates
+input and decoding errors unchanged and does not retry them. Once `Some` is
+returned, the destination has been taken and is empty; another call at EOF
+returns `None`.
+
+```rust
+use std::io;
+
+use qubit_io::AsyncByteInput;
+use qubit_io_text::AsyncUtf8TextReader;
+
+pub async fn resume_line<I>(
+    reader: &mut AsyncUtf8TextReader<I>,
+    line: &mut String,
+) -> io::Result<Option<String>>
+where
+    I: AsyncByteInput + Unpin,
+{
+    let appended = reader.read_line_async(line).await?;
+    if appended || !line.is_empty() {
+        Ok(Some(std::mem::take(line)))
+    } else {
+        Ok(None)
+    }
+}
+```

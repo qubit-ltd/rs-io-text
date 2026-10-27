@@ -295,3 +295,32 @@ fn main() -> io::Result<()> {
 - [README](../README.zh_CN.md) 与 [English README](../README.md)
 - [English user guide](user_guide.md)
 - [API 文档](https://docs.rs/qubit-io-text)
+
+## 恢复中断的行读取
+
+仅当调用方已确认可以继续读取时，才使用这种模式。`line` 只能包含当前尚未交付记录的
+前缀；不能包含任意预置文本或已经返回给调用方的记录。返回 false 描述的是本次调用的
+进度，因此到达 EOF 时仍可能保留待交付的前缀。示例会原样传播输入和解码错误，不会自动
+重试。返回 `Some` 后，目标内容已取出且目标为空；再次在 EOF 调用会返回 `None`。
+
+```rust
+use std::io;
+
+use qubit_io::AsyncByteInput;
+use qubit_io_text::AsyncUtf8TextReader;
+
+pub async fn resume_line<I>(
+    reader: &mut AsyncUtf8TextReader<I>,
+    line: &mut String,
+) -> io::Result<Option<String>>
+where
+    I: AsyncByteInput + Unpin,
+{
+    let appended = reader.read_line_async(line).await?;
+    if appended || !line.is_empty() {
+        Ok(Some(std::mem::take(line)))
+    } else {
+        Ok(None)
+    }
+}
+```
