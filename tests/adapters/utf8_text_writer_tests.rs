@@ -124,6 +124,62 @@ fn test_write_utf8_text_to_byte_writer() -> std::io::Result<()> {
 }
 
 #[test]
+fn test_utf8_long_write_preserves_configured_buffer_capacity() -> io::Result<()> {
+    for capacity in [0, 1, 16, 8192] {
+        let baseline = Utf8TextWriter::with_capacity(Vec::<u8>::new(), capacity);
+        let (_, baseline) = baseline.into_parts();
+        let qubit_io::BufferedOutputRecovery::Pending(baseline) = baseline else {
+            panic!("new writer must have determinate recovery");
+        };
+        for text in ["a".repeat(32769), "中🙂A".repeat(4097)] {
+            let mut writer = Utf8TextWriter::with_capacity(Vec::<u8>::new(), capacity);
+            writer.write_str(&text)?;
+            writer.finish()?;
+            let (output, recovery) = writer.into_parts();
+            let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+                panic!("non-panicking output must have determinate recovery");
+            };
+            assert_eq!(output, text.as_bytes());
+            assert!(pending.readable().is_empty());
+            assert_eq!(
+                pending.capacity(),
+                baseline.capacity(),
+                "long input must not grow the configured byte buffer",
+            );
+        }
+    }
+
+    for capacity in [4, 8, 16] {
+        let baseline = Utf8TextWriter::with_capacity(Vec::<u8>::new(), capacity);
+        let (_, baseline) = baseline.into_parts();
+        let qubit_io::BufferedOutputRecovery::Pending(baseline) = baseline else {
+            panic!("new writer must have determinate recovery");
+        };
+        for ending in [LineEnding::Lf, LineEnding::CrLf, LineEnding::Cr] {
+            let text = "中🙂A".repeat(257);
+            let mut writer = Utf8TextWriter::with_capacity(Vec::<u8>::new(), capacity)
+                .with_line_ending(ending);
+            writer.write_str("")?;
+            writer.write_str("prefix")?;
+            writer.write_str(&text)?;
+            writer.write_line("")?;
+            writer.finish()?;
+            let (output, recovery) = writer.into_parts();
+            let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
+                panic!("non-panicking output must have determinate recovery");
+            };
+            let mut expected = b"prefix".to_vec();
+            expected.extend_from_slice(text.as_bytes());
+            expected.extend_from_slice(ending.as_str().as_bytes());
+            assert_eq!(output, expected);
+            assert!(pending.readable().is_empty());
+            assert_eq!(pending.capacity(), baseline.capacity());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn test_accessors_and_into_inner() -> std::io::Result<()> {
     let output = b"prefix:".to_vec();
     let mut writer = Utf8TextWriter::with_capacity(output, 1);
@@ -249,7 +305,7 @@ fn test_write_line_body_error_does_not_append_line_ending() {
     let mut recovered = output.bytes;
     recovered.extend_from_slice(pending.readable());
     assert!(!recovered.contains(&b'\n'));
-    assert!(recovered.iter().all(|byte| *byte == b'!'));
+    assert!(body.as_bytes().starts_with(&recovered));
 }
 
 #[test]
@@ -259,8 +315,8 @@ fn test_write_line_ending_write_flush_error_keeps_body_bytes() {
         fail_on: b'b',
         failed: false,
     };
-    let mut writer = Utf8TextWriter::with_capacity(output, 1);
-    let body = "b".repeat(8 * 1024 - 1);
+    let mut writer = Utf8TextWriter::with_capacity(output, 8);
+    let body = "b".repeat(8);
     let error = writer
         .write_line(&body)
         .expect_err("the line-ending write should surface its output flush failure");

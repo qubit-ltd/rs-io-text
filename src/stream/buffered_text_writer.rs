@@ -229,6 +229,9 @@ where
     ///
     /// This is crate-private because bypassing the encoder is only valid for a
     /// stateless UTF-8 encoder whose input is already a valid Rust string.
+    /// Bytes are copied in chunks bounded by the existing spare capacity and
+    /// the usual 8 KiB copy window. Capacity pressure may write buffered bytes
+    /// to the inner output; long UTF-8 text does not itself grow this buffer.
     pub(crate) fn write_encoded_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
         self.ensure_open()?;
         if bytes.is_empty() {
@@ -238,7 +241,7 @@ where
         let mut offset = 0;
         while offset < bytes.len() {
             let requested = (bytes.len() - offset).min(DEFAULT_BUFFER_CAPACITY);
-            self.output.ensure_spare_capacity(requested)?;
+            self.output.ensure_spare_capacity(1)?;
             let (units, output_index, available) = self.output.spare_raw_parts_mut();
             let count = requested.min(available);
             units[output_index..output_index + count].copy_from_slice(&bytes[offset..offset + count]);
