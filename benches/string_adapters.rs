@@ -442,12 +442,14 @@ fn bench_writer_allocation(criterion: &mut Criterion) {
     group.finish();
 }
 
-/// Runs one asynchronous string path with identical writer and finish boundaries.
+/// Runs one asynchronous string path with identical writer and finish
+/// boundaries.
 fn run_async_string_path(path: &str, text: &str, chars: &[char], capacity: usize) -> usize {
     let mut writer = AsyncUtf8TextWriter::with_capacity(ReadyCountingOutput::default(), capacity);
     match path {
-        "full_string" => complete_ready(writer.write_str_fully_async(black_box(text)))
-            .expect("valid UTF-8 benchmark input"),
+        "full_string" => {
+            complete_ready(writer.write_str_fully_async(black_box(text))).expect("valid UTF-8 benchmark input")
+        }
         "step_string" => {
             let mut offset = 0;
             while offset < text.len() {
@@ -455,16 +457,14 @@ fn run_async_string_path(path: &str, text: &str, chars: &[char], capacity: usize
                     .expect("valid UTF-8 benchmark step");
             }
         }
-        "full_chars" => complete_ready(writer.write_chars_fully_async(black_box(chars)))
-            .expect("valid character benchmark input"),
+        "full_chars" => {
+            complete_ready(writer.write_chars_fully_async(black_box(chars))).expect("valid character benchmark input")
+        }
         _ => unreachable!("known asynchronous string benchmark path"),
     }
     complete_ready(writer.finish_async()).expect("UTF-8 benchmark writer should finish");
     let (output, pending) = writer.into_inner().into_parts();
-    assert!(
-        pending.is_empty(),
-        "finished benchmark output has no pending bytes"
-    );
+    assert!(pending.is_empty(), "finished benchmark output has no pending bytes");
     output.bytes
 }
 

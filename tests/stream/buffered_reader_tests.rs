@@ -215,9 +215,7 @@ fn test_buffered_reader_line_ending_configuration_and_parts() -> std::io::Result
 #[test]
 fn test_reader_parts_preserve_chars_bytes_and_source() -> std::io::Result<()> {
     let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
-    let mut reader = BufferedTextReader::with_capacity(
-        Cursor::new("abc🙂tail".as_bytes().to_vec()), decoder, 4,
-    );
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new("abc🙂tail".as_bytes().to_vec()), decoder, 4);
     assert_eq!(Some('a'), reader.read_char()?);
     let mut parts = reader.into_parts();
     assert_eq!(4, parts.input.position());

@@ -496,11 +496,7 @@ where
     /// This budget bounds the number of source characters converted before an
     /// encode step; the output driver still decides how many it can commit.
     fn string_step_char_limit(&self) -> usize {
-        let per_char = self
-            .encoder
-            .max_transcode_output_len(1)
-            .unwrap_or(1)
-            .max(1);
+        let per_char = self.encoder.max_transcode_output_len(1).unwrap_or(1).max(1);
         (self.output.capacity() / per_char).clamp(1, DEFAULT_CHAR_CHUNK_CAPACITY)
     }
 

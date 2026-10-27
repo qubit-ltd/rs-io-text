@@ -235,7 +235,10 @@ fn test_charset_text_reader_into_parts_preserves_unreturned_characters() -> std:
 #[test]
 fn test_charset_text_reader_parts_preserve_chars_bytes_and_source() -> io::Result<()> {
     let mut reader = CharsetTextReader::new_with_buffer_capacity(
-        Cursor::new("abc🙂tail".as_bytes().to_vec()), Utf8Codec, CharsetDecodePolicy::report(), 4,
+        Cursor::new("abc🙂tail".as_bytes().to_vec()),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+        4,
     );
     assert_eq!(Some('a'), reader.read_char()?);
     let mut parts = reader.into_parts();

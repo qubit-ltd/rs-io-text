@@ -231,8 +231,7 @@ fn test_async_string_single_steps_preserve_unicode_boundaries() -> io::Result<()
         );
         let mut offset = 0;
         while offset < text.len() {
-            let consumed =
-                complete(AsyncTextWriter::write_str_async(&mut writer, &text[offset..]))?;
+            let consumed = complete(AsyncTextWriter::write_str_async(&mut writer, &text[offset..]))?;
             assert!(consumed > 0);
             assert!(consumed <= text.len() - offset);
             assert!(text.is_char_boundary(offset + consumed));

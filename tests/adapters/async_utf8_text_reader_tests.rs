@@ -111,9 +111,7 @@ fn test_async_utf8_text_reader_forwards_all_async_read_methods() -> io::Result<(
 
 #[test]
 fn test_async_utf8_text_reader_parts_preserve_chars_bytes_and_source() -> io::Result<()> {
-    let mut reader = AsyncUtf8TextReader::with_capacity(
-        ReadyInput::new("abc🙂tail"), CharsetDecodePolicy::report(), 4,
-    );
+    let mut reader = AsyncUtf8TextReader::with_capacity(ReadyInput::new("abc🙂tail"), CharsetDecodePolicy::report(), 4);
     assert_eq!(Some('a'), complete(reader.read_char_async())?);
     let parts = reader.into_inner().into_parts();
     assert_eq!(4, parts.input.position);

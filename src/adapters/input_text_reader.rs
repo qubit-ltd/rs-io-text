@@ -40,8 +40,9 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Ok::<(), std::io::Error>(())
 /// ```
 pub struct InputTextReader<'a> {
-    /// Owns the character input, including any buffer added during construction.
-    /// Characters in the pending queue logically precede further input reads.
+    /// Owns the character input, including any buffer added during
+    /// construction. Characters in the pending queue logically precede
+    /// further input reads.
     input: Box<dyn CharInput + 'a>,
     /// Retains read-ahead characters in the order they must be returned.
     pending: VecDeque<char>,
