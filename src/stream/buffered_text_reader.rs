@@ -39,6 +39,14 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// characters are exposed through [`TextReader`].
 /// Decoder reset is started lazily on the first read attempt, and any values
 /// emitted by reset are returned before decoded source characters.
+/// Buffered decoding may inspect bytes beyond the requested character or line.
+/// Under a reporting policy, malformed data later in the same decoding window
+/// may cause an error before an earlier valid character or complete line is
+/// returned. How much text has been delivered when an error occurs can depend
+/// on input chunking. An error does not guarantee delivery of every valid
+/// prefix, input rollback, or a generally safe retry; decoded characters not
+/// registered as readable are distinct from text already appended to the
+/// caller's output.
 ///
 /// # Examples
 ///

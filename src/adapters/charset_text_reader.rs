@@ -23,6 +23,14 @@ use crate::TextReaderParts;
 /// This adapter is a charset-specific wrapper around [`BufferedTextReader`]. It
 /// constructs the appropriate [`CharsetDecoder`] from the supplied codec and
 /// malformed-input policy.
+/// Buffered decoding may inspect bytes beyond the requested character or line.
+/// Under a reporting policy, malformed data later in the same decoding window
+/// may cause an error before an earlier valid character or complete line is
+/// returned. How much text has been delivered when an error occurs can depend
+/// on input chunking. An error does not guarantee delivery of every valid
+/// prefix, input rollback, or a generally safe retry; decoded characters not
+/// registered as readable are distinct from text already appended to the
+/// caller's output.
 ///
 /// # Examples
 ///

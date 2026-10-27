@@ -183,6 +183,17 @@ shows line reads that preserve terminators.
   consumed prefix. Concrete APIs can provide stronger guarantees; in
   particular, the append-limit rollback rules below still apply. Handle flush
   errors explicitly when buffered delivery matters.
+- Buffered readers can decode ahead of the requested character or line. With a
+  reporting policy, malformed bytes later in the same decode window can make a
+  read fail before an earlier valid character or complete line is returned.
+  For example, with `ok\n` followed by `0xff`, a read may return `ok\n` or
+  report `InvalidData` first, depending on how the input is chunked. Text already
+  appended to the destination and decoded characters that have not been
+  registered as readable are separate states. An error guarantees neither
+  delivery of every valid prefix nor input rollback or safe retry; a smaller
+  buffer is not a recovery protocol. Applications that need record isolation
+  should frame encoded records according to their encoding and protocol before
+  decoding them. Do not split arbitrary encoded input on LF bytes.
 - One-shot `read_to_string_with_charset` and
   `read_to_string_with_charset_limited` return no decoded prefix or temporary
   decoder/unread state on failure, even though input may have advanced or been

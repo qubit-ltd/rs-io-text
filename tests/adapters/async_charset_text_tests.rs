@@ -398,6 +398,59 @@ where
     panic!("test future did not complete");
 }
 
+#[test]
+fn test_read_ahead_error_boundary_async_line() {
+    for chunk in 1..=4 {
+        for pending in [false, true] {
+            let input = ChunkedAsyncInput::new(b"ok\n\xff".to_vec(), chunk, pending);
+            let mut reader =
+                AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 8);
+            let mut line = String::new();
+            let result = complete(reader.read_line_async(&mut line));
+            match chunk {
+                1 | 3 => {
+                    assert!(result.unwrap());
+                    assert_eq!(line, "ok\n");
+                }
+                2 => {
+                    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
+                    assert_eq!(line, "ok");
+                }
+                4 => {
+                    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
+                    assert!(line.is_empty());
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+#[test]
+fn test_read_ahead_error_boundary_async_character_and_control() {
+    for chunk in 1..=4 {
+        for pending in [false, true] {
+            let input = ChunkedAsyncInput::new(b"ok\n\xff".to_vec(), chunk, pending);
+            let mut reader =
+                AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 8);
+            let result = complete(reader.read_char_async());
+            if chunk == 4 {
+                assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
+            } else {
+                assert_eq!(result.unwrap(), Some('o'));
+            }
+
+            let input = ChunkedAsyncInput::new(b"ok\n".to_vec(), chunk, pending);
+            let mut reader =
+                AsyncCharsetTextReader::new_with_buffer_capacity(input, Utf8Codec, CharsetDecodePolicy::report(), 8);
+            let mut line = String::new();
+            assert!(complete(reader.read_line_async(&mut line)).unwrap());
+            assert_eq!(line, "ok\n");
+            assert_eq!(complete(reader.read_char_async()).unwrap(), None);
+        }
+    }
+}
+
 #[derive(Default)]
 struct CountingAsyncOutput {
     bytes: Vec<u8>,

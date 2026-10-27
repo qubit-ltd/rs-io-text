@@ -30,6 +30,76 @@ use qubit_io_text::LineEndingSet;
 use qubit_io_text::TextLineReader;
 use qubit_io_text::TextReader;
 
+struct ReadChunkLimit {
+    source: Cursor<Vec<u8>>,
+    max_chunk: usize,
+}
+
+impl Read for ReadChunkLimit {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        let count = output.len().min(self.max_chunk);
+        self.source.read(&mut output[..count])
+    }
+}
+
+#[test]
+fn test_read_ahead_error_boundary_sync_line() {
+    for chunk in 1..=4 {
+        let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+        let input = ReadChunkLimit {
+            source: Cursor::new(b"ok\n\xff".to_vec()),
+            max_chunk: chunk,
+        };
+        let mut reader = BufferedTextReader::with_capacity(input, decoder, 8);
+        let mut line = String::new();
+        let result = reader.read_line(&mut line);
+        match chunk {
+            1 | 3 => {
+                assert!(result.unwrap());
+                assert_eq!(line, "ok\n");
+            }
+            2 => {
+                assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidData);
+                assert_eq!(line, "ok");
+            }
+            4 => {
+                assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidData);
+                assert!(line.is_empty());
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn test_read_ahead_error_boundary_sync_character_and_control() {
+    for chunk in 1..=4 {
+        let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+        let input = ReadChunkLimit {
+            source: Cursor::new(b"ok\n\xff".to_vec()),
+            max_chunk: chunk,
+        };
+        let mut reader = BufferedTextReader::with_capacity(input, decoder, 8);
+        let result = reader.read_char();
+        if chunk == 4 {
+            assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidData);
+        } else {
+            assert_eq!(result.unwrap(), Some('o'));
+        }
+
+        let decoder = CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report());
+        let input = ReadChunkLimit {
+            source: Cursor::new(b"ok\n".to_vec()),
+            max_chunk: chunk,
+        };
+        let mut reader = BufferedTextReader::with_capacity(input, decoder, 8);
+        let mut line = String::new();
+        assert!(reader.read_line(&mut line).unwrap());
+        assert_eq!(line, "ok\n");
+        assert_eq!(reader.read_char().unwrap(), None);
+    }
+}
+
 #[derive(Debug, Default)]
 struct ExpandingDecoder;
 
