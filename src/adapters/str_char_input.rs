@@ -31,7 +31,10 @@ use qubit_utils::UncheckedSlice;
 /// ```
 #[derive(Debug)]
 pub struct StrCharInput<'a> {
+    /// Valid UTF-8 text borrowed from the caller for this adapter's lifetime.
     text: &'a str,
+    /// Byte offset of the next unread character, always on a UTF-8 boundary
+    /// and no greater than the borrowed text's byte length.
     position: usize,
 }
 

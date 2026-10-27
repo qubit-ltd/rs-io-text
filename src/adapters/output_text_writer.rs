@@ -45,7 +45,10 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Ok::<(), std::io::Error>(())
 /// ```
 pub struct OutputTextWriter<'a> {
+    /// Owns the character output, including any automatically added buffer.
+    /// Successful acceptance does not guarantee delivery to the original sink.
     output: Box<dyn CharOutput + 'a>,
+    /// Terminator appended after the body of each complete line write.
     line_ending: LineEnding,
 }
 
