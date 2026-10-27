@@ -144,6 +144,87 @@ implementation completed all IDs with exit code 0 in approximately 3 minutes
 | emoji_8192/step_string | 59.558 µs | 59.278–59.819 µs |
 | emoji_8192/full_chars | 21.424 µs | 21.270–21.613 µs |
 
+### Verified optimized build (control drift, not accepted)
+
+The optimized build used the verified independent target and completed all 27
+IDs with exit code 0. It ran from approximately 07:05:43 to 07:09:50 UTC with
+20 samples, 2-second warm-up, and 5-second measurement per ID. At start, load
+average was 2.62/4.31/5.47 and an external `validation_test` process used
+96.7% CPU. Other compiler/test processes appeared during the run. End load was
+3.69/3.79/4.95. Estimates are recorded below, but the run is not accepted for
+performance sign-off because ASCII character-slice controls drifted materially.
+
+| ID | Estimate | 95% CI |
+| --- | ---: | ---: |
+| ascii_4/full_string | 70.407 µs | 70.004–70.743 µs |
+| ascii_4/step_string | 600.126 µs | 594.829–607.290 µs |
+| ascii_4/full_chars | 61.561 µs | 61.205–61.900 µs |
+| ascii_16/full_string | 32.843 µs | 31.417–34.621 µs |
+| ascii_16/step_string | 167.287 µs | 162.783–172.367 µs |
+| ascii_16/full_chars | 23.095 µs | 22.975–23.224 µs |
+| ascii_8192/full_string | 20.450 µs | 20.295–20.633 µs |
+| ascii_8192/step_string | 27.097 µs | 27.008–27.182 µs |
+| ascii_8192/full_chars | 11.779 µs | 11.730–11.826 µs |
+| mixed_4/full_string | 182.122 µs | 181.567–182.644 µs |
+| mixed_4/step_string | 669.403 µs | 640.427–707.231 µs |
+| mixed_4/full_chars | 165.354 µs | 164.178–166.350 µs |
+| mixed_16/full_string | 68.429 µs | 68.099–68.742 µs |
+| mixed_16/step_string | 221.441 µs | 220.347–222.529 µs |
+| mixed_16/full_chars | 52.044 µs | 51.296–52.588 µs |
+| mixed_8192/full_string | 34.788 µs | 34.607–34.931 µs |
+| mixed_8192/step_string | 42.150 µs | 41.971–42.337 µs |
+| mixed_8192/full_chars | 17.132 µs | 17.051–17.219 µs |
+| emoji_4/full_string | 267.625 µs | 266.341–269.026 µs |
+| emoji_4/step_string | 619.618 µs | 616.981–622.441 µs |
+| emoji_4/full_chars | 244.430 µs | 243.271–245.531 µs |
+| emoji_16/full_string | 118.445 µs | 101.975–130.665 µs |
+| emoji_16/step_string | 181.884 µs | 181.446–182.274 µs |
+| emoji_16/full_chars | 76.587 µs | 75.737–77.403 µs |
+| emoji_8192/full_string | 45.703 µs | 45.583–45.853 µs |
+| emoji_8192/step_string | 50.210 µs | 49.907–50.503 µs |
+| emoji_8192/full_chars | 21.631 µs | 21.542–21.711 µs |
+
+Against paired old, complete strings improved 91.8%/95.8%/97.1% at capacity 4
+for ASCII/mixed/emoji, and 85.0%/93.8%/94.9% at capacity 16. At capacity 8192,
+mixed and emoji complete strings improved 20.9% and 23.0%; ASCII changed by
+5.7%. Single-step paths improved substantially at capacities 4 and 16 for all
+three fixtures. At capacity 8192, mixed and emoji improved 4.4% and 15.7%, while
+ASCII was 39.3% slower. The unaffected `full_chars` controls were close to
+paired old for most fixtures, but `ascii_16/full_chars` drifted +19.0% and
+`ascii_8192/full_chars` drifted +97.0%. This makes the default-capacity ASCII
+single-step comparison inconclusive; report it as a measured regression pending
+a cleaner repeat rather than attributing the entire delta to the code change.
+
+### Focused default-capacity diagnostic (performance not accepted)
+
+To isolate the default-capacity ASCII single-step result, both old and optimized
+binaries ran the same filter, covering `step_string` and `full_chars` for ASCII,
+mixed Unicode, and emoji at capacity 8192. Each side used 20 samples, 2-second
+warm-up, and 5-second measurement. The old side ran first around 07:25:34 UTC
+in a separate target (start load 7.82/6.43/5.70; no external process above
+10% CPU at the start; estimates finished by 07:26:28 UTC). The optimized side
+then ran in its verified independent target around 07:27:45–07:28:38 UTC
+(start load 6.42/6.47/5.80; no external high-CPU compiler/test process at the
+start or mid-run). The old controls were within 10% of the prior paired-old
+baseline. The optimized controls did not stay within 10%, and the emoji control
+had a wide interval, so these measurements do not meet performance acceptance.
+
+| ID | Old estimate (95% CI) | Optimized estimate (95% CI) | Step / control ratio, old → optimized |
+| --- | ---: | ---: | ---: |
+| ascii_8192/step_string | 21.462 µs (20.574–22.389) | 28.381 µs (27.821–29.014) | 3.32 → 2.40 |
+| ascii_8192/full_chars | 6.458 µs (6.404–6.520) | 11.825 µs (11.746–11.882) | — |
+| mixed_8192/step_string | 44.581 µs (44.362–44.863) | 42.194 µs (42.007–42.427) | 2.63 → 2.49 |
+| mixed_8192/full_chars | 16.948 µs (16.804–17.077) | 16.977 µs (16.839–17.114) | — |
+| emoji_8192/step_string | 59.439 µs (59.161–59.722) | 50.114 µs (49.794–50.500) | 2.79 → 1.19 |
+| emoji_8192/full_chars | 21.351 µs (21.254–21.483) | 41.966 µs (33.489–53.618) | — |
+
+The raw ASCII step time rose 32.2%, while its `full_chars` control rose 83.1%;
+the normalized step/control ratio fell about 27.7%. Mixed Unicode's ratio fell
+about 5.5%. The emoji ratio is inconclusive because the optimized control
+interval is wide. Report the default-capacity ASCII step result as unresolved
+and the performance gate as not accepted; do not treat the ratio alone as a
+passing benchmark.
+
 The first paired after-run using the shared target was invalid: Cargo printed
 `Finished` without `Compiling qubit-io-text`, and its small-capacity string
 timings matched the old implementation. That run was interrupted (exit code
