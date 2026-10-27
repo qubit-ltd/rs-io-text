@@ -324,8 +324,10 @@ impl AsyncOutput for ScriptOutput {
 #[derive(Clone, Copy)]
 struct Header {
     scene: usize,
+    raw_mode: usize,
     capacity: usize,
     endings: usize,
+    multibyte_policy: u8,
     event_count: usize,
     cancel: u8,
 }
@@ -351,8 +353,10 @@ fn parse(data: &[u8]) -> (Header, Vec<u8>, Vec<Event>, Vec<u8>) {
     (
         Header {
             scene: usize::from(header[0] % 4),
+            raw_mode: usize::from((header[0] >> 2) % 3),
             capacity: usize::from(header[1] % 8 + 1),
             endings: usize::from(header[2] % 4),
+            multibyte_policy: (header[2] >> 2) % 3,
             event_count,
             cancel: header[5],
         },
@@ -437,7 +441,7 @@ fn run_raw_companion(payload: &[u8], header: &Header, ops: &[u8], events: &[Even
         );
     }
     let expected = expected.expect("replacement and ignore always produce text");
-    let mode = header.endings % 3;
+    let mode = header.raw_mode;
     let lines = mode == 1;
     let limited = mode == 2;
     if limited {
@@ -475,12 +479,12 @@ fn run_multibyte_companion(payload: &[u8], header: &Header, ops: &[u8], events: 
         2 => ReferenceEncoding::Utf32Le,
         _ => ReferenceEncoding::Utf32Be,
     };
-    let policy = decode_policy((header.endings % 3) as u8);
+    let policy = decode_policy(header.multibyte_policy);
     let expected = decode_reference(payload, encoding, policy);
     let mode = usize::from(ops.first().copied().unwrap_or(0) % 3);
     macro_rules! dispatch {
         ($codec:expr) => {{
-            if header.endings % 3 == 0 {
+            if header.multibyte_policy == 0 {
                 run_report_reader(
                     payload,
                     expected,
@@ -1134,6 +1138,7 @@ fn drive<F: std::future::Future>(future: F, polls: &mut usize, cancel_pending: b
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
@@ -1172,6 +1177,52 @@ mod tests {
     use super::run_reject_reader_with;
     use super::run_report_reader;
     use super::run_script;
+
+    #[test]
+    fn test_companion_selectors_reach_independent_dimensions() {
+        let mut raw = BTreeSet::new();
+        let mut multibyte = BTreeSet::new();
+        for first in 0_u8..16 {
+            for third in 0_u8..16 {
+                for mode in 0_u8..3 {
+                    let data = [first, 0, third, 1, 0, 0, mode];
+                    let (header, operations, events, payload) = parse(&data);
+                    assert_eq!(operations, vec![mode]);
+                    assert!(events.is_empty() && payload.is_empty());
+                    raw.insert((header.scene % 3, header.raw_mode, header.endings));
+                    multibyte.insert((
+                        header.scene % 4,
+                        header.multibyte_policy,
+                        usize::from(operations[0] % 3),
+                        header.endings,
+                    ));
+                }
+            }
+        }
+        assert_eq!(raw.len(), 3 * 3 * 4);
+        assert_eq!(multibyte.len(), 4 * 3 * 3 * 4);
+    }
+
+    #[test]
+    fn test_companion_selectors_dispatch_malformed_records() {
+        for scene in 0_u8..4 {
+            for raw_mode in 0_u8..3 {
+                for policy in 0_u8..3 {
+                    for endings in 0_u8..4 {
+                        for mode in 0_u8..3 {
+                            let first = scene | (raw_mode << 2);
+                            let third = endings | (policy << 2);
+                            let mut data = vec![first, 1, third, 64, 0, 0];
+                            data.extend([16_u8; 64]);
+                            data[6] = mode;
+                            data.extend_from_slice(b"A\xff\r\xff\nB\xe4\xb8");
+                            let _ = run_script(&data);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     #[should_panic(expected = "Report rejected valid input")]
