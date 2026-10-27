@@ -121,6 +121,7 @@ assumes inner I/O calls obey their normal return contracts.
 | --- | --- |
 | Unicode text traits | `TextReader`, `TextLineReader`, `TextWriter` |
 | In-memory text | `StrTextReader`, `StringTextReader`, `StringTextWriter` |
+| Complete charset conversion | `CharsetStringEncoder`, `CharsetStringDecoder` |
 | Character streams | `StringCharInput`, `StringCharOutput`, `InputTextReader`, `OutputTextWriter` |
 | UTF-8 byte streams | `Utf8TextReader`, `Utf8TextWriter` over `ByteInput`/`ByteOutput` |
 | Synchronous charsets | `CharsetTextReader`, `CharsetTextWriter`, `CharsetReadExt`, `CharsetWriteExt` |
@@ -134,6 +135,9 @@ reportable prefix and return its count; advance the source cursor before the
 next call. The `*_fully_async` convenience loops are not cancellation-safe:
 after cancellation their source position cannot be recovered reliably. Use
 the single-step APIs for cancellation-sensitive protocols.
+
+For complete inputs, use [`CharsetStringEncoder` and `CharsetStringDecoder`](doc/user_guide.md#complete-in-memory-conversion);
+streaming interfaces remain appropriate for incremental input.
 
 After an asynchronous bounded line read rejects an oversized record, resume
 with a line-read method on the same reader to finish recovery before reading

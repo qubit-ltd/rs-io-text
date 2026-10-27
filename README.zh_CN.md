@@ -15,6 +15,7 @@
   `AsyncTextWriter`；
 - `StrTextReader`、`StringCharInput`、`StringCharOutput`、
   `InputTextReader`、`OutputTextWriter` 等字符串与字符流 adapter；
+- 面向完整内存输入转换的 `CharsetStringEncoder` 和 `CharsetStringDecoder`；
 - 基于 Qubit 字节输入与输出的严格 UTF-8 便利 adapter；
 - 基于 `qubit_io::ByteInput` / `ByteOutput` 的同步 charset
   adapter；
@@ -107,6 +108,7 @@ writer 并重试 `finish()` 以完成交付；不要重放原始文本。编码�
 | --- | --- |
 | Unicode 文本 trait | `TextReader`、`TextLineReader`、`TextWriter` |
 | 内存文本 | `StrTextReader`、`StringTextReader`、`StringTextWriter` |
+| 完整 charset 转换 | `CharsetStringEncoder`、`CharsetStringDecoder` |
 | 字符流 | `StringCharInput`、`StringCharOutput`、`InputTextReader`、`OutputTextWriter` |
 | UTF-8 字节流 | 基于 `ByteInput`/`ByteOutput` 的 `Utf8TextReader`、`Utf8TextWriter` |
 | 同步 charset | `CharsetTextReader`、`CharsetTextWriter`、`CharsetReadExt`、`CharsetWriteExt` |
@@ -118,6 +120,9 @@ writer 并重试 `finish()` 以完成交付；不要重放原始文本。编码�
 `write_chars_async` 和 `write_str_async` 每次只提交一个可报告的前缀；按返回数量推进
 输入后再继续。`*_fully_async` 是便利循环，取消后无法可靠恢复其源位置；取消敏感场景
 只使用单步 API，不要重试完整文本。
+
+完整内存输入可使用[完整内存转换](doc/user_guide.zh_CN.md#完整内存转换)中的
+`CharsetStringEncoder` 和 `CharsetStringDecoder`；增量输入仍应使用流式接口。
 
 异步限长行读取拒绝超长记录后，应在同一 reader 上继续调用行读取方法，完成恢复后再读
 下一条记录。运行时配置的替换策略应使用可失败的 `try_*` 构造器；详见

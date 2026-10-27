@@ -17,6 +17,7 @@ streams, UTF-8 byte streams, or configurable character sets.
 | Need | Main API | Input or output |
 | --- | --- | --- |
 | In-memory Unicode text | `StrTextReader`, `StringTextReader`, `StringTextWriter` | strings |
+| Complete in-memory charset conversion | `CharsetStringEncoder`, `CharsetStringDecoder` | complete input; `Vec<C::Unit>` |
 | Character streams | `InputTextReader`, `OutputTextWriter` | `CharInput`, `CharOutput` |
 | Strict UTF-8 bytes | `Utf8TextReader`, `Utf8TextWriter` | `ByteInput`, `ByteOutput` |
 | Synchronous charset conversion | `CharsetTextReader`, `CharsetTextWriter` | `ByteInput`, `ByteOutput` |
@@ -46,6 +47,45 @@ qubit-io = "0.19"
 This guide uses `Utf8Codec` and `AsyncByteOutput`, which are owned by
 `qubit-codec-text` and `qubit-io`; Rust consumers must declare those crates as
 direct dependencies.
+
+## Complete In-Memory Conversion
+
+`CharsetStringEncoder` and `CharsetStringDecoder` convert a complete input held
+in memory. Use them for closed inputs; use the stream adapters for incremental
+input, ongoing streams, or when codec state must remain available between
+chunks. The codec determines the encoded unit type `C::Unit`, so the encoder
+returns `Vec<C::Unit>`; only a byte codec such as `Utf8Codec` returns `Vec<u8>`.
+The convenience `new` constructors use replacement policies by default. This
+example selects `report()` explicitly so malformed or unmappable text returns
+an error. The encoder's `with_policy` can fail during construction, while the
+decoder's returns directly.
+Each conversion runs a complete codec lifecycle, including reset and finish.
+If `encode_str` returns an error, its locally accumulated output is not returned;
+this does not promise rollback of encoder state. `decode_to_string_into` restores
+the destination string's original length on `Err`, but does not roll back decoder
+state or cover panics. The slice-writing `encode_str_into` may leave an encoded
+prefix in the caller's output when it fails.
+
+```rust
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::Utf8Codec;
+use qubit_io_text::CharsetStringDecoder;
+use qubit_io_text::CharsetStringEncoder;
+
+pub fn convert_memory() -> Result<(), Box<dyn std::error::Error>> {
+    let mut encoder = CharsetStringEncoder::with_policy(
+        Utf8Codec, CharsetEncodePolicy::report(),
+    )?;
+    let bytes = encoder.encode_str("A中🙂")?;
+    assert_eq!("A中🙂".as_bytes(), bytes.as_slice());
+    let mut decoder = CharsetStringDecoder::with_policy(
+        Utf8Codec, CharsetDecodePolicy::report(),
+    );
+    assert_eq!("A中🙂", decoder.decode_to_string(&bytes)?);
+    Ok(())
+}
+```
 
 ## Core Workflow
 
@@ -159,7 +199,56 @@ corresponding source suffix. The [AsyncTextWriter example](https://docs.rs/qubit
 shows both loops and explicit finalization; the [AsyncTextLineReader example](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextLineReader.html#examples)
 shows line reads that preserve terminators.
 
+## Send Futures and Threaded Tasks
+
+Runtime-neutral APIs do not select an executor, and runtime neutrality does not
+mean every generic future can move between threads. The
+[`AsyncTextReader`](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextReader.html)
+and
+[`AsyncTextWriter`](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextWriter.html)
+traits document that their method futures are not required to be `Send`.
+Adding `Send` to a generic reader or writer bound therefore does not establish
+a `Send` future. Keep generic code local to a task unless its concrete future
+bounds are known.
+
+A concrete `AsyncUtf8TextReader<I>` can provide a `Send` future when its owned
+input satisfies the needed bounds. Here `async move` owns the input, and the
+`'static` bound is needed for this example's task handoff; borrowed local async
+calls do not universally require `'static`. `Send` does not imply cancellation
+safety: consult the concrete adapter's cancellation behavior before retrying.
+
+```rust
+use std::future::Future;
+use std::io;
+use qubit_io::AsyncByteInput;
+use qubit_io_text::AsyncUtf8TextReader;
+
+pub fn read_owned<I>(input: I)
+    -> impl Future<Output = io::Result<String>> + Send + 'static
+where
+    I: AsyncByteInput + Unpin + Send + 'static,
+{
+    async move {
+        let mut reader = AsyncUtf8TextReader::new(input);
+        let mut text = String::new();
+        reader.read_to_string_async(&mut text).await?;
+        Ok(text)
+    }
+}
+```
+
 ## Errors and Diagnostics
+- To identify this crate's bounded-append error, inspect the source of an existing `io::Error` and downcast it to `TextAppendLimitError`; do not classify every `InvalidData` error as an append limit. The getter reports the original configured UTF-8 byte limit. A rejected line is discarded before its limit error is reported; if discarding is interrupted by an input error, resume a line read on the same reader, which reports that original limit once after recovery. This type does not authorize retrying arbitrary decode failures or roll back consumed input. Character reads and one-shot conversions retain their own documented behavior.
+
+```rust
+use qubit_io_text::TextAppendLimitError;
+
+fn append_limit(error: &std::io::Error) -> Option<usize> {
+    error.get_ref()?
+        .downcast_ref::<TextAppendLimitError>()
+        .map(TextAppendLimitError::max_append_len)
+}
+```
 
 - `CharsetDecodePolicy::report()` reports malformed encoded input and incomplete
   encoded tails at EOF. `CharsetEncodePolicy::report()` reports Unicode

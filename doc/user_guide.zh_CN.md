@@ -17,6 +17,7 @@ Adapter 再将这些 trait 连接到字符串、字符流、UTF-8 字节流或�
 | 需求 | 主要 API | 输入或输出 |
 | --- | --- | --- |
 | 内存中的 Unicode 文本 | `StrTextReader`、`StringTextReader`、`StringTextWriter` | 字符串 |
+| 完整内存 charset 转换 | `CharsetStringEncoder`、`CharsetStringDecoder` | 完整输入；`Vec<C::Unit>` |
 | 字符流 | `InputTextReader`、`OutputTextWriter` | `CharInput`、`CharOutput` |
 | 严格 UTF-8 字节 | `Utf8TextReader`、`Utf8TextWriter` | `ByteInput`、`ByteOutput` |
 | 同步 charset 转换 | `CharsetTextReader`、`CharsetTextWriter` | `ByteInput`、`ByteOutput` |
@@ -43,6 +44,40 @@ qubit-io = "0.19"
 
 本指南使用由 `qubit-codec-text` 和 `qubit-io` 提供的 `Utf8Codec` 与
 `AsyncByteOutput`；Rust 消费方必须将这两个 crate 声明为直接依赖。
+
+## 完整内存转换
+
+`CharsetStringEncoder` 和 `CharsetStringDecoder` 用于转换保存在内存中的完整输入，适合
+封闭输入；增量输入、持续流，或需要在多个数据块之间保留 codec 状态时，应使用流式
+adapter。编码单元类型由 codec 的 `C::Unit` 决定，因此 encoder 返回 `Vec<C::Unit>`；只有
+`Utf8Codec` 这样的字节 codec 才返回 `Vec<u8>`。便捷 `new` 构造器默认使用替换策略。下面
+的示例显式选择 `report()`，让畸形或无法映射的文本返回错误。encoder 的 `with_policy`
+构造可能失败，而 decoder 的构造直接返回实例。
+每次转换都会运行完整 codec 生命周期，包括 reset 和 finish。`encode_str` 返回错误时，
+其局部累积输出不会返回；这不表示 encoder 状态会回滚。`decode_to_string_into` 返回 `Err`
+时会恢复目标字符串的原长度，但不会回滚 decoder 状态，也不覆盖 panic。切片写入方法
+`encode_str_into` 失败时，调用方输出中可能保留已编码前缀。
+
+```rust
+use qubit_codec_text::CharsetDecodePolicy;
+use qubit_codec_text::CharsetEncodePolicy;
+use qubit_codec_text::Utf8Codec;
+use qubit_io_text::CharsetStringDecoder;
+use qubit_io_text::CharsetStringEncoder;
+
+pub fn convert_memory() -> Result<(), Box<dyn std::error::Error>> {
+    let mut encoder = CharsetStringEncoder::with_policy(
+        Utf8Codec, CharsetEncodePolicy::report(),
+    )?;
+    let bytes = encoder.encode_str("A中🙂")?;
+    assert_eq!("A中🙂".as_bytes(), bytes.as_slice());
+    let mut decoder = CharsetStringDecoder::with_policy(
+        Utf8Codec, CharsetDecodePolicy::report(),
+    );
+    assert_eq!("A中🙂", decoder.decode_to_string(&bytes)?);
+    Ok(())
+}
+```
 
 ## 核心流程
 
@@ -146,7 +181,57 @@ where
 
 成功返回时，`write_str_async` 的进度按 UTF-8 字节计数，`write_chars_async` 则按 `char` 元素计数；继续写入时，要据此截取各自的输入后缀。[AsyncTextWriter 示例](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextWriter.html#examples) 展示两种推进方式和显式结束编码器的步骤；[AsyncTextLineReader 示例](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextLineReader.html#examples) 展示保留终止符的逐行读取。
 
+## Send future 与跨线程任务
+
+运行时无关 API 不选择执行器，但运行时无关不代表所有泛型 future 都可在线程间调度。
+[`AsyncTextReader`](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextReader.html)
+和
+[`AsyncTextWriter`](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextWriter.html)
+的 Rustdoc 说明，其方法返回的 future 不保证实现 `Send`。因此，仅给泛型 reader 或
+writer 增加 `Send` bound，不能推出 future 也是 `Send`。除非已知具体 future 的边界，泛型
+代码应留在本地任务中。
+
+当拥有的底层输入满足所需边界时，具体的 `AsyncUtf8TextReader<I>` 可以提供 `Send`
+future。这里 `async move` 拥有输入；示例为了将任务交接出去而要求 `'static`，但本地借用
+异步调用并非普遍需要 `'static`。`Send` 也不表示取消安全；重试前应查阅具体 adapter
+的取消行为。
+
+```rust
+use std::future::Future;
+use std::io;
+use qubit_io::AsyncByteInput;
+use qubit_io_text::AsyncUtf8TextReader;
+
+pub fn read_owned<I>(input: I)
+    -> impl Future<Output = io::Result<String>> + Send + 'static
+where
+    I: AsyncByteInput + Unpin + Send + 'static,
+{
+    async move {
+        let mut reader = AsyncUtf8TextReader::new(input);
+        let mut text = String::new();
+        reader.read_to_string_async(&mut text).await?;
+        Ok(text)
+    }
+}
+```
+
 ## 错误与诊断
+- 要识别本 crate 的追加限额错误，应检查已有 `io::Error` 的 source 并 downcast 为
+  `TextAppendLimitError`；不能把所有 `InvalidData` 都判为追加限额。getter 返回原始配置的
+  UTF-8 字节限额。行限额错误报告前会先丢弃被拒绝的行；若丢弃过程被输入错误中断，应在
+  同一 reader 上恢复行读取，恢复完成后会报告一次原始限额。该类型不授权重试任意解码错误，
+  也不会回滚已消费输入。字符读取和一次性转换保留各自文档说明的行为。
+
+```rust
+use qubit_io_text::TextAppendLimitError;
+
+fn append_limit(error: &std::io::Error) -> Option<usize> {
+    error.get_ref()?
+        .downcast_ref::<TextAppendLimitError>()
+        .map(TextAppendLimitError::max_append_len)
+}
+```
 
 - `CharsetDecodePolicy::report()` 报告畸形编码输入和 EOF 处不完整的编码尾部；
   `CharsetEncodePolicy::report()` 报告当前 codec 无法编码的 Unicode 字符。只有在明确允许

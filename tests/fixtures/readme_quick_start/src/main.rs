@@ -99,6 +99,12 @@ fn main() -> std::io::Result<()> {
     user_guide_examples::guide_chinese::run()?;
     user_guide_examples::reader_recovery_english::run()?;
     user_guide_examples::reader_recovery_chinese::run()?;
+    user_guide_examples::memory_english::convert_memory()
+        .expect("English in-memory conversion example");
+    user_guide_examples::memory_chinese::convert_memory()
+        .expect("Chinese in-memory conversion example");
+    assert_eq!("", complete(user_guide_examples::send_english::read_owned(EofAsyncInput))?);
+    assert_eq!("", complete(user_guide_examples::send_chinese::read_owned(EofAsyncInput))?);
     let output = complete(user_guide_examples::readme_async_english::run(RecordingAsyncOutput::default()))?;
     assert_eq!(b"hello\n", output.bytes.as_slice());
     assert!(output.flushed);
