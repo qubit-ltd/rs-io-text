@@ -157,12 +157,10 @@ fn test_utf8_long_write_preserves_configured_buffer_capacity() -> io::Result<()>
         };
         for ending in [LineEnding::Lf, LineEnding::CrLf, LineEnding::Cr] {
             let text = "中🙂A".repeat(257);
-            let mut writer = Utf8TextWriter::with_capacity(Vec::<u8>::new(), capacity)
-                .with_line_ending(ending);
+            let mut writer = Utf8TextWriter::with_capacity(Vec::<u8>::new(), capacity).with_line_ending(ending);
             writer.write_str("")?;
             writer.write_str("prefix")?;
-            writer.write_str(&text)?;
-            writer.write_line("")?;
+            writer.write_line(&text)?;
             writer.finish()?;
             let (output, recovery) = writer.into_parts();
             let qubit_io::BufferedOutputRecovery::Pending(pending) = recovery else {
