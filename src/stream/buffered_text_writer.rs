@@ -32,6 +32,9 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// buffered by [`qubit_codec::TranscodeEncodeOutput`].
 /// Encoder reset is started lazily before the first non-empty write, or before
 /// finishing an empty stream.
+/// Synchronous character-slice writes are transcoded in windows of at most 256
+/// characters. The requested byte capacity is an initial capacity, not a hard
+/// limit: a custom encoder's single-window or lifecycle output may grow it.
 ///
 /// Main-stage input-character errors from [`TextWriter::write_str`] identify
 /// zero-based Unicode scalar (`char`) positions relative to that call, and each
@@ -116,7 +119,9 @@ where
     /// # Returns
     ///
     /// Returns a buffered text writer. The byte buffer is raised to the maximum
-    /// output needed for one input character when that can be computed.
+    /// output needed for one input character when that can be computed. This is
+    /// an initial capacity, not a hard limit; a custom encoder's output for one
+    /// 256-character window or its reset/finish output may grow the buffer.
     #[must_use]
     pub fn with_capacity(inner: W, encoder: E, capacity: usize) -> Self {
         let one = nonzero(1).get();
@@ -209,7 +214,8 @@ where
     E::Error: StdError + Send + Sync + 'static,
     E::EncodeError: Send + Sync + 'static,
 {
-    /// Encodes a character slice into the shared output buffer.
+    /// Encodes a character slice into the shared output buffer in bounded
+    /// windows while preserving the original input slice for error indices.
     ///
     /// # Parameters
     ///
@@ -220,8 +226,13 @@ where
     /// Returns encoding errors or I/O errors from the wrapped writer.
     fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
         self.ensure_started()?;
-        self.output
-            .transcode(&mut self.encoder, &mut encode_error_to_io, chars, 0, chars.len())?;
+        let mut cursor = 0;
+        while cursor < chars.len() {
+            let count = (chars.len() - cursor).min(DEFAULT_CHAR_CHUNK_CAPACITY);
+            self.output
+                .transcode(&mut self.encoder, &mut encode_error_to_io, chars, cursor, count)?;
+            cursor += count;
+        }
         Ok(())
     }
 

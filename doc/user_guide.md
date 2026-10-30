@@ -300,6 +300,13 @@ fn append_limit(error: &std::io::Error) -> Option<usize> {
   a generic encoder's opaque domain source keeps its own index semantics.
   `write_line` encodes its body and line ending as separate calls, so each has
   its own position origin.
+- Synchronous buffered character-slice writes use windows of at most 256
+  characters. The requested buffer capacity is an initial value, not a hard
+  limit; a custom codec's output for one window or its reset/finish output may
+  grow the buffer. A failed write is not transactional, and windowing can
+  change how much output was delivered before an error and the number of
+  underlying I/O calls. Do not depend on a particular call count or replay the
+  full input after failure.
 - For `AsyncCharsetTextWriter`, single-step encoding errors use zero-based Rust
   `char` positions relative to the source slice or string suffix passed to that
   call. Complete-write errors use positions relative to the original complete

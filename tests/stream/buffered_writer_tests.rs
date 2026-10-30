@@ -733,6 +733,54 @@ fn test_buffered_writer_reuses_string_path_after_empty_and_across_chunks() -> st
 }
 
 #[test]
+fn test_buffered_writer_char_slice_capacity_is_independent_of_total_length() -> std::io::Result<()> {
+    for alphabet in [vec!['A'], vec!['中', '🙂', 'é']] {
+        let mut capacities = Vec::new();
+        for len in [256, 65_536] {
+            let chars: Vec<char> = alphabet.iter().copied().cycle().take(len).collect();
+            let expected: String = chars.iter().copied().collect();
+            let encoder = CharsetEncoder::with_policy(Utf8Codec, CharsetEncodePolicy::report())
+                .expect("valid UTF-8 report encoder");
+            let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), encoder, 8);
+            writer.write_chars(&chars)?;
+            writer.finish()?;
+            let (output, recovery) = writer.into_parts();
+            let qubit_io::BufferedOutputRecovery::Pending(buffer) = recovery else {
+                panic!("ordinary writes must have determinate recovery");
+            };
+            assert!(buffer.readable().is_empty());
+            assert_eq!(expected.as_bytes(), output.get_ref().as_slice());
+            capacities.push(buffer.capacity());
+        }
+        assert_eq!(capacities[0], capacities[1], "input length enlarged output cache");
+    }
+    Ok(())
+}
+
+#[test]
+fn test_buffered_writer_char_slice_boundaries_preserve_lifecycle() -> std::io::Result<()> {
+    for len in [0, 1, 255, 256, 257] {
+        let chars = vec!['A'; len];
+        let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), LifecycleEncoder::default(), 1);
+        writer.write_chars(&[])?;
+        writer.write_char('B')?;
+        writer.write_chars(&chars)?;
+        writer.write_str("C")?;
+        writer.finish()?;
+        let (output, recovery) = writer.into_parts();
+        let qubit_io::BufferedOutputRecovery::Pending(buffer) = recovery else {
+            panic!("ordinary writes must have determinate recovery");
+        };
+        assert!(buffer.readable().is_empty());
+        assert_eq!(
+            format!("^B{}C!", "A".repeat(len)).as_bytes(),
+            output.get_ref().as_slice()
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn test_buffered_writer_clears_string_staging_after_encode_error() -> std::io::Result<()> {
     let mut writer = BufferedTextWriter::with_capacity(Cursor::new(Vec::new()), MarkerUnencodableEncoder, 1);
     let text = format!("{}#", "A".repeat(256));

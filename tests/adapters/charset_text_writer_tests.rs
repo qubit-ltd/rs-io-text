@@ -275,6 +275,39 @@ fn test_write_chars_rejects_unencodable_text_in_strict_mode() {
 }
 
 #[test]
+fn test_write_chars_reports_original_slice_indices_across_chunks() {
+    for expected in [255, 256, 512] {
+        let mut writer = CharsetTextWriter::new(Vec::<u8>::new(), AsciiCodec, CharsetEncodePolicy::report());
+        let mut chars = vec!['A'; expected];
+        chars.push('中');
+        let error = writer.write_chars(&chars).expect_err("ASCII rejects 中");
+        assert_charset_main_index(&error, expected);
+    }
+
+    let mut writer = CharsetTextWriter::new(Vec::<u8>::new(), AsciiCodec, CharsetEncodePolicy::report());
+    writer.write_chars(&['A'; 300]).expect("ASCII prefix is encodable");
+    let error = writer.write_chars(&['中']).expect_err("the second call rejects 中");
+    assert_charset_main_index(&error, 0);
+}
+
+#[test]
+fn test_write_chars_output_failure_preserves_an_ordered_prefix() {
+    let mut output = OneShotWriteFailure::default();
+    let mut writer =
+        CharsetTextWriter::new_with_buffer_capacity(&mut output, Utf8Codec, CharsetEncodePolicy::report(), 8);
+    let text: String = (0..1024).map(|index| char::from(b'A' + (index % 26) as u8)).collect();
+    let chars: Vec<char> = text.chars().collect();
+    assert_eq!(ErrorKind::BrokenPipe, writer.write_chars(&chars).unwrap_err().kind());
+    let (output, recovery) = writer.into_parts();
+    let qubit_io::BufferedOutputRecovery::Pending(buffer) = recovery else {
+        panic!("ordinary writes must have determinate recovery");
+    };
+    let mut delivered_and_pending = output.bytes.clone();
+    delivered_and_pending.extend_from_slice(buffer.readable());
+    assert!(text.as_bytes().starts_with(&delivered_and_pending));
+}
+
+#[test]
 fn test_write_replaces_unencodable_text_in_replace_mode() -> std::io::Result<()> {
     let mut output = Vec::new();
     {
