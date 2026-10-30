@@ -9,7 +9,6 @@
 #![no_main]
 
 use std::io::Cursor;
-use std::io::ErrorKind;
 
 use libfuzzer_sys::fuzz_target;
 use qubit_codec::ByteOrder;
@@ -22,6 +21,7 @@ use qubit_io_text::CharsetTextReader;
 use qubit_io_text::CharsetTextWriter;
 use qubit_io_text::TextReader;
 use qubit_io_text::TextWriter;
+use qubit_io_text_fuzz::append_limit_error::is_append_limit_error;
 use qubit_io_text_fuzz::multibyte_reference::fuzz_multibyte_reference;
 use qubit_io_text_fuzz::report_decode_error::is_report_input_error;
 
@@ -137,9 +137,10 @@ fn fuzz_bounded_utf8_reads(data: &[u8]) {
                 assert_eq!(expected.chars().count(), result.expect("bounded text must fit"));
                 assert_eq!(format!("seed:中{expected}"), output);
             } else {
-                assert_eq!(
-                    ErrorKind::InvalidData,
-                    result.expect_err("text must exceed limit").kind()
+                let error = result.expect_err("text must exceed limit");
+                assert!(
+                    is_append_limit_error(&error, limit),
+                    "unexpected append-limit error: {error:?}"
                 );
                 assert_eq!("seed:中", output);
             }
@@ -202,9 +203,10 @@ fn fuzz_mixed_utf8_reads(data: &[u8]) {
                             assert_eq!(!line.is_empty(), result.expect("line must fit"));
                             assert_eq!(format!("seed:中{line}"), output);
                         } else {
-                            assert_eq!(
-                                ErrorKind::InvalidData,
-                                result.expect_err("line must exceed limit").kind()
+                            let error = result.expect_err("line must exceed limit");
+                            assert!(
+                                is_append_limit_error(&error, limit),
+                                "unexpected append-limit error: {error:?}"
                             );
                             assert_eq!("seed:中", output);
                         }

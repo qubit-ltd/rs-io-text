@@ -4,6 +4,8 @@
 
 The asynchronous target caps each input at 4096 bytes. Its six-byte header keeps the existing layout: byte 0 selects the legacy scenario in its low two bits and independently selects the UTF-8 raw companion mode in bits 2–3 (`% 3`); byte 1 selects capacity (1–8); byte 2 selects the line-ending set and independently selects the multibyte companion decode policy in bits 2–3 (`% 3`); bytes 3 and 4 select operation and event counts; byte 5 selects the poll/cancellation parameter. The ending index is `byte2 % 4 + 4 * ((byte2 / 12) % 2)`:
 
+Limited-read rejection checks verify the `InvalidData` kind, the structured `TextAppendLimitError` source, and its original configured byte limit.
+
 | Index | Accepted line endings |
 | --- | --- |
 | 0 | LF, CRLF, CR |

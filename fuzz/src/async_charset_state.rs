@@ -26,6 +26,7 @@ use qubit_io_text::AsyncCharsetTextReader;
 use qubit_io_text::AsyncCharsetTextWriter;
 use qubit_io_text::LineEndingSet;
 
+use crate::append_limit_error::is_append_limit_error;
 use crate::multibyte_policy_reference::ReferenceEncoding;
 use crate::multibyte_policy_reference::ReferenceText;
 use crate::multibyte_policy_reference::decode_reference;
@@ -981,6 +982,10 @@ fn run_reject_reader_with<C: CharsetCodec<Unit = u8>>(
                     break 'reading;
                 }
                 Some(Err(error)) if error.kind() == io::ErrorKind::InvalidData => {
+                    assert!(
+                        is_append_limit_error(&error, limit),
+                        "unexpected limited-line rejection: {error:?}"
+                    );
                     assert_eq!(output, before, "rejected call must roll back its target append");
                     assert!(remaining.len() > limit, "record rejected without an oversized suffix");
                     let rejected_before = stats.rejected_records;
