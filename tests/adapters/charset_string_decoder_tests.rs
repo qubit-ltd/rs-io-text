@@ -216,9 +216,9 @@ impl Codec for DecodeFlushErrorCodec {
         Ok(('A', NonZeroUsize::MIN))
     }
 
-    unsafe fn decode_finish(&mut self, _output: &mut [char], output_index: usize) -> CharsetDecodeResult<usize> {
-        let kind = CharsetDecodeErrorKind::malformed_unknown();
-        Err(CharsetDecodeError::new(Charset::ASCII, kind, output_index))
+    unsafe fn decode_finish(&mut self, _output: &mut [char], _output_index: usize) -> CharsetDecodeResult<usize> {
+        let kind = CharsetDecodeErrorKind::malformed(0xff);
+        Err(CharsetDecodeError::new(Charset::ASCII, kind, 7).with_consumed(NonZeroUsize::new(2).unwrap()))
     }
 
     unsafe fn encode(&mut self, _value: &char, _output: &mut [u8], output_index: usize) -> CharsetEncodeResult<usize> {
@@ -518,13 +518,18 @@ fn test_charset_string_decoder_decode_to_string_propagates_reset_errors() {
 #[test]
 fn test_charset_string_decoder_decode_to_string_propagates_finish_errors() {
     let mut decoder = CharsetStringDecoder::new(DecodeFlushErrorCodec);
+    let input = vec![b'A'; 300];
+    let mut output = String::from("prefix:");
 
     let error = decoder
-        .decode_to_string(b"A")
+        .decode_to_string_into(&input, 3, &mut output)
         .expect_err("decode flush errors should be propagated");
 
-    assert_eq!(CharsetDecodeErrorKind::malformed_unknown(), error.kind());
-    assert_eq!(1, error.index());
+    assert_eq!(CharsetDecodeErrorKind::malformed(0xff), error.kind());
+    assert_eq!(Charset::ASCII, error.charset());
+    assert_eq!(7, error.index());
+    assert_eq!(Some(NonZeroUsize::new(2).unwrap()), error.consumed());
+    assert_eq!("prefix:", output);
 }
 
 #[test]

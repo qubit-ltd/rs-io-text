@@ -406,27 +406,36 @@ fn map_decode_error(charset: Charset, error: TranscodeDecodeError<CharsetDecodeE
     CharsetDecodeError::from_transcode_error(charset, error)
 }
 
-/// Maps a bounded finish-buffer index to the complete decoded output index.
+/// Preserves finish domain errors and globalizes framework output indices.
 ///
 /// # Parameters
 ///
 /// - `charset`: Charset attached to framework-level failures.
-/// - `error`: Error whose output index is relative to the finish buffer.
+/// - `error`: Domain error or framework failure reported while finishing.
 /// - `output_offset`: Character count already appended before finishing.
 ///
 /// # Returns
 ///
-/// Returns an error whose output index is relative to the complete output.
+/// Returns domain errors unchanged. Framework output indices are relative to
+/// the complete output; other framework error indices remain unchanged.
 fn map_finish_decode_error(
     charset: Charset,
     error: TranscodeDecodeError<CharsetDecodeError>,
     output_offset: usize,
 ) -> CharsetDecodeError {
-    let error = map_decode_error(charset, error);
-    if matches!(error.kind(), CharsetDecodeErrorKind::OutputLengthOverflow) {
-        return error;
+    let failure = match error {
+        TranscodeDecodeError::Failure(failure) => failure,
+        TranscodeDecodeError::Domain(error) => return error.into_source(),
+    };
+    let error = map_decode_error(charset, TranscodeDecodeError::Failure(failure));
+    if matches!(
+        error.kind(),
+        CharsetDecodeErrorKind::InvalidOutputIndex { .. } | CharsetDecodeErrorKind::BufferTooSmall { .. }
+    ) {
+        CharsetDecodeError::new(charset, error.kind(), output_offset.saturating_add(error.index()))
+    } else {
+        error
     }
-    CharsetDecodeError::new(charset, error.kind(), output_offset.saturating_add(error.index()))
 }
 
 #[cfg(coverage)]
@@ -574,6 +583,76 @@ mod tests {
             error.kind(),
         );
         assert_eq!(3, error.index());
+
+        let invalid_output = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::invalid_output_index(3, 2)),
+            7,
+        );
+        assert_eq!(
+            CharsetDecodeErrorKind::InvalidOutputIndex { output_len: 2 },
+            invalid_output.kind()
+        );
+        assert_eq!(10, invalid_output.index());
+
+        let insufficient_output = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::insufficient_output(3, 2, 1)),
+            7,
+        );
+        assert_eq!(
+            CharsetDecodeErrorKind::BufferTooSmall {
+                required: 2,
+                available: 1
+            },
+            insufficient_output.kind()
+        );
+        assert_eq!(10, insufficient_output.index());
+
+        let invalid_input = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::invalid_input_index(3, 2)),
+            7,
+        );
+        assert_eq!(
+            CharsetDecodeErrorKind::InvalidInputIndex { input_len: 2 },
+            invalid_input.kind()
+        );
+        assert_eq!(3, invalid_input.index());
+
+        let unexpected = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::TranscodeBeforeReset),
+            7,
+        );
+        assert_eq!(CharsetDecodeErrorKind::TranscodeBeforeReset, unexpected.kind());
+        assert_eq!(usize::MAX, unexpected.index());
+
+        let unknown = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::trailing_input(1, 1)),
+            7,
+        );
+        assert_eq!(CharsetDecodeErrorKind::UnexpectedTranscodeFailure, unknown.kind());
+        assert_eq!(usize::MAX, unknown.index());
+
+        let overflow = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Failure(TranscodeFailure::output_length_overflow()),
+            7,
+        );
+        assert_eq!(CharsetDecodeErrorKind::OutputLengthOverflow, overflow.kind());
+        assert_eq!(usize::MAX, overflow.index());
+
+        let domain_error = CharsetDecodeError::new(Charset::ASCII, CharsetDecodeErrorKind::malformed(0xff), 7)
+            .with_consumed(core::num::NonZeroUsize::new(2).expect("two is non-zero"));
+        let error = map_finish_decode_error(
+            Charset::UTF_8,
+            TranscodeDecodeError::Domain(TranscodeDomainError::finish(domain_error)),
+            300,
+        );
+        assert_eq!(domain_error, error);
+        assert_eq!(Some(0xff), error.kind().value());
 
         let overflow =
             CharsetDecodeError::new(Charset::UTF_8, CharsetDecodeErrorKind::OutputLengthOverflow, usize::MAX);
