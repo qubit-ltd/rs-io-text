@@ -92,6 +92,10 @@ where
     rejected_line: Option<(usize, LineEndingSet)>,
     /// Records whether decoder reset has completed.
     started: bool,
+    /// Records whether EOF decoding has started.
+    eof_started: bool,
+    /// Records whether EOF decoding has completed.
+    eof_complete: bool,
     /// Records whether decoder finalization has completed.
     finished: bool,
 }
@@ -141,6 +145,8 @@ where
             pending_char: None,
             rejected_line: None,
             started: false,
+            eof_started: false,
+            eof_complete: false,
             finished: false,
         }
     }
@@ -324,6 +330,7 @@ where
     ///
     /// Returns I/O, decoder, or finalization errors.
     fn decode_eof(&mut self) -> io::Result<bool> {
+        self.eof_started = true;
         let capacity = self.chars.len();
         let progress = self.input.transcode_eof_step(
             &mut self.decoder,
@@ -334,6 +341,9 @@ where
         )?;
         self.char_position = 0;
         self.char_limit = progress.written();
+        if progress.status() == TranscodeStatus::Complete {
+            self.eof_complete = true;
+        }
         if self.has_buffered_chars() {
             return Ok(true);
         }
@@ -369,6 +379,12 @@ where
         self.ensure_started()?;
         if self.has_buffered_chars() {
             return Ok(true);
+        }
+        if self.eof_complete {
+            return self.finish_decoder();
+        }
+        if self.eof_started {
+            return self.decode_eof();
         }
         loop {
             self.clear_chars();

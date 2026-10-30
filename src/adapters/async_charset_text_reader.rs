@@ -98,6 +98,11 @@ where
     rejected_line: Option<(usize, LineEndingSet)>,
     /// Records successful decoder reset, without promising rollback on error.
     started: bool,
+    /// Records that EOF decoding has started, even when it yielded characters.
+    eof_started: bool,
+    /// Records that EOF decoding completed before its characters were
+    /// delivered.
+    eof_complete: bool,
     /// Records successful decoder finalization; finalization output or a
     /// retained character may still await delivery to the caller.
     finished: bool,
@@ -151,6 +156,8 @@ where
             pending_char: None,
             rejected_line: None,
             started: false,
+            eof_started: false,
+            eof_complete: false,
             finished: false,
         }
     }
@@ -301,6 +308,7 @@ where
     where
         I: Unpin,
     {
+        self.eof_started = true;
         let char_capacity = self.chars.len();
         let progress = self.input.transcode_eof_step(
             &mut self.decoder,
@@ -311,10 +319,14 @@ where
         )?;
         self.char_position = 0;
         self.char_limit = progress.written();
+        let status = coverage_eof_status(progress.status());
+        if matches!(status, TranscodeStatus::Complete) {
+            self.eof_complete = true;
+        }
         if self.has_buffered_chars() {
             return Ok(true);
         }
-        match coverage_eof_status(progress.status()) {
+        match status {
             TranscodeStatus::NeedOutput { required, .. } => {
                 self.chars.resize(required.get(), '\0');
                 self.decode_eof()
@@ -341,6 +353,12 @@ where
         self.ensure_started()?;
         if self.has_buffered_chars() {
             return Ok(true);
+        }
+        if self.eof_complete {
+            return self.finish_decoder();
+        }
+        if self.eof_started {
+            return self.decode_eof();
         }
         loop {
             self.clear_chars();

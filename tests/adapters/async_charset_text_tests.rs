@@ -221,6 +221,104 @@ impl Codec for ScriptedCodec {
     }
 }
 
+#[derive(Clone, Debug)]
+struct EofWindowCodec {
+    ordinary_decode_calls: Rc<Cell<usize>>,
+    eof_decode_calls: Rc<Cell<usize>>,
+    eof_started: Rc<Cell<bool>>,
+    after_eof_ordinary_decode_calls: Rc<Cell<usize>>,
+    eof_window_full_with_tail: Rc<Cell<bool>>,
+    eof_window_retry_calls: Rc<Cell<usize>>,
+    finish_calls: Rc<Cell<usize>>,
+}
+
+impl CharsetCodec for EofWindowCodec {
+    fn charset(&self) -> Charset {
+        Charset::UTF_8
+    }
+}
+
+impl Codec for EofWindowCodec {
+    type Value = char;
+    type Unit = u8;
+    type DecodeError = CharsetDecodeError;
+    type EncodeError = CharsetEncodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 6;
+    const MAX_ENCODE_RESET_UNITS: usize = 0;
+    const MAX_ENCODE_FINISH_UNITS: usize = 0;
+    const MAX_DECODE_RESET_VALUES: usize = 0;
+    const MAX_DECODE_FINISH_VALUES: usize = 1;
+
+    fn encode_len(&self, _value: &char) -> usize {
+        1
+    }
+
+    unsafe fn encode_reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &char,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        unreachable!("EOF window fixture is used only for decoding")
+    }
+
+    unsafe fn encode_finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+
+    unsafe fn decode_reset(&mut self, _output: &mut [char], _output_index: usize) -> Result<usize, Self::DecodeError> {
+        Ok(0)
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(char, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        self.ordinary_decode_calls.set(self.ordinary_decode_calls.get() + 1);
+        if self.eof_started.get() {
+            self.after_eof_ordinary_decode_calls
+                .set(self.after_eof_ordinary_decode_calls.get() + 1);
+        }
+        let visible = input.len() - input_index;
+        Err(DecodeFailure::incomplete(
+            NonZeroUsize::new(visible + 1).expect("visible prefix is shorter than six"),
+        ))
+    }
+
+    unsafe fn decode_eof(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(char, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        self.eof_started.set(true);
+        let calls = self.eof_decode_calls.get() + 1;
+        self.eof_decode_calls.set(calls);
+        if calls == 4 && input.len() - input_index > 1 {
+            self.eof_window_full_with_tail.set(true);
+        }
+        // Four decoded chars fill the configured window; later EOF decoding
+        // demonstrates that the reader resumed with the retained tail.
+        if calls > 4 {
+            self.eof_window_retry_calls.set(self.eof_window_retry_calls.get() + 1);
+        }
+        Ok((char::from(input[input_index]), NonZeroUsize::MIN))
+    }
+
+    unsafe fn decode_finish(&mut self, output: &mut [char], output_index: usize) -> Result<usize, Self::DecodeError> {
+        self.finish_calls.set(self.finish_calls.get() + 1);
+        output[output_index] = '!';
+        Ok(1)
+    }
+}
+
 struct ChunkedAsyncInput {
     bytes: Vec<u8>,
     position: usize,
@@ -425,6 +523,142 @@ fn test_read_ahead_error_boundary_async_line() {
             }
         }
     }
+}
+
+#[test]
+fn test_review_eof_phase_async_need_output_with_chars_continues_eof() {
+    let ordinary_decode_calls = Rc::new(Cell::new(0));
+    let eof_decode_calls = Rc::new(Cell::new(0));
+    let eof_started = Rc::new(Cell::new(false));
+    let after_eof_ordinary_decode_calls = Rc::new(Cell::new(0));
+    let eof_window_full_with_tail = Rc::new(Cell::new(false));
+    let eof_window_retry_calls = Rc::new(Cell::new(0));
+    let finish_calls = Rc::new(Cell::new(0));
+    let codec = EofWindowCodec {
+        ordinary_decode_calls: Rc::clone(&ordinary_decode_calls),
+        eof_decode_calls: Rc::clone(&eof_decode_calls),
+        eof_started: Rc::clone(&eof_started),
+        after_eof_ordinary_decode_calls: Rc::clone(&after_eof_ordinary_decode_calls),
+        eof_window_full_with_tail: Rc::clone(&eof_window_full_with_tail),
+        eof_window_retry_calls: Rc::clone(&eof_window_retry_calls),
+        finish_calls: Rc::clone(&finish_calls),
+    };
+    let input = ChunkedAsyncInput::new(b"abcde".to_vec(), 5, false);
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(input, codec, CharsetDecodePolicy::report(), 4);
+
+    let mut text = String::new();
+    assert_eq!(complete(reader.read_to_string_async(&mut text)).unwrap(), 6);
+    assert_eq!(text, "abcde!");
+    assert_eq!(finish_calls.get(), 1, "decoder finish must run exactly once");
+    assert!(eof_started.get(), "reader must enter EOF decoding");
+    assert_eq!(
+        after_eof_ordinary_decode_calls.get(),
+        0,
+        "ordinary decode must not run after EOF decoding starts"
+    );
+    assert!(
+        eof_window_full_with_tail.get(),
+        "EOF decoding must fill the four-char window while retaining input"
+    );
+    assert_eq!(eof_decode_calls.get(), 5, "all retained EOF bytes must be decoded");
+    assert_eq!(
+        eof_window_retry_calls.get(),
+        1,
+        "EOF decoding must resume after the four-char window fills"
+    );
+    assert!(ordinary_decode_calls.get() > 0);
+    let ordinary_calls_after_eof = ordinary_decode_calls.get();
+
+    assert_eq!(complete(reader.read_char_async()).unwrap(), None);
+    assert_eq!(complete(reader.read_char_async()).unwrap(), None);
+    assert_eq!(finish_calls.get(), 1, "stable EOF must not finish the decoder again");
+    assert_eq!(eof_decode_calls.get(), 5, "stable EOF must not decode again");
+    assert_eq!(
+        ordinary_decode_calls.get(),
+        ordinary_calls_after_eof,
+        "stable EOF must not resume ordinary decoding"
+    );
+    assert_eq!(
+        after_eof_ordinary_decode_calls.get(),
+        0,
+        "EOF must not call ordinary decode"
+    );
+}
+
+#[test]
+fn test_review_eof_phase_async_pending_cancellation_stays_before_eof() {
+    let ordinary_decode_calls = Rc::new(Cell::new(0));
+    let eof_decode_calls = Rc::new(Cell::new(0));
+    let eof_started = Rc::new(Cell::new(false));
+    let after_eof_ordinary_decode_calls = Rc::new(Cell::new(0));
+    let eof_window_full_with_tail = Rc::new(Cell::new(false));
+    let eof_window_retry_calls = Rc::new(Cell::new(0));
+    let finish_calls = Rc::new(Cell::new(0));
+    let progress = Rc::new(Cell::new(0));
+    let codec = EofWindowCodec {
+        ordinary_decode_calls: Rc::clone(&ordinary_decode_calls),
+        eof_decode_calls: Rc::clone(&eof_decode_calls),
+        eof_started: Rc::clone(&eof_started),
+        after_eof_ordinary_decode_calls: Rc::clone(&after_eof_ordinary_decode_calls),
+        eof_window_full_with_tail: Rc::clone(&eof_window_full_with_tail),
+        eof_window_retry_calls: Rc::clone(&eof_window_retry_calls),
+        finish_calls: Rc::clone(&finish_calls),
+    };
+    let input = ChunkedAsyncInput::new(b"abcde".to_vec(), 5, true).with_progress(Rc::clone(&progress));
+    let mut reader = AsyncCharsetTextReader::new_with_buffer_capacity(input, codec, CharsetDecodePolicy::report(), 4);
+    let mut context = test_context();
+
+    {
+        let mut cancelled_output = String::new();
+        let future = reader.read_to_string_async(&mut cancelled_output);
+        let mut future = std::pin::pin!(future);
+        assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+    }
+    assert_eq!(progress.get(), 0, "the first Pending must not advance input");
+    assert!(!eof_started.get(), "EOF must not start before input is consumed");
+    assert_eq!(eof_decode_calls.get(), 0);
+    assert_eq!(finish_calls.get(), 0);
+
+    {
+        let mut cancelled_output = String::new();
+        let future = reader.read_to_string_async(&mut cancelled_output);
+        let mut future = std::pin::pin!(future);
+        assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+    }
+    assert_eq!(progress.get(), 4, "the second Pending follows the first bufferful");
+    assert!(!eof_started.get(), "Pending while refilling must remain before EOF");
+    assert_eq!(eof_decode_calls.get(), 0);
+    assert_eq!(finish_calls.get(), 0);
+
+    {
+        let mut cancelled_output = String::new();
+        let future = reader.read_to_string_async(&mut cancelled_output);
+        let mut future = std::pin::pin!(future);
+        assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+    }
+    assert_eq!(progress.get(), 5, "the third Pending follows the final input bytes");
+    assert!(!eof_started.get(), "EOF must wait until a refill confirms end of input");
+    assert_eq!(eof_decode_calls.get(), 0);
+    assert_eq!(finish_calls.get(), 0);
+
+    let mut output = String::new();
+    assert_eq!(complete(reader.read_to_string_async(&mut output)).unwrap(), 6);
+    assert_eq!(output, "abcde!");
+    assert!(eof_started.get(), "EOF starts only after the refill confirms EOF");
+    assert_eq!(eof_decode_calls.get(), 5, "all input bytes must be decoded at EOF");
+    assert_eq!(finish_calls.get(), 1, "decoder finish must run exactly once");
+    assert_eq!(
+        after_eof_ordinary_decode_calls.get(),
+        0,
+        "ordinary decode must not run after EOF starts"
+    );
+    assert!(eof_window_full_with_tail.get());
+    assert_eq!(eof_window_retry_calls.get(), 1);
+
+    assert_eq!(complete(reader.read_char_async()).unwrap(), None);
+    assert_eq!(complete(reader.read_char_async()).unwrap(), None);
+    assert_eq!(eof_decode_calls.get(), 5, "stable EOF must not decode again");
+    assert_eq!(finish_calls.get(), 1, "stable EOF must not finish again");
 }
 
 #[test]

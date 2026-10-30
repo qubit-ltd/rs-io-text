@@ -593,6 +593,152 @@ impl TranscodeDecoder for ExpandingDecoder {
     type DecodeError = std::io::Error;
 }
 
+type EofPhaseTrace = Rc<Cell<(usize, usize, usize, usize, usize)>>;
+
+#[derive(Debug, Default)]
+struct EofPhaseDecoder {
+    trace: EofPhaseTrace,
+    need_output: bool,
+}
+
+impl Transcoder for EofPhaseDecoder {
+    type Input = u8;
+    type Output = char;
+    type Error = TranscodeDecodeError<std::io::Error>;
+
+    fn max_transcode_output_len(&self, _: usize) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+    fn reset(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> {
+        TranscodeFailure::ensure_output_index(output.len(), index)?;
+        let (_, _, _, resets, _) = self.trace.get();
+        self.trace.set((0, 0, 0, resets + 1, 0));
+        Ok(0)
+    }
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        TranscodeFailure::ensure_transcode_indices(input.len(), index, output.len(), output_index)?;
+        let (main_calls, eof_calls, finishes, resets, after_eof_main_calls) = self.trace.get();
+        self.trace.set((
+            main_calls + 1,
+            eof_calls,
+            finishes,
+            resets,
+            after_eof_main_calls + if eof_calls > 0 { 1 } else { 0 },
+        ));
+        if index == input.len() {
+            return Ok(TranscodeProgress::new(
+                TranscodeStatus::need_input(NonZeroUsize::new(1).unwrap()),
+                0,
+                0,
+            ));
+        }
+        Ok(TranscodeProgress::complete(input.len() - index, 0))
+    }
+    fn transcode_eof(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        output: &mut [char],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        TranscodeFailure::ensure_transcode_indices(input.len(), index, output.len(), output_index)?;
+        let (main_calls, eof_calls, finishes, resets, after_eof_main_calls) = self.trace.get();
+        self.trace
+            .set((main_calls, eof_calls + 1, finishes, resets, after_eof_main_calls));
+        if self.need_output {
+            match eof_calls {
+                0 => {
+                    output[output_index] = '甲';
+                    let required = output.len() - output_index + 1;
+                    return Ok(TranscodeProgress::new(
+                        TranscodeStatus::need_output(NonZeroUsize::new(required).unwrap()),
+                        input.len() - index,
+                        1,
+                    ));
+                }
+                1 => {
+                    output[output_index] = '乙';
+                    return Ok(TranscodeProgress::complete(input.len() - index, 1));
+                }
+                _ => return Ok(TranscodeProgress::complete(0, 0)),
+            }
+        }
+        if eof_calls > 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        output[output_index] = '終';
+        Ok(TranscodeProgress::complete(input.len() - index, 1))
+    }
+    fn finish(&mut self, output: &mut [char], index: usize) -> Result<usize, Self::Error> {
+        TranscodeFailure::ensure_output_index(output.len(), index)?;
+        let (main_calls, eof_calls, finishes, resets, after_eof_main_calls) = self.trace.get();
+        self.trace
+            .set((main_calls, eof_calls, finishes + 1, resets, after_eof_main_calls));
+        output[index] = '尾';
+        Ok(1)
+    }
+}
+
+impl TranscodeDecoder for EofPhaseDecoder {
+    type DecodeError = std::io::Error;
+}
+
+#[test]
+fn test_review_eof_phase_complete_with_char_is_single_shot() -> std::io::Result<()> {
+    let trace = Rc::new(Cell::new((0, 0, 0, 0, 0)));
+    let decoder = EofPhaseDecoder {
+        trace: trace.clone(),
+        need_output: false,
+    };
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![7]), decoder, 1);
+    assert_eq!(Some('終'), reader.read_char()?);
+    assert_eq!(Some('尾'), reader.read_char()?);
+    assert_eq!(None, reader.read_char()?);
+    assert_eq!(None, reader.read_char()?);
+    let (main_calls, eof_calls, finishes, resets, after_eof_main_calls) = trace.get();
+    assert!(main_calls > 0);
+    assert_eq!(0, after_eof_main_calls);
+    assert_eq!(
+        1, eof_calls,
+        "EOF completion must not be dispatched again after its character is delivered"
+    );
+    assert_eq!(1, finishes);
+    assert_eq!(1, resets);
+    Ok(())
+}
+
+#[test]
+fn test_review_eof_phase_need_output_with_char_continues_eof() -> std::io::Result<()> {
+    let trace = Rc::new(Cell::new((0, 0, 0, 0, 0)));
+    let decoder = EofPhaseDecoder {
+        trace: trace.clone(),
+        need_output: true,
+    };
+    let mut reader = BufferedTextReader::with_capacity(Cursor::new(vec![7]), decoder, 1);
+    let mut output = String::new();
+    while let Some(ch) = reader.read_char()? {
+        output.push(ch);
+    }
+    assert_eq!("甲乙尾", output);
+    assert_eq!(None, reader.read_char()?);
+    let (main_calls, eof_calls, finishes, resets, after_eof_main_calls) = trace.get();
+    assert!(main_calls > 0);
+    assert_eq!(0, after_eof_main_calls);
+    assert_eq!(2, eof_calls); // NeedOutput with output, then Complete with output before finish.
+    assert_eq!(1, finishes);
+    assert_eq!(1, resets);
+    Ok(())
+}
+
 #[derive(Debug)]
 struct LargeOutputDecoder {
     attempts: Rc<Cell<usize>>,
