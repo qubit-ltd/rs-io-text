@@ -10,9 +10,9 @@ checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
 
 [[package]]
 name = "cc"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "877bf67ac8e52449eb2f9e98a344ea163beb70dd1f9eebe3cc5357dcfeaee4df"
+checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -80,9 +80,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec"
-version = "0.17.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f58b5436807beeab95fef99586f12feb3f3ce2ae3a963a5b4a5ace52ce71b42"
+checksum = "0e81b1f38615a1b0c2dcbd58d8b849241995a286ce33075b085c0df755c611f4"
 dependencies = [
  "qubit-io",
  "qubit-utils",
@@ -91,9 +91,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec-text"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e17d5aeda4d8f14eba2f994f0c45bb9b0966ad24ff8e39d3477490731bc825f"
+checksum = "b3698ad2b9014546e2ae6a0d3381170b9e27c840379e021877c4e1047e74ec81"
 dependencies = [
  "qubit-codec",
  "qubit-utils",
@@ -102,16 +102,16 @@ dependencies = [
 
 [[package]]
 name = "qubit-io"
-version = "0.19.0"
+version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43d93b816b278d218809c780998a9763a3863fe92ec3cb19e74a1470ffcf9d7b"
+checksum = "6bfdd223d0cdcc6b7b2e3a05f8cac133405bd12f8544fdfc837c2257d87861fe"
 dependencies = [
  "qubit-utils",
 ]
 
 [[package]]
 name = "qubit-io-text"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "qubit-codec",
  "qubit-codec-text",
@@ -132,9 +132,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-utils"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff9da2a76c1f983bc036d4135036db57f9d066c6fd6e8cdfbfacee72de4e2309"
+checksum = "0488fb46cb58bfc4f4237a9b15889e6cb2700ad68dc65837e82e6c3f2c5d571e"
 
 [[package]]
 name = "quote"
