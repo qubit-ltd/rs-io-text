@@ -28,7 +28,10 @@ use crate::LineEnding;
 /// assert!(!endings.contains(LineEnding::Cr));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct LineEndingSet(u8);
+pub struct LineEndingSet(
+    /// Bit flags identifying the accepted LF, CRLF, and CR line endings.
+    u8,
+);
 
 impl LineEndingSet {
     /// A set accepting LF line endings.
@@ -51,6 +54,7 @@ impl LineEndingSet {
     /// # Returns
     /// A set containing only `line_ending`.
     #[must_use]
+    #[inline]
     pub const fn only(line_ending: LineEnding) -> Self {
         match line_ending {
             LineEnding::Lf => Self::LF,
@@ -67,6 +71,7 @@ impl LineEndingSet {
     /// # Returns
     /// `true` if this set accepts `line_ending`.
     #[must_use]
+    #[inline]
     pub const fn contains(self, line_ending: LineEnding) -> bool {
         self.0 & Self::only(line_ending).0 != 0
     }
@@ -79,6 +84,7 @@ impl LineEndingSet {
     /// # Returns
     /// A set containing the previous line endings and `line_ending`.
     #[must_use]
+    #[inline]
     pub const fn with(self, line_ending: LineEnding) -> Self {
         Self(self.0 | Self::only(line_ending).0)
     }
@@ -91,6 +97,7 @@ impl LineEndingSet {
     /// # Returns
     /// A set containing the previous line endings except `line_ending`.
     #[must_use]
+    #[inline]
     pub const fn without(self, line_ending: LineEnding) -> Self {
         Self(self.0 & !Self::only(line_ending).0)
     }
@@ -100,12 +107,14 @@ impl LineEndingSet {
     /// # Returns
     /// `true` when no line ending is accepted.
     #[must_use]
+    #[inline]
     pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
 }
 
 impl Default for LineEndingSet {
+    /// Returns the set containing LF, CRLF, and CR.
     fn default() -> Self {
         Self::ALL
     }
@@ -126,6 +135,10 @@ impl Default for LineEndingSet {
 ///   character retained for a later read.
 /// - `read_char` retrieves the next character and may return the caller's
 ///   error.
+///
+/// # Type Parameters
+/// - `E` is the error type returned by `read_char`.
+/// - `ReadChar` is the callback type used to retrieve characters.
 ///
 /// # Returns
 /// `Ok(true)` if at least one character was read, including a line ending;
@@ -212,6 +225,10 @@ where
 ///   discarded line ending.
 /// - `read_char` retrieves the next character and may return the caller's
 ///   error.
+///
+/// # Type Parameters
+/// - `E` is the error type returned by `read_char`.
+/// - `ReadChar` is the callback type used to retrieve characters.
 ///
 /// # Errors
 /// Returns the error produced by `read_char` while consuming or looking ahead

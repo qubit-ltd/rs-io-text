@@ -52,7 +52,11 @@ use crate::LineEnding;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct AsyncUtf8TextWriter<O>(AsyncCharsetTextWriter<O, Utf8Codec>)
+pub struct AsyncUtf8TextWriter<O>(
+    /// Holds the charset writer that owns the output, UTF-8 encoder, and
+    /// pending bytes.
+    AsyncCharsetTextWriter<O, Utf8Codec>,
+)
 where
     O: AsyncByteOutput;
 
@@ -135,8 +139,11 @@ impl<O> Deref for AsyncUtf8TextWriter<O>
 where
     O: AsyncByteOutput,
 {
+    /// The generic writer type exposed by dereferencing this UTF-8 wrapper.
     type Target = AsyncCharsetTextWriter<O, Utf8Codec>;
 
+    /// Borrows the wrapped charset writer to expose its configuration and
+    /// state.
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -147,6 +154,8 @@ impl<O> DerefMut for AsyncUtf8TextWriter<O>
 where
     O: AsyncByteOutput,
 {
+    /// Mutably borrows the wrapped writer so delegated operations remain
+    /// available.
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -157,40 +166,170 @@ impl<O> AsyncTextWriter for AsyncUtf8TextWriter<O>
 where
     O: AsyncByteOutput + Unpin,
 {
+    /// Error type used by asynchronous writes; encoding and output failures use
+    /// I/O errors.
     type Error = std::io::Error;
 
+    /// Returns the line ending configured for subsequent line writes.
+    ///
+    /// # Returns
+    ///
+    /// Returns the current line-ending setting.
     fn line_ending(&self) -> LineEnding {
         self.0.configured_line_ending()
     }
 
+    /// Encodes and writes one character, returning after the wrapped writer
+    /// accepts its progress.
+    ///
+    /// # Parameters
+    ///
+    /// - `ch`: Character to encode.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding or output error.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after the character is accepted.
     async fn write_char_async(&mut self, ch: char) -> Result<(), Self::Error> {
         self.0.write_char_async(ch).await
     }
 
+    /// Encodes a character prefix and returns the number of characters
+    /// accepted.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Characters to encode.
+    ///
+    /// # Returns
+    ///
+    /// Returns the accepted character count, which can be smaller than the
+    /// input length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding or output error; a prefix may already have been
+    /// accepted.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after progress is accepted; inspect the count to resume
+    /// a partial write.
     async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
         self.0.write_chars_async(chars).await
     }
 
+    /// Encodes a UTF-8 byte prefix of `text` and returns its committed byte
+    /// length.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: UTF-8 text to encode.
+    ///
+    /// # Returns
+    ///
+    /// Returns the accepted prefix length in UTF-8 bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding or output error; a prefix may already have been
+    /// accepted.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after progress is accepted; use the byte count to resume
+    /// at a UTF-8 boundary.
     async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
         self.0.write_str_async(text).await
     }
 
+    /// Repeats character writes until all input is accepted. Cancellation may
+    /// lose the cursor.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Characters to encode and write completely.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding or output error; earlier characters may already have
+    /// been accepted.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after all characters are accepted.
     async fn write_chars_fully_async(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         self.0.write_chars_fully_async(chars).await
     }
 
+    /// Repeats string writes until all input is accepted. Cancellation may lose
+    /// the cursor.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: UTF-8 text to encode and write completely.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding or output error; earlier characters may already have
+    /// been accepted.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after all text is accepted.
     async fn write_str_fully_async(&mut self, text: &str) -> Result<(), Self::Error> {
         self.0.write_str_fully_async(text).await
     }
 
+    /// Writes the line and configured ending as separate operations.
+    /// Cancellation may interrupt either operation.
+    ///
+    /// # Parameters
+    ///
+    /// - `line`: Text to write before the configured line ending.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding or output error; the line or its ending may be
+    /// partially accepted.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after both the line and its ending are accepted.
     async fn write_line_fully_async(&mut self, line: &str) -> Result<(), Self::Error> {
         self.0.write_line_fully_async(line).await
     }
 
+    /// Drains pending encoded bytes and flushes the wrapped output without
+    /// finalizing the encoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an output write or flush error.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after pending bytes are drained and the wrapped output
+    /// is flushed.
     async fn flush_async(&mut self) -> Result<(), Self::Error> {
         self.0.flush_async().await
     }
 
+    /// Finalizes UTF-8 encoding and flushes output. Failed delivery can be
+    /// retried on this writer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encoding finalization or output error. After finalization
+    /// succeeds, text writes are rejected even if output delivery still
+    /// needs retrying.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after finalization and output flushing complete.
     async fn finish_async(&mut self) -> Result<(), Self::Error> {
         self.0.finish_async().await
     }

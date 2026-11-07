@@ -44,6 +44,11 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// this writer adjusts the outer transcode input index; an opaque domain error
 /// source retains its own index semantics.
 ///
+/// # Type Parameters
+///
+/// - `W`: Byte output that receives encoded bytes.
+/// - `E`: Streaming encoder from Rust characters to bytes.
+///
 /// # Examples
 ///
 /// ```
@@ -214,133 +219,6 @@ where
     E::Error: StdError + Send + Sync + 'static,
     E::EncodeError: Send + Sync + 'static,
 {
-    /// Encodes a character slice into the shared output buffer in bounded
-    /// windows while preserving the original input slice for error indices.
-    ///
-    /// # Parameters
-    ///
-    /// - `chars`: Characters to encode.
-    ///
-    /// # Errors
-    ///
-    /// Returns encoding errors or I/O errors from the wrapped writer.
-    fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
-        self.ensure_started()?;
-        let mut cursor = 0;
-        while cursor < chars.len() {
-            let count = (chars.len() - cursor).min(DEFAULT_CHAR_CHUNK_CAPACITY);
-            self.output
-                .transcode(&mut self.encoder, &mut encode_error_to_io, chars, cursor, count)?;
-            cursor += count;
-        }
-        Ok(())
-    }
-
-    /// Appends already encoded UTF-8 bytes to the buffered output.
-    ///
-    /// This is crate-private because bypassing the encoder is only valid for a
-    /// stateless UTF-8 encoder whose input is already a valid Rust string.
-    /// Bytes are copied in chunks bounded by the existing spare capacity and
-    /// the usual 8 KiB copy window. Capacity pressure may write buffered bytes
-    /// to the inner output; long UTF-8 text does not itself grow this buffer.
-    pub(crate) fn write_encoded_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
-        self.ensure_open()?;
-        if bytes.is_empty() {
-            return Ok(());
-        }
-        self.ensure_started()?;
-        let mut offset = 0;
-        while offset < bytes.len() {
-            let requested = (bytes.len() - offset).min(DEFAULT_BUFFER_CAPACITY);
-            self.output.ensure_spare_capacity(1)?;
-            let (units, output_index, available) = self.output.spare_raw_parts_mut();
-            let count = requested.min(available);
-            units[output_index..output_index + count].copy_from_slice(&bytes[offset..offset + count]);
-            // SAFETY: `count` units were initialized in the spare window above.
-            unsafe {
-                self.output.advance(count);
-            }
-            offset += count;
-        }
-        Ok(())
-    }
-
-    /// Starts the encoder lifecycle before the first non-empty write.
-    ///
-    /// # Errors
-    ///
-    /// Returns capacity, reset, or output errors produced while emitting the
-    /// encoder's stream-start units.
-    fn ensure_started(&mut self) -> io::Result<()> {
-        if self.started {
-            return Ok(());
-        }
-        self.output.reset(&mut self.encoder, &mut encode_error_to_io)?;
-        self.started = true;
-        Ok(())
-    }
-
-    /// Flushes one internal string-writing character chunk and maps its input
-    /// positions to the enclosing string call.
-    ///
-    /// # Errors
-    ///
-    /// Returns encoding errors or I/O errors from the wrapped writer.
-    fn flush_char_chunk<M>(&mut self, base: usize, map_domain: &mut M) -> io::Result<()>
-    where
-        M: FnMut(E::EncodeError, usize) -> E::EncodeError,
-    {
-        if self.char_buffer.is_empty() {
-            return Ok(());
-        }
-        let chars = std::mem::take(&mut self.char_buffer);
-        let result = (|| {
-            self.ensure_started()?;
-            let mut map_error = |error| encode_error_to_io(offset_main_encode_error(error, base, map_domain));
-            self.output
-                .transcode(&mut self.encoder, &mut map_error, &chars, 0, chars.len())?;
-            Ok(())
-        })();
-        self.char_buffer = chars;
-        self.char_buffer.clear();
-        result
-    }
-
-    /// Encodes a string while mapping domain input positions to the string's
-    /// coordinate system.
-    ///
-    /// The mapper is called only for main-phase domain errors and receives the
-    /// chunk's base character index. Reset, finish, framework, capacity, and
-    /// output errors retain their original meaning.
-    ///
-    /// # Errors
-    ///
-    /// Returns the mapped encoding error or an I/O error from the wrapped
-    /// output.
-    pub(crate) fn write_str_with_domain_offset<M>(&mut self, text: &str, mut map_domain: M) -> io::Result<()>
-    where
-        M: FnMut(E::EncodeError, usize) -> E::EncodeError,
-    {
-        self.ensure_open()?;
-        if text.is_empty() {
-            return Ok(());
-        }
-        // Reserve the fixed chunk window on first use, then reuse it.
-        if self.char_buffer.capacity() < DEFAULT_CHAR_CHUNK_CAPACITY {
-            self.char_buffer.reserve_exact(DEFAULT_CHAR_CHUNK_CAPACITY);
-        }
-        let mut base = 0_usize;
-        for ch in text.chars() {
-            self.char_buffer.push(ch);
-            if self.char_buffer.len() == DEFAULT_CHAR_CHUNK_CAPACITY {
-                let count = self.char_buffer.len();
-                self.flush_char_chunk(base, &mut map_domain)?;
-                base = base.saturating_add(count);
-            }
-        }
-        self.flush_char_chunk(base, &mut map_domain)
-    }
-
     /// Finishes codec-owned output and flushes pending bytes.
     ///
     /// If finalization succeeds but delivery fails, calling this method again
@@ -368,6 +246,166 @@ where
     }
 }
 
+impl<W, E> BufferedTextWriter<W, E>
+where
+    W: ByteOutput,
+    E: TranscodeEncoder<Input = char, Output = u8>,
+    E::Error: StdError + Send + Sync + 'static,
+    E::EncodeError: Send + Sync + 'static,
+{
+    /// Appends already encoded UTF-8 bytes to the buffered output.
+    ///
+    /// This is crate-private because bypassing the encoder is only valid for a
+    /// stateless UTF-8 encoder whose input is already a valid Rust string.
+    /// Bytes are copied in chunks bounded by the existing spare capacity and
+    /// the usual 8 KiB copy window. Capacity pressure may write buffered bytes
+    /// to the inner output; long UTF-8 text does not itself grow this buffer.
+    ///
+    /// # Parameters
+    ///
+    /// - `bytes`: Already encoded bytes to append. The caller must ensure they
+    ///   are valid output for the stateless UTF-8 encoder.
+    pub(crate) fn write_encoded_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.ensure_open()?;
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        self.ensure_started()?;
+        let mut offset = 0;
+        while offset < bytes.len() {
+            let requested = (bytes.len() - offset).min(DEFAULT_BUFFER_CAPACITY);
+            self.output.ensure_spare_capacity(1)?;
+            let (units, output_index, available) = self.output.spare_raw_parts_mut();
+            let count = requested.min(available);
+            units[output_index..output_index + count].copy_from_slice(&bytes[offset..offset + count]);
+            // SAFETY: `count` units were initialized in the spare window above.
+            unsafe {
+                self.output.advance(count);
+            }
+            offset += count;
+        }
+        Ok(())
+    }
+
+    /// Encodes a string while mapping domain input positions to the string's
+    /// coordinate system.
+    ///
+    /// The mapper is called only for main-phase domain errors and receives the
+    /// chunk's base character index. Reset, finish, framework, capacity, and
+    /// output errors retain their original meaning.
+    ///
+    /// # Errors
+    ///
+    /// Returns the mapped encoding error or an I/O error from the wrapped
+    /// output.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `M`: Mapper for encoder domain errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: String to encode.
+    /// - `map_domain`: Maps domain errors using each chunk's base character
+    ///   offset; other error categories are unchanged.
+    pub(crate) fn write_str_with_domain_offset<M>(&mut self, text: &str, mut map_domain: M) -> io::Result<()>
+    where
+        M: FnMut(E::EncodeError, usize) -> E::EncodeError,
+    {
+        self.ensure_open()?;
+        if text.is_empty() {
+            return Ok(());
+        }
+        // Reserve the fixed chunk window on first use, then reuse it.
+        if self.char_buffer.capacity() < DEFAULT_CHAR_CHUNK_CAPACITY {
+            self.char_buffer.reserve_exact(DEFAULT_CHAR_CHUNK_CAPACITY);
+        }
+        let mut base = 0_usize;
+        for ch in text.chars() {
+            self.char_buffer.push(ch);
+            if self.char_buffer.len() == DEFAULT_CHAR_CHUNK_CAPACITY {
+                let count = self.char_buffer.len();
+                self.flush_char_chunk(base, &mut map_domain)?;
+                base = base.saturating_add(count);
+            }
+        }
+        self.flush_char_chunk(base, &mut map_domain)
+    }
+
+    /// Encodes a character slice into the shared output buffer in bounded
+    /// windows while preserving the original input slice for error indices.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Characters to encode.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding errors or I/O errors from the wrapped writer.
+    fn encode_chars(&mut self, chars: &[char]) -> io::Result<()> {
+        self.ensure_started()?;
+        let mut cursor = 0;
+        while cursor < chars.len() {
+            let count = (chars.len() - cursor).min(DEFAULT_CHAR_CHUNK_CAPACITY);
+            self.output
+                .transcode(&mut self.encoder, &mut encode_error_to_io, chars, cursor, count)?;
+            cursor += count;
+        }
+        Ok(())
+    }
+
+    /// Starts the encoder lifecycle before the first non-empty write.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity, reset, or output errors produced while emitting the
+    /// encoder's stream-start units.
+    fn ensure_started(&mut self) -> io::Result<()> {
+        if self.started {
+            return Ok(());
+        }
+        self.output.reset(&mut self.encoder, &mut encode_error_to_io)?;
+        self.started = true;
+        Ok(())
+    }
+
+    /// Flushes one internal string-writing character chunk and maps its input
+    /// positions to the enclosing string call.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding errors or I/O errors from the wrapped writer.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `M`: Mapper for encoder domain errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `base`: Character offset of this chunk in the enclosing string.
+    /// - `map_domain`: Maps a domain error and the chunk's base character
+    ///   offset while preserving non-domain errors.
+    fn flush_char_chunk<M>(&mut self, base: usize, map_domain: &mut M) -> io::Result<()>
+    where
+        M: FnMut(E::EncodeError, usize) -> E::EncodeError,
+    {
+        if self.char_buffer.is_empty() {
+            return Ok(());
+        }
+        let chars = std::mem::take(&mut self.char_buffer);
+        let result = (|| {
+            self.ensure_started()?;
+            let mut map_error = |error| encode_error_to_io(offset_main_encode_error(error, base, map_domain));
+            self.output
+                .transcode(&mut self.encoder, &mut map_error, &chars, 0, chars.len())?;
+            Ok(())
+        })();
+        self.char_buffer = chars;
+        self.char_buffer.clear();
+        result
+    }
+}
+
 impl<W, E> TextWriter for BufferedTextWriter<W, E>
 where
     W: ByteOutput,
@@ -375,18 +413,42 @@ where
     E::Error: StdError + Send + Sync + 'static,
     E::EncodeError: Send + Sync + 'static,
 {
+    /// I/O error returned by this writer's operations.
     type Error = io::Error;
 
+    /// Returns the configured line terminator used by [`Self::write_line`].
+    ///
+    /// # Returns
+    ///
+    /// Returns the configured line ending.
     #[inline]
     fn line_ending(&self) -> LineEnding {
         self.line_ending
     }
 
+    /// Encodes and buffers one Unicode scalar value.
+    ///
+    /// # Parameters
+    ///
+    /// - `ch`: Character to encode and buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors.
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
         self.write_chars(&[ch])
     }
 
+    /// Encodes and buffers the supplied characters using bounded chunks.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Characters to encode in order.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors.
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         self.ensure_open()?;
         if chars.is_empty() {
@@ -395,15 +457,44 @@ where
         self.encode_chars(chars)
     }
 
+    /// Encodes and buffers a string, reporting character indices relative to
+    /// this call.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: String to encode and buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors. Main-stage character indices are
+    /// relative to this string.
+    #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
         self.write_str_with_domain_offset(text, |source, _| source)
     }
 
+    /// Encodes and buffers a line followed by the configured line terminator.
+    ///
+    /// # Parameters
+    ///
+    /// - `line`: Text to encode before the configured line ending.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors. The line body may have been written
+    /// before an error occurs while writing its terminator.
+    #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.write_str(line)?;
         self.write_str(self.line_ending.as_str())
     }
 
+    /// Delivers pending encoded bytes to the wrapped output.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if delivery or flushing fails.
+    #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.output.flush()
     }
@@ -411,6 +502,22 @@ where
 
 /// Adds a chunk's base character position to errors whose indices describe
 /// input characters, leaving lifecycle and framework failures unchanged.
+///
+/// # Type Parameters
+///
+/// - `D`: Encoder domain error payload.
+/// - `M`: Mapper applied to domain errors from the main encoding phase.
+///
+/// # Parameters
+///
+/// - `error`: Encoding error produced for the current chunk.
+/// - `base`: Chunk's starting character index in the enclosing string.
+/// - `map_domain`: Transformation applied to main-phase domain errors.
+///
+/// # Returns
+///
+/// Returns the error with applicable character indices and domain payload
+/// mapped to the enclosing string's coordinate system.
 fn offset_main_encode_error<D, M>(
     error: TranscodeEncodeError<D, char>,
     base: usize,
@@ -438,6 +545,18 @@ where
 }
 
 /// Converts encoder errors at the buffered-writer boundary.
+///
+/// # Type Parameters
+///
+/// - `E`: Concrete encoder error type.
+///
+/// # Parameters
+///
+/// - `error`: Encoder error to expose as an I/O error.
+///
+/// # Returns
+///
+/// Returns the corresponding [`io::Error`].
 fn encode_error_to_io<E>(error: E) -> io::Error
 where
     E: StdError + Send + Sync + 'static,

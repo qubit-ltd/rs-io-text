@@ -72,14 +72,24 @@ impl<'a> StringCharOutput<'a> {
 }
 
 impl Output for StringCharOutput<'_> {
+    /// The Unicode scalar value appended to the destination string.
     type Item = char;
 
     /// Appends characters from an indexed input range to the destination.
+    ///
+    /// # Parameters
+    /// - `input`: Source characters containing the range to append.
+    /// - `index`: Inclusive starting index of the source range.
+    /// - `count`: Number of characters to append.
     ///
     /// # Errors
     ///
     /// Returns an I/O error if reserving enough string capacity fails. No
     /// characters from this call are appended in that case.
+    ///
+    /// # Returns
+    ///
+    /// The number of characters appended, equal to `count` on success.
     ///
     /// # Safety
     ///
@@ -96,7 +106,12 @@ impl Output for StringCharOutput<'_> {
         Ok(count)
     }
 
-    /// Flushes the string output.
+    /// Flushes the string output, which requires no action because writes
+    /// update the destination immediately.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())`, since flushing this adapter cannot fail.
     #[inline]
     fn flush(&mut self) -> Result<()> {
         Ok(())

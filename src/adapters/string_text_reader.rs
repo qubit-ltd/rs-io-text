@@ -81,6 +81,16 @@ impl StringTextReader {
         self.position
     }
 
+    /// Returns the line endings recognized by this reader.
+    ///
+    /// # Returns
+    /// The line endings recognized by this reader.
+    #[must_use]
+    #[inline]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.line_endings
+    }
+
     /// Sets the line endings recognized by [`TextLineReader::read_line`].
     ///
     /// # Parameters
@@ -95,13 +105,6 @@ impl StringTextReader {
         self
     }
 
-    /// Returns the line endings recognized by this reader.
-    #[must_use]
-    #[inline]
-    pub const fn line_endings(&self) -> LineEndingSet {
-        self.line_endings
-    }
-
     /// Returns the owned string.
     ///
     /// # Returns
@@ -114,8 +117,18 @@ impl StringTextReader {
 }
 
 impl TextReader for StringTextReader {
+    /// This in-memory reader cannot fail while decoding its valid UTF-8 input.
     type Error = Infallible;
 
+    /// Returns the next Unicode scalar value, including any character retained
+    /// during line-ending lookahead, or `None` when the input is exhausted.
+    ///
+    /// # Returns
+    /// `Ok(Some(ch))` when a character is available, or `Ok(None)` at EOF.
+    ///
+    /// # Errors
+    /// This in-memory reader never returns an error because its error type is
+    /// [`Infallible`].
     #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         if let Some(ch) = self.pending_char.take() {
@@ -124,6 +137,21 @@ impl TextReader for StringTextReader {
         Ok(read_char_at(self.text.as_str(), &mut self.position))
     }
 
+    /// Appends up to `max` Unicode scalar values to `output` and returns the
+    /// number appended. A character retained during line-ending lookahead is
+    /// returned first; a zero limit leaves it pending.
+    ///
+    /// # Parameters
+    /// - `output`: Destination that receives the characters, appended after its
+    ///   existing contents.
+    /// - `max`: Maximum number of Unicode scalar values to append.
+    ///
+    /// # Returns
+    /// `Ok(count)` with the number of characters appended.
+    ///
+    /// # Errors
+    /// This in-memory reader never returns an error because its error type is
+    /// [`Infallible`].
     #[inline]
     fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
@@ -142,6 +170,19 @@ impl TextReader for StringTextReader {
             ))
     }
 
+    /// Appends all remaining text, including any retained lookahead character,
+    /// to `output` and returns the number of Unicode scalar values appended.
+    ///
+    /// # Parameters
+    /// - `output`: Destination that receives the remaining text, appended after
+    ///   its existing contents.
+    ///
+    /// # Returns
+    /// `Ok(count)` with the number of Unicode scalar values appended.
+    ///
+    /// # Errors
+    /// This in-memory reader never returns an error because its error type is
+    /// [`Infallible`].
     #[inline]
     fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
@@ -154,6 +195,21 @@ impl TextReader for StringTextReader {
 }
 
 impl TextLineReader for StringTextReader {
+    /// Appends the next line to `output`, consuming its recognized line ending
+    /// when present. Returns `false` only when no line content or terminator
+    /// remains; a final unterminated line is returned with `true`.
+    ///
+    /// # Parameters
+    /// - `output`: Destination that receives the next line, appended after its
+    ///   existing contents.
+    ///
+    /// # Returns
+    /// `Ok(true)` when a line or final unterminated line is read, or
+    /// `Ok(false)` when no content or terminator remains.
+    ///
+    /// # Errors
+    /// This in-memory reader never returns an error because its error type is
+    /// [`Infallible`].
     #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let text = self.text.as_str();

@@ -9,12 +9,9 @@
 use std::io;
 
 use qubit_codec::AsyncTranscodeEncodeOutput;
-use qubit_codec::TranscodeDomainError;
-use qubit_codec::TranscodeEncodeError;
 use qubit_codec::Transcoder;
 use qubit_codec_text::CharsetCodec;
 use qubit_codec_text::CharsetEncodeError;
-use qubit_codec_text::CharsetEncodeErrorKind;
 use qubit_codec_text::CharsetEncodePolicy;
 use qubit_codec_text::CharsetEncoder;
 use qubit_io::AsyncByteOutput;
@@ -53,7 +50,8 @@ const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
 /// # Examples
 ///
 /// ```no_run
-/// use qubit_codec_text::{CharsetEncodePolicy, Utf8Codec};
+/// use qubit_codec_text::CharsetEncodePolicy;
+/// use qubit_codec_text::Utf8Codec;
 /// use qubit_io::AsyncByteOutput;
 /// use qubit_io_text::AsyncCharsetTextWriter;
 ///
@@ -90,6 +88,9 @@ where
     /// Records whether encoder finalization has succeeded.
     finished: bool,
 }
+
+// Implements private encoding and lifecycle helpers for this writer.
+mod internal;
 
 impl<O, C> AsyncCharsetTextWriter<O, C>
 where
@@ -319,17 +320,6 @@ where
     pub fn into_buffered_parts(self) -> (O, Buffer<u8>) {
         self.output.into_parts()
     }
-
-    /// Returns an error when encoding has already been finished.
-    fn ensure_open(&self) -> io::Result<()> {
-        if self.finished {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "cannot write after asynchronous text writer has been finished",
-            ));
-        }
-        Ok(())
-    }
 }
 
 impl<O, C> AsyncTextWriter for AsyncCharsetTextWriter<O, C>
@@ -337,40 +327,125 @@ where
     O: AsyncByteOutput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Uses I/O errors for asynchronous writing and flushing failures.
     type Error = io::Error;
 
+    /// Returns the line ending configured for this writer.
+    ///
+    /// # Returns
+    ///
+    /// Returns the configured line ending.
     fn line_ending(&self) -> LineEnding {
         self.configured_line_ending()
     }
 
+    /// Encodes and buffers one character.
+    ///
+    /// # Parameters
+    ///
+    /// - `ch`: Character to encode and write.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors, or an invalid-input error after the
+    /// writer has been finished.
     async fn write_char_async(&mut self, ch: char) -> Result<(), Self::Error> {
         AsyncCharsetTextWriter::write_char_async(self, ch).await
     }
 
+    /// Encodes one progress step from a character slice.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Characters to encode in this progress step.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of characters committed from this slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors, or an invalid-input error after the
+    /// writer has been finished.
     async fn write_chars_async(&mut self, chars: &[char]) -> Result<usize, Self::Error> {
         AsyncCharsetTextWriter::write_chars_async(self, chars).await
     }
 
+    /// Encodes one progress step from a UTF-8 string.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: UTF-8 text to encode in this progress step.
+    ///
+    /// # Returns
+    ///
+    /// Returns the UTF-8 byte length of the committed character prefix.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors, or an invalid-input error after the
+    /// writer has been finished.
     async fn write_str_async(&mut self, text: &str) -> Result<usize, Self::Error> {
         AsyncCharsetTextWriter::write_str_async(self, text).await
     }
 
+    /// Encodes the complete character slice, potentially across several steps.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Complete character slice to encode.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors. A character prefix can already be
+    /// committed when an error is returned, or the writer has been finished.
     async fn write_chars_fully_async(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         AsyncCharsetTextWriter::write_chars_fully_async(self, chars).await
     }
 
+    /// Encodes the complete UTF-8 string, potentially across several steps.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: Complete UTF-8 string to encode.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors. A UTF-8 prefix can already be
+    /// committed when an error is returned, or the writer has been finished.
     async fn write_str_fully_async(&mut self, text: &str) -> Result<(), Self::Error> {
         AsyncCharsetTextWriter::write_str_fully_async(self, text).await
     }
 
+    /// Encodes a complete line with the configured line ending.
+    ///
+    /// # Parameters
+    ///
+    /// - `line`: Line contents without the appended line ending.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoding or output errors. The line body may already be
+    /// committed when writing the line ending fails, or the writer has been
+    /// finished.
     async fn write_line_fully_async(&mut self, line: &str) -> Result<(), Self::Error> {
         AsyncCharsetTextWriter::write_line_fully_async(self, line).await
     }
 
+    /// Drains buffered bytes and flushes the wrapped output.
+    ///
+    /// # Errors
+    ///
+    /// Returns output write or flush errors.
     async fn flush_async(&mut self) -> Result<(), Self::Error> {
         AsyncCharsetTextWriter::flush_async(self).await
     }
 
+    /// Finalizes the encoder and flushes the wrapped output.
+    ///
+    /// # Errors
+    ///
+    /// Returns encoder finalization or output errors.
     async fn finish_async(&mut self) -> Result<(), Self::Error> {
         AsyncCharsetTextWriter::finish_async(self).await
     }
@@ -412,6 +487,11 @@ where
     /// # Parameters
     ///
     /// - `chars`: Characters to encode and write.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of characters committed from this slice, or zero
+    /// only when it is empty.
     ///
     /// A successful write accepts encoded bytes into the buffer without
     /// guaranteeing delivery. Capacity pressure may deliver older bytes;
@@ -468,6 +548,11 @@ where
     ///
     /// - `text`: Unicode text to encode and write.
     ///
+    /// # Returns
+    ///
+    /// Returns the UTF-8 byte length of the committed character prefix, or
+    /// zero only when the string is empty.
+    ///
     /// A successful write accepts encoded bytes into the buffer without
     /// guaranteeing delivery. Capacity pressure may deliver older bytes;
     /// call [`Self::flush_async`] when delivery must be observable.
@@ -489,37 +574,6 @@ where
         }
         let (bytes, _) = self.write_str_step_async(text, 0).await?;
         Ok(bytes)
-    }
-
-    /// Limits string pre-conversion to the configured output capacity.
-    ///
-    /// This budget bounds the number of source characters converted before an
-    /// encode step; the output driver still decides how many it can commit.
-    fn string_step_char_limit(&self) -> usize {
-        let per_char = self.encoder.max_transcode_output_len(1).unwrap_or(1).max(1);
-        (self.output.capacity() / per_char).clamp(1, DEFAULT_CHAR_CHUNK_CAPACITY)
-    }
-
-    /// Encodes one bounded string step and returns its committed byte and
-    /// character counts.
-    async fn write_str_step_async(&mut self, text: &str, base: usize) -> io::Result<(usize, usize)> {
-        if text.is_empty() {
-            return Ok((0, 0));
-        }
-        let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
-        let mut byte_ends = [0; DEFAULT_CHAR_CHUNK_CAPACITY];
-        let char_limit = self.string_step_char_limit();
-        let mut char_count = 0;
-        for (byte_index, ch) in text.char_indices() {
-            chars[char_count] = ch;
-            byte_ends[char_count] = byte_index + ch.len_utf8();
-            char_count += 1;
-            if char_count == char_limit {
-                break;
-            }
-        }
-        let consumed = self.encode_chars_async(&chars[..char_count], base).await?;
-        Ok((byte_ends[consumed - 1], consumed))
     }
 
     /// Asynchronously writes an entire UTF-8 Rust string through the selected
@@ -631,61 +685,5 @@ where
             self.finished = true;
         }
         self.output.flush_async().await
-    }
-
-    /// Starts the encoder lifecycle, retaining reset output until capacity or
-    /// an explicit delivery call.
-    async fn ensure_started_async(&mut self) -> io::Result<()> {
-        if !self.started {
-            let mut map_error = encode_error_to_io;
-            self.output.reset_async(&mut self.encoder, &mut map_error).await?;
-            self.started = true;
-        }
-        Ok(())
-    }
-
-    /// Encodes one character-slice progress step using the supplied call base.
-    async fn encode_chars_async(&mut self, chars: &[char], base: usize) -> io::Result<usize> {
-        self.ensure_started_async().await?;
-        let mut map_error = |error| encode_error_to_io(offset_main_encode_error(error, base));
-        let progress = self
-            .output
-            .transcode_async(&mut self.encoder, &mut map_error, chars, 0, chars.len())
-            .await?;
-        Ok(progress.read())
-    }
-}
-
-/// Offsets input coordinates for charset errors in the main transcode stage.
-///
-/// Only input-related failures are shifted; lifecycle, output, and framework
-/// failures retain their original error and coordinate semantics.
-fn offset_main_encode_error(
-    error: TranscodeEncodeError<CharsetEncodeError, char>,
-    base: usize,
-) -> TranscodeEncodeError<CharsetEncodeError, char> {
-    match error {
-        TranscodeEncodeError::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable {
-            input_index: base.saturating_add(input_index),
-            value,
-        },
-        TranscodeEncodeError::Domain(TranscodeDomainError::Main {
-            source,
-            input_index,
-            input_consumed,
-        }) => {
-            let source = match source.kind() {
-                CharsetEncodeErrorKind::InvalidCodePoint { .. }
-                | CharsetEncodeErrorKind::UnmappableCharacter { .. }
-                | CharsetEncodeErrorKind::UnencodableValue => source.offset_by(base),
-                _ => source,
-            };
-            TranscodeEncodeError::Domain(TranscodeDomainError::Main {
-                source,
-                input_index: base.saturating_add(input_index),
-                input_consumed,
-            })
-        }
-        other => other,
     }
 }

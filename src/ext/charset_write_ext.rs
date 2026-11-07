@@ -40,6 +40,10 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     /// - `codec`: Charset codec used for outgoing text.
     /// - `policy`: Unencodable text handling policy.
     ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose encoded units are bytes.
+    ///
     /// # Returns
     ///
     /// Returns a streaming text writer with the default buffer capacity.
@@ -65,6 +69,10 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     ///
     /// - `codec`: Charset codec used for outgoing text.
     /// - `policy`: Unencodable text handling policy.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose encoded units are bytes.
     ///
     /// # Returns
     ///
@@ -93,6 +101,10 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     /// - `codec`: Charset codec used for outgoing text.
     /// - `policy`: Unencodable text handling policy.
     /// - `capacity`: Requested byte buffer capacity.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose encoded units are bytes.
     ///
     /// # Returns
     ///
@@ -126,6 +138,10 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     /// - `policy`: Unencodable text handling policy.
     /// - `capacity`: Requested byte buffer capacity.
     ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose encoded units are bytes.
+    ///
     /// # Returns
     ///
     /// Returns the configured writer when the replacement policy is valid.
@@ -154,6 +170,10 @@ pub trait CharsetWriteExt: ByteOutput + Sized {
     /// - `text`: Unicode text to encode and write.
     /// - `codec`: Charset codec used for outgoing text.
     /// - `policy`: Unencodable text handling policy.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose encoded units are bytes.
     ///
     /// # Errors
     ///

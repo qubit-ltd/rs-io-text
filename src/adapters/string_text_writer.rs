@@ -88,13 +88,26 @@ impl<'a> StringTextWriter<'a> {
 }
 
 impl TextWriter for StringTextWriter<'_> {
+    /// Error type used when reserving capacity in the destination string fails.
     type Error = io::Error;
 
+    /// Returns the line ending configured when this writer was constructed.
+    ///
+    /// # Returns
+    /// The configured line ending.
     #[inline]
     fn line_ending(&self) -> LineEnding {
         self.line_ending
     }
 
+    /// Appends one character after reserving enough space for its UTF-8 bytes.
+    ///
+    /// # Parameters
+    /// - `ch`: Character to append.
+    ///
+    /// # Errors
+    /// Returns an I/O error if reserving the required capacity fails. The
+    /// destination is unchanged when reservation fails.
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
         try_reserve_string(self.output, ch.len_utf8())?;
@@ -102,6 +115,14 @@ impl TextWriter for StringTextWriter<'_> {
         Ok(())
     }
 
+    /// Appends characters in order after reserving space for their UTF-8 bytes.
+    ///
+    /// # Parameters
+    /// - `chars`: Characters to append in order.
+    ///
+    /// # Errors
+    /// Returns an I/O error if reserving capacity fails. No characters are
+    /// appended when reservation fails.
     #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         let additional = chars.iter().map(|ch| ch.len_utf8()).sum();
@@ -110,6 +131,14 @@ impl TextWriter for StringTextWriter<'_> {
         Ok(())
     }
 
+    /// Appends text after reserving space for its UTF-8 bytes.
+    ///
+    /// # Parameters
+    /// - `text`: Text to append.
+    ///
+    /// # Errors
+    /// Returns an I/O error if reserving capacity fails. The destination is
+    /// unchanged when reservation fails.
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
         try_reserve_string(self.output, text.len())?;
@@ -117,12 +146,21 @@ impl TextWriter for StringTextWriter<'_> {
         Ok(())
     }
 
+    /// Appends the line and then the configured line ending.
+    ///
+    /// # Parameters
+    /// - `line`: Line content to append before the configured terminator.
+    ///
+    /// # Errors
+    /// Returns an I/O error if capacity reservation fails. If reserving the
+    /// terminator fails, the line content has already been appended.
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.write_str(line)?;
         self.write_str(self.line_ending.as_str())
     }
 
+    /// Completes the write operation; a `String` has no buffered sink to flush.
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())
@@ -130,26 +168,43 @@ impl TextWriter for StringTextWriter<'_> {
 }
 
 impl TextWriter for String {
+    /// Error type for string writes, which cannot fail.
     type Error = Infallible;
 
+    /// Appends one character to the string.
+    ///
+    /// # Parameters
+    /// - `ch`: Character to append.
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
         self.push(ch);
         Ok(())
     }
 
+    /// Appends characters to the string in slice order.
+    ///
+    /// # Parameters
+    /// - `chars`: Characters to append in order.
     #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         self.extend(chars.iter().copied());
         Ok(())
     }
 
+    /// Appends the supplied text to the string.
+    ///
+    /// # Parameters
+    /// - `text`: Text to append.
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
         self.push_str(text);
         Ok(())
     }
 
+    /// Appends the line followed by the default LF line ending.
+    ///
+    /// # Parameters
+    /// - `line`: Line content to append before the LF terminator.
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.push_str(line);
@@ -157,6 +212,7 @@ impl TextWriter for String {
         Ok(())
     }
 
+    /// Completes immediately because a `String` has no buffered sink.
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())

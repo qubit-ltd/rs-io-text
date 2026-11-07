@@ -9,17 +9,30 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-/// Extracts and generates the executable synchronous and asynchronous examples from four documents.
+/// Extracts and generates the executable synchronous and asynchronous examples
+/// from four documents.
 fn main() {
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
     let project = manifest.join("../../..");
     let mut generated = String::from("mod user_guide_examples {\n");
     for (file, heading, name) in [
-        ("README.md", "## Quick Start: Encode a UTF-8 Text Message", "readme_english"),
-        ("README.zh_CN.md", "## 快速开始：编码一条 UTF-8 文本消息", "readme_chinese"),
+        (
+            "README.md",
+            "## Quick Start: Encode a UTF-8 Text Message",
+            "readme_english",
+        ),
+        (
+            "README.zh_CN.md",
+            "## 快速开始：编码一条 UTF-8 文本消息",
+            "readme_chinese",
+        ),
         ("doc/user_guide.md", "## Core Workflow", "guide_english"),
         ("doc/user_guide.zh_CN.md", "## 核心流程", "guide_chinese"),
-        ("doc/user_guide.md", "### Recovering unread text", "reader_recovery_english"),
+        (
+            "doc/user_guide.md",
+            "### Recovering unread text",
+            "reader_recovery_english",
+        ),
         ("doc/user_guide.zh_CN.md", "### 恢复未读文本", "reader_recovery_chinese"),
     ] {
         let path = project.join(file);
@@ -31,10 +44,30 @@ fn main() {
         generated.push_str("\npub fn run() -> std::io::Result<()> { main() }\n}\n");
     }
     for (file, heading, name, function) in [
-        ("README.md", "## Runtime-Neutral Async", "readme_async_english", "write_message"),
-        ("README.zh_CN.md", "## 运行时无关的异步 API", "readme_async_chinese", "write_message"),
-        ("doc/user_guide.md", "## Async Workflow", "guide_async_english", "write_document"),
-        ("doc/user_guide.zh_CN.md", "## 异步流程", "guide_async_chinese", "write_document"),
+        (
+            "README.md",
+            "## Runtime-Neutral Async",
+            "readme_async_english",
+            "write_message",
+        ),
+        (
+            "README.zh_CN.md",
+            "## 运行时无关的异步 API",
+            "readme_async_chinese",
+            "write_message",
+        ),
+        (
+            "doc/user_guide.md",
+            "## Async Workflow",
+            "guide_async_english",
+            "write_document",
+        ),
+        (
+            "doc/user_guide.zh_CN.md",
+            "## 异步流程",
+            "guide_async_chinese",
+            "write_document",
+        ),
     ] {
         let path = project.join(file);
         println!("cargo:rerun-if-changed={}", path.display());
@@ -47,7 +80,11 @@ fn main() {
         ));
     }
     for (file, heading, name) in [
-        ("doc/user_guide.md", "## Resuming an interrupted line read", "line_resume_english"),
+        (
+            "doc/user_guide.md",
+            "## Resuming an interrupted line read",
+            "line_resume_english",
+        ),
         ("doc/user_guide.zh_CN.md", "## 恢复中断的行读取", "line_resume_chinese"),
     ] {
         let path = project.join(file);
@@ -59,9 +96,17 @@ fn main() {
         generated.push_str("\n}\n");
     }
     for (file, heading, name) in [
-        ("doc/user_guide.md", "## Complete In-Memory Conversion", "memory_english"),
+        (
+            "doc/user_guide.md",
+            "## Complete In-Memory Conversion",
+            "memory_english",
+        ),
         ("doc/user_guide.zh_CN.md", "## 完整内存转换", "memory_chinese"),
-        ("doc/user_guide.md", "## Send Futures and Threaded Tasks", "send_english"),
+        (
+            "doc/user_guide.md",
+            "## Send Futures and Threaded Tasks",
+            "send_english",
+        ),
         ("doc/user_guide.zh_CN.md", "## Send future 与跨线程任务", "send_chinese"),
     ] {
         let path = project.join(file);

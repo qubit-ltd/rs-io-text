@@ -139,36 +139,58 @@ where
     }
 
     /// Makes the next reserve operation fail in coverage builds.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// This function takes no parameters.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_fail_next_reserve() {
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(0));
     }
 
     /// Makes a later reserve operation fail in coverage builds.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// - `successful_attempts`: Number of reserve attempts allowed before
+    ///   failure.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Makes the next capacity-bound operation fail in coverage builds.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// This function takes no parameters.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_fail_next_capacity_bound() {
         COVERAGE_CAPACITY_FAIL_AFTER.with(|state| state.set(0));
     }
 
     /// Makes a later capacity-bound operation fail in coverage builds.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// - `successful_attempts`: Number of capacity-bound checks allowed before
+    ///   failure.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_fail_capacity_bound_after(successful_attempts: usize) {
         COVERAGE_CAPACITY_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Clears coverage-only reserve failure hooks.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// This function takes no parameters.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_reset_reserve_hooks() {
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(usize::MAX));
         COVERAGE_CAPACITY_FAIL_AFTER.with(|state| state.set(usize::MAX));
@@ -341,6 +363,10 @@ fn fill_char_chunk(chars: &mut impl Iterator<Item = char>, chunk: &mut [char; CH
 }
 
 /// Ensures that an owned output exposes a writable range at `output_index`.
+///
+/// # Type Parameters
+///
+/// - `T`: Default-initializable output unit stored in the buffer.
 ///
 /// # Parameters
 ///

@@ -55,6 +55,9 @@ impl<'a> InputTextReader<'a> {
     ///
     /// Unbuffered inputs are wrapped in [`BufferedInput`] automatically.
     ///
+    /// # Type Parameters
+    /// - `I`: Character input type owned by the reader.
+    ///
     /// # Parameters
     /// - `input`: Character input to read.
     ///
@@ -121,9 +124,17 @@ impl<'a> InputTextReader<'a> {
     ///
     /// # Returns
     /// The wrapped input trait object.
+    #[must_use = "use the returned reference to access the wrapped input"]
     #[inline(always)]
     pub fn get_mut(&mut self) -> &mut (dyn CharInput + 'a) {
         self.input.as_mut()
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    #[inline]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.line_endings
     }
 
     /// Returns the wrapped input and characters retained after a line boundary.
@@ -166,13 +177,6 @@ impl<'a> InputTextReader<'a> {
         self
     }
 
-    /// Returns the line endings recognized by this reader.
-    #[must_use]
-    #[inline]
-    pub const fn line_endings(&self) -> LineEndingSet {
-        self.line_endings
-    }
-
     /// Reads one available character chunk, retrying interrupted source calls.
     ///
     /// # Parameters
@@ -194,6 +198,10 @@ impl<'a> InputTextReader<'a> {
     }
 
     /// Moves up to `max` queued characters into `output` and returns the count.
+    ///
+    /// # Parameters
+    /// - `output`: Destination vector receiving queued characters.
+    /// - `max`: Maximum number of queued characters to move.
     fn drain_pending_chars(&mut self, output: &mut Vec<char>, max: usize) -> usize {
         let mut count = 0;
         while count < max {
@@ -207,6 +215,9 @@ impl<'a> InputTextReader<'a> {
     }
 
     /// Moves every queued character into `output` and returns the count.
+    ///
+    /// # Parameters
+    /// - `output`: Destination string receiving all queued characters.
     fn drain_pending_string(&mut self, output: &mut String) -> usize {
         let mut count = 0;
         while let Some(ch) = self.pending.pop_front() {
@@ -218,8 +229,17 @@ impl<'a> InputTextReader<'a> {
 }
 
 impl TextReader for InputTextReader<'_> {
+    /// I/O error returned when reading the wrapped character source fails.
     type Error = io::Error;
 
+    /// Reads the next character, consuming retained read-ahead before the
+    /// wrapped source. Interrupted source reads are retried.
+    ///
+    /// # Returns
+    /// `Ok(Some(ch))` when a character is available, or `Ok(None)` at EOF.
+    ///
+    /// # Errors
+    /// Returns a non-interrupted I/O error from the wrapped source.
     #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         if let Some(ch) = self.pending.pop_front() {
@@ -233,6 +253,18 @@ impl TextReader for InputTextReader<'_> {
         }
     }
 
+    /// Appends at most `max` characters, using retained read-ahead first.
+    ///
+    /// # Parameters
+    /// - `output`: Destination vector; characters are appended.
+    /// - `max`: Maximum number of characters to append.
+    ///
+    /// # Returns
+    /// The number of characters appended, which may be less than `max` at EOF.
+    ///
+    /// # Errors
+    /// Returns a non-interrupted I/O error. Any characters appended before the
+    /// error remain in `output`.
     fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = self.drain_pending_chars(output, max);
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
@@ -248,6 +280,17 @@ impl TextReader for InputTextReader<'_> {
         Ok(count)
     }
 
+    /// Appends all remaining characters, starting with retained read-ahead.
+    ///
+    /// # Parameters
+    /// - `output`: Destination string; decoded characters are appended.
+    ///
+    /// # Returns
+    /// The number of characters appended before EOF.
+    ///
+    /// # Errors
+    /// Returns a non-interrupted I/O error. Any text appended before the error
+    /// remains in `output`.
     fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = self.drain_pending_string(output);
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
@@ -263,6 +306,21 @@ impl TextReader for InputTextReader<'_> {
 }
 
 impl TextLineReader for InputTextReader<'_> {
+    /// Appends one line using the configured terminators and preserves the
+    /// complete recognized terminator. Retained characters are processed
+    /// before reading more source input.
+    ///
+    /// # Parameters
+    /// - `output`: Destination string; line contents and terminator are
+    ///   appended.
+    ///
+    /// # Returns
+    /// `true` if any line text or terminator was read, including a final
+    /// unterminated line; `false` at EOF when no text was read.
+    ///
+    /// # Errors
+    /// Returns a non-interrupted I/O error. Text already appended remains in
+    /// `output`; a CR retained while looking ahead for CRLF can be read again.
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let line_endings = self.line_endings;
         let mut pending = std::mem::take(&mut self.pending);
@@ -333,6 +391,14 @@ impl TextLineReader for InputTextReader<'_> {
 }
 
 impl fmt::Debug for InputTextReader<'_> {
+    /// Formats the reader's buffering state without exposing its input or
+    /// pending character contents.
+    ///
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the debug representation.
+    ///
+    /// # Returns
+    /// The result of writing the debug representation to `formatter`.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("InputTextReader")

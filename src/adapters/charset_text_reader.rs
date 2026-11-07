@@ -32,6 +32,11 @@ use crate::TextReaderParts;
 /// registered as readable are distinct from text already appended to the
 /// caller's output.
 ///
+/// # Type Parameters
+///
+/// - `I`: Byte input consumed by the buffered reader.
+/// - `C`: Codec that decodes the input bytes into Unicode text.
+///
 /// # Examples
 ///
 /// ```
@@ -122,7 +127,7 @@ where
     ///
     /// Returns the wrapped byte reader. It may already be positioned beyond
     /// bytes retained in this reader's internal buffer.
-    #[must_use]
+    #[must_use = "use the returned reference to access the wrapped byte reader"]
     #[inline(always)]
     pub const fn input(&self) -> &I {
         self.reader.inner()
@@ -154,7 +159,6 @@ where
     ///
     /// Returns named components for the input, unread encoded bytes, decoder,
     /// and decoded characters not yet returned by this reader.
-    #[must_use = "all returned reader state must be handled"]
     #[inline]
     pub fn into_parts(self) -> TextReaderParts<I, CharsetDecoder<C>> {
         self.reader.into_parts()
@@ -214,18 +218,37 @@ where
     I: ByteInput,
     C: CharsetCodec<Unit = u8>,
 {
+    /// The I/O error type used for byte-input and charset-decoding failures.
     type Error = io::Error;
 
+    /// Reads the next decoded Unicode scalar value, returning `None` at EOF.
     #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         self.reader.read_char()
     }
 
+    /// Appends up to `max` decoded characters and returns the appended count.
+    ///
+    /// If decoding fails, characters already appended remain in `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination vector to append decoded characters to.
+    /// - `max`: Maximum number of characters to append.
     #[inline]
     fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
+    /// Appends all remaining decoded text and returns the appended character
+    /// count.
+    ///
+    /// If reading or decoding fails, any text already appended remains in
+    /// `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append decoded text to.
     #[inline]
     fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
@@ -237,6 +260,14 @@ where
     I: ByteInput,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Reads one decoded line using this reader's configured line endings.
+    ///
+    /// Returns `false` at EOF when no text was appended. On an I/O or decoding
+    /// error, text appended before the error remains in `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append the decoded line to.
     #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         self.reader.read_line(output)

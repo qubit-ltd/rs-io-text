@@ -1160,6 +1160,7 @@ mod tests {
     use qubit_codec_text::Charset;
     use qubit_codec_text::CharsetDecodeError;
     use qubit_codec_text::CharsetDecodeErrorKind;
+    use qubit_io_text::LineEnding;
 
     use super::AsyncCharsetTextWriter;
     use super::AsyncInput;
@@ -1269,7 +1270,6 @@ mod tests {
 
     #[test]
     fn test_reference_records_all_line_ending_sets() {
-        use qubit_io_text::LineEnding;
         let sets = [
             LineEndingSet::ALL,
             LineEndingSet::LF,
@@ -1512,7 +1512,7 @@ mod tests {
     }
 
     #[test]
-    fn reference_utf8_matches_known_policy_results() {
+    fn test_reference_utf8_matches_known_policy_results() {
         for policy in 0..=2 {
             assert_eq!(reference_utf8(b"", policy), Ok(String::new()));
             assert_eq!(reference_utf8(b"A\xe4\xb8\xad", policy), Ok("A中".to_owned()));
@@ -1539,7 +1539,7 @@ mod tests {
     }
 
     #[test]
-    fn raw_reader_companion_covers_policies_modes_endings_and_scheduler_events() {
+    fn test_raw_reader_companion_covers_policies_modes_endings_and_scheduler_events() {
         let source = b"A\xff\xef\xbf\xbd\xe4\xb8\xad\r\xff\n\xe4\xb8";
         for policy in [1_u8, 2] {
             for mode in 0..3 {
@@ -1600,7 +1600,7 @@ mod tests {
     }
 
     #[test]
-    fn raw_malformed_limited_rejection_recovers_after_cancel_and_injected_error() {
+    fn test_raw_malformed_limited_rejection_recovers_after_cancel_and_injected_error() {
         let source = b"ab\xffcdefgh\nok\n";
         for policy in [1_u8, 2] {
             let expected = reference_utf8(source, policy).unwrap();
@@ -1865,7 +1865,7 @@ mod tests {
     }
 
     #[test]
-    fn report_raw_reader_observes_decode_error_without_retrying_it() {
+    fn test_report_raw_reader_observes_decode_error_without_retrying_it() {
         let source = b"A\xffB";
         let stats = run_report_reader(
             source,
@@ -1921,7 +1921,7 @@ mod tests {
     }
 
     #[test]
-    fn operation_and_event_header_counts_wrap_at_sixty_five() {
+    fn test_operation_and_event_header_counts_wrap_at_sixty_five() {
         let mut data = vec![0; 6 + OP_LIMIT + EVENT_LIMIT];
         data[3] = 64;
         data[4] = 64;
@@ -1938,7 +1938,7 @@ mod tests {
     }
 
     #[test]
-    fn output_events_are_independent_and_bounded_at_indexed_offsets() {
+    fn test_output_events_are_independent_and_bounded_at_indexed_offsets() {
         let mut output = ScriptOutput::new(
             vec![Event::Pending, Event::Error, Event::Ready(1)],
             vec![Event::Error, Event::Ready(8)],
@@ -1985,7 +1985,7 @@ mod tests {
     }
 
     #[test]
-    fn cancelled_write_and_finish_resume_the_same_writer() {
+    fn test_cancelled_write_and_finish_resume_the_same_writer() {
         let output = ScriptOutput::new(
             vec![Event::Ready(8)],
             vec![Event::Pending, Event::Pending, Event::Ready(8)],
@@ -2018,7 +2018,7 @@ mod tests {
     }
 
     #[test]
-    fn buffered_parts_complete_the_accepted_prefix_at_a_step_boundary() {
+    fn test_buffered_parts_complete_the_accepted_prefix_at_a_step_boundary() {
         let output = ScriptOutput::new(vec![Event::Ready(8)], vec![Event::Ready(8)]);
         let mut writer =
             AsyncCharsetTextWriter::new_with_buffer_capacity(output, Utf8Codec, CharsetEncodePolicy::report(), 1);
@@ -2034,7 +2034,7 @@ mod tests {
     }
 
     #[test]
-    fn schedule_consumes_pending_error_and_ready_once_without_side_effects() {
+    fn test_schedule_consumes_pending_error_and_ready_once_without_side_effects() {
         let mut input = ScriptInput::new(vec![9, 8], vec![Event::Pending, Event::Error, Event::Ready(1)]);
         let wake_counter = Arc::new(WakeCounter::default());
         let waker = std::task::Waker::from(wake_counter.clone());
@@ -2076,7 +2076,7 @@ mod tests {
     }
 
     #[test]
-    fn deterministic_scenarios_exercise_each_model_mode() {
+    fn test_deterministic_scenarios_exercise_each_model_mode() {
         // Writer schedule: Pending on write, then a short write; the remaining
         // events force independent write/flush error handling.
         let writer = run_script(&[
@@ -2158,7 +2158,7 @@ mod tests {
     }
 
     #[test]
-    fn limited_line_model_covers_limits_retries_recovery_and_eof() {
+    fn test_limited_line_model_covers_limits_retries_recovery_and_eof() {
         for (limit, accepted) in [(2, false), (3, true), (4, true)] {
             let stats = run_reject_reader("a\r\n", 2, &[limit], vec![], 0, 0);
             assert_eq!(stats.accepted_records == 1, accepted);
@@ -2269,7 +2269,7 @@ mod tests {
     }
 
     #[test]
-    fn scene_three_uses_nonzero_operation_bytes_from_input() {
+    fn test_scene_three_uses_nonzero_operation_bytes_from_input() {
         let mut data = vec![3, 0, 0, 4, 0, 0, 3, 3, 3, 3];
         data.extend_from_slice(b"abcd\nx\nabcdef\ny\n");
 
@@ -2281,7 +2281,7 @@ mod tests {
     }
 
     #[test]
-    fn scene_three_missing_operation_bytes_default_to_zero() {
+    fn test_scene_three_missing_operation_bytes_default_to_zero() {
         let mut data = vec![3, 0, 0, 0, 0, 0];
         data.extend_from_slice(b"x\n");
 
@@ -2294,42 +2294,42 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "new target text is not an unconsumed record prefix")]
-    fn limited_line_oracle_rejects_replaced_content() {
+    fn test_limited_line_oracle_rejects_replaced_content() {
         super::validate_record_append("seed:中", "seed:中x", "y\n", 4);
     }
 
     #[test]
     #[should_panic(expected = "call exceeded its append limit")]
-    fn limited_line_oracle_rejects_excess_append() {
+    fn test_limited_line_oracle_rejects_excess_append() {
         super::validate_record_append("seed:中", "seed:中ab", "ab\n", 1);
     }
 
     #[test]
     #[should_panic(expected = "target lost its prior contents")]
-    fn limited_line_oracle_rejects_bad_rollback() {
+    fn test_limited_line_oracle_rejects_bad_rollback() {
         super::validate_record_append("seed:中a", "seed:中", "b\n", 2);
     }
 
     #[test]
     #[should_panic(expected = "duplicate or skipped reference-record completion")]
-    fn limited_line_oracle_rejects_duplicate_completion_count() {
+    fn test_limited_line_oracle_rejects_duplicate_completion_count() {
         super::assert_record_completion(0, 2);
     }
 
     #[test]
     #[should_panic(expected = "rejection count must increase exactly once for one record")]
-    fn limited_line_oracle_rejects_duplicate_rejection_of_same_record() {
+    fn test_limited_line_oracle_rejects_duplicate_rejection_of_same_record() {
         super::assert_rejection_progress(0, 0, 2, 0, 2);
     }
 
     #[test]
     #[should_panic(expected = "EOF records incomplete")]
-    fn limited_line_oracle_rejects_missing_records() {
+    fn test_limited_line_oracle_rejects_missing_records() {
         assert_record_read_result(&[String::from("x\n")], &[], true);
     }
 
     #[test]
-    fn scenarios_stop_after_sixty_four_logical_operations() {
+    fn test_scenarios_stop_after_sixty_four_logical_operations() {
         let mut writer_input = vec![0, 0, 0, 65, 0, 0];
         writer_input.extend(std::iter::repeat_n(b'A', INPUT_LIMIT - 6));
         let writer = run_script(&writer_input);
@@ -2348,14 +2348,14 @@ mod tests {
     }
 
     #[test]
-    fn minimized_nine_byte_line_error_seed_records_target_at_eof() {
+    fn test_minimized_nine_byte_line_error_seed_records_target_at_eof() {
         let stats = run_script(&[10, 255, 10, 0, 132, 249, 255, 10, 252]);
         assert!(stats.read_errors > 0);
         assert_eq!(stats.eof_tail_records, 1);
     }
 
     #[test]
-    fn cancelled_line_resume_records_retained_target_at_eof() {
+    fn test_cancelled_line_resume_records_retained_target_at_eof() {
         // The Pending event cancels with a nonempty target; an injected read
         // error and then EOF exercise the per-call false-return edge.
         let stats = run_script(&[10, 255, 10, 0, 3, 249, 0, 1, 2, b'\n']);

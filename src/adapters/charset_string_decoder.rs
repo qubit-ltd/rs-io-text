@@ -96,6 +96,10 @@ where
     }
 
     /// Returns the configured malformed-input action.
+    ///
+    /// # Returns
+    ///
+    /// The action used for malformed or incomplete input.
     #[must_use]
     #[inline]
     pub const fn malformed_action(&self) -> MalformedAction {
@@ -103,6 +107,10 @@ where
     }
 
     /// Returns the configured replacement character.
+    ///
+    /// # Returns
+    ///
+    /// The character emitted when the configured action replaces input.
     #[must_use]
     #[inline]
     pub const fn replacement(&self) -> char {
@@ -110,6 +118,10 @@ where
     }
 
     /// Returns the wrapped charset decoder.
+    ///
+    /// # Returns
+    ///
+    /// A shared reference to the decoder owned by this adapter.
     #[must_use]
     #[inline(always)]
     pub const fn decoder(&self) -> &CharsetDecoder<C> {
@@ -117,6 +129,10 @@ where
     }
 
     /// Returns a mutable reference to the wrapped charset decoder.
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the decoder owned by this adapter.
     #[must_use]
     #[inline(always)]
     pub fn decoder_mut(&mut self) -> &mut CharsetDecoder<C> {
@@ -124,6 +140,10 @@ where
     }
 
     /// Consumes this string decoder and returns the wrapped charset decoder.
+    ///
+    /// # Returns
+    ///
+    /// The decoder previously owned by this adapter.
     #[must_use]
     #[inline]
     pub fn into_decoder(self) -> CharsetDecoder<C> {
@@ -131,29 +151,39 @@ where
     }
 
     /// Makes the next reserve operation fail in coverage builds.
-    #[cfg(coverage)]
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_fail_next_reserve() {
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(0));
     }
 
     /// Makes a later reserve operation fail in coverage builds.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// - `successful_attempts`: Number of reserve attempts allowed before
+    ///   failure.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_fail_reserve_after(successful_attempts: usize) {
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(successful_attempts));
     }
 
     /// Shrinks the next character buffer capacity in coverage builds.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// - `amount`: Number of character slots removed from the next capacity
+    ///   request.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_shrink_next_char_capacity_by(amount: usize) {
         COVERAGE_CHAR_CAPACITY_SHRINK_BY.with(|state| state.set(amount));
     }
 
     /// Clears coverage-only reserve failure hooks.
-    #[cfg(coverage)]
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_reset_reserve_hooks() {
         COVERAGE_RESERVE_FAIL_AFTER.with(|state| state.set(usize::MAX));
         COVERAGE_CHAR_CAPACITY_SHRINK_BY.with(|state| state.set(0));
@@ -164,29 +194,33 @@ where
     }
 
     /// Forces the next transcode status in coverage builds.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// - `mode`: Status selector consumed by the next transcode operation.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_force_next_status(mode: u8) {
         COVERAGE_FORCE_STATUS.with(|state| state.set(mode));
     }
 
     /// Forces the output character count overflow branch in coverage builds.
-    #[cfg(coverage)]
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_force_output_count_overflow() {
         COVERAGE_FORCE_OUTPUT_COUNT_OVERFLOW.with(|state| state.set(true));
     }
 
     /// Forces reset capacity planning to fail in coverage builds.
-    #[cfg(coverage)]
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_force_reset_capacity_error() {
         COVERAGE_FORCE_RESET_CAPACITY_ERROR.with(|state| state.set(true));
     }
 
     /// Forces finish capacity planning to fail in coverage builds.
-    #[cfg(coverage)]
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_force_finish_capacity_error() {
         COVERAGE_FORCE_FINISH_CAPACITY_ERROR.with(|state| state.set(true));
     }
@@ -231,6 +265,10 @@ where
     /// - `input_index`: Absolute index where decoding starts.
     /// - `output`: String receiving decoded text.
     ///
+    /// # Returns
+    ///
+    /// Returns `()` after appending all decoded text successfully.
+    ///
     /// # Errors
     ///
     /// Returns [`CharsetDecodeError`] when `input_index` is outside `input`,
@@ -263,6 +301,10 @@ where
     /// - `input`: Complete source-unit slice visible to the decoder.
     /// - `input_index`: Absolute unit index where decoding starts.
     /// - `output`: String receiving decoded UTF-8 text.
+    ///
+    /// # Returns
+    ///
+    /// Returns `()` after the closed decode lifecycle completes successfully.
     ///
     /// # Errors
     ///
@@ -349,6 +391,10 @@ where
 /// - `required`: Minimum number of character slots required.
 /// - `charset`: Charset attached to any reported error.
 ///
+/// # Returns
+///
+/// Returns `()` after the requested character slots are available.
+///
 /// # Errors
 ///
 /// Returns [`CharsetDecodeErrorKind::OutputLengthOverflow`] when the allocation
@@ -375,6 +421,10 @@ fn ensure_char_capacity(chars: &mut Vec<char>, required: usize, charset: Charset
 /// - `output`: String receiving the decoded characters.
 /// - `chars`: Decoded character window to append.
 /// - `charset`: Charset attached to any reported error.
+///
+/// # Returns
+///
+/// Returns `()` after the characters have been appended.
 ///
 /// # Errors
 ///
@@ -449,7 +499,12 @@ thread_local! {
 }
 
 /// Returns and clears the synthetic char capacity shrink request.
+///
+/// # Returns
+///
+/// The pending number of character slots to remove, or zero when unset.
 #[cfg(coverage)]
+#[must_use]
 fn coverage_take_char_capacity_shrink() -> usize {
     COVERAGE_CHAR_CAPACITY_SHRINK_BY.with(|state| {
         let amount = state.get();
@@ -459,6 +514,10 @@ fn coverage_take_char_capacity_shrink() -> usize {
 }
 
 /// Reports whether a synthetic reserve failure was requested.
+///
+/// # Returns
+///
+/// `true` once when the configured reserve attempt should fail.
 #[cfg(coverage)]
 fn coverage_should_fail_reserve() -> bool {
     COVERAGE_RESERVE_FAIL_AFTER.with(|state| {
@@ -475,6 +534,15 @@ fn coverage_should_fail_reserve() -> bool {
     })
 }
 
+/// Replaces a transcode status with the one-shot coverage override, when set.
+///
+/// # Parameters
+///
+/// - `status`: Transcode status to preserve when no override is pending.
+///
+/// # Returns
+///
+/// The pending synthetic status, or `status` when no override is set.
 #[cfg(coverage)]
 fn coverage_status(status: TranscodeStatus) -> TranscodeStatus {
     match COVERAGE_FORCE_STATUS.with(|state| state.replace(0)) {
@@ -488,12 +556,31 @@ fn coverage_status(status: TranscodeStatus) -> TranscodeStatus {
     }
 }
 
+/// Returns the transcode status unchanged in non-coverage builds.
+///
+/// # Parameters
+///
+/// - `status`: Transcode status supplied by the decoder.
+///
+/// # Returns
+///
+/// The unchanged `status` value.
 #[cfg(not(coverage))]
 fn coverage_status(status: TranscodeStatus) -> TranscodeStatus {
     status
 }
 
+/// Supplies a one-shot overflow value for coverage branch testing.
+///
+/// # Parameters
+///
+/// - `count`: Actual output character count unless an override is pending.
+///
+/// # Returns
+///
+/// The synthetic overflow count when requested, or `count` otherwise.
 #[cfg(coverage)]
+#[must_use]
 fn coverage_output_count(count: usize) -> usize {
     if COVERAGE_FORCE_OUTPUT_COUNT_OVERFLOW.with(|state| state.replace(false)) {
         usize::MAX
@@ -502,11 +589,31 @@ fn coverage_output_count(count: usize) -> usize {
     }
 }
 
+/// Returns the actual output character count in non-coverage builds.
+///
+/// # Parameters
+///
+/// - `count`: Actual output character count to preserve.
+///
+/// # Returns
+///
+/// The unchanged `count` value.
 #[cfg(not(coverage))]
+#[must_use]
 fn coverage_output_count(count: usize) -> usize {
     count
 }
 
+/// Injects a one-shot capacity error for reset or finish coverage paths.
+///
+/// # Parameters
+///
+/// - `result`: Capacity calculation result unless an override is pending.
+/// - `reset`: Selects the reset hook when true and the finish hook otherwise.
+///
+/// # Returns
+///
+/// The synthetic capacity error when requested, or the original result.
 #[cfg(coverage)]
 fn coverage_capacity_result(result: Result<usize, CapacityError>, reset: bool) -> Result<usize, CapacityError> {
     let force = if reset {
@@ -521,6 +628,16 @@ fn coverage_capacity_result(result: Result<usize, CapacityError>, reset: bool) -
     }
 }
 
+/// Returns the actual capacity result in non-coverage builds.
+///
+/// # Parameters
+///
+/// - `result`: Capacity calculation result to preserve.
+/// - `_reset`: Unused selector retained to match the coverage-build signature.
+///
+/// # Returns
+///
+/// The unchanged capacity calculation result.
 #[cfg(not(coverage))]
 fn coverage_capacity_result(result: Result<usize, CapacityError>, _reset: bool) -> Result<usize, CapacityError> {
     result
@@ -549,6 +666,7 @@ fn output_length_overflow(charset: Charset) -> CharsetDecodeError {
 /// # Returns
 ///
 /// Returns the exact number of additional UTF-8 bytes required.
+#[must_use]
 fn required_string_capacity(chars: &[char]) -> usize {
     let mut capacity = 0;
     for ch in chars {

@@ -26,6 +26,11 @@ use crate::TextWriter;
 /// constructs the appropriate [`CharsetEncoder`] from the supplied codec and
 /// unmappable-character policy.
 ///
+/// # Type Parameters
+///
+/// - `O`: Byte output that receives the encoded text.
+/// - `C`: Charset codec that encodes Unicode scalar values as bytes.
+///
 /// Main-stage input-character errors from each string write report zero-based
 /// Unicode scalar (`char`) positions relative to that call, starting at zero. A
 /// line body's error is relative to the body; the line ending is encoded as a
@@ -59,6 +64,7 @@ where
     O: ByteOutput,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Buffered writer that owns the codec encoder and pending output bytes.
     writer: BufferedTextWriter<O, CharsetEncoder<C>>,
 }
 
@@ -246,6 +252,14 @@ where
     O: ByteOutput,
 {
     /// Writes a valid UTF-8 string without re-encoding each scalar value.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: Valid UTF-8 text to append to the encoded output.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if writing the encoded bytes fails.
     pub(crate) fn write_utf8_bytes(&mut self, text: &str) -> io::Result<()> {
         self.writer.write_encoded_bytes(text.as_bytes())
     }
@@ -256,29 +270,72 @@ where
     O: ByteOutput,
     C: CharsetCodec<Unit = u8>,
 {
+    /// I/O error returned when a text operation fails.
     type Error = io::Error;
 
+    /// Returns the configured line ending used by [`Self::write_line`].
+    ///
+    /// # Returns
+    ///
+    /// Returns the line ending configured for this writer.
     #[inline]
     fn line_ending(&self) -> LineEnding {
         self.writer.configured_line_ending()
     }
 
+    /// Encodes and writes one Unicode scalar value.
+    ///
+    /// # Parameters
+    ///
+    /// - `ch`: Character to encode and write.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if encoding or output fails.
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
         self.writer.write_char(ch)
     }
 
+    /// Encodes and writes the supplied Unicode scalar values in order.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Characters to encode and write.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if encoding or output fails.
     #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         self.writer.write_chars(chars)
     }
 
+    /// Encodes and writes a string, reporting charset input offsets relative
+    /// to this call.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: Text to encode and write.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if encoding or output fails.
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
         self.writer
             .write_str_with_domain_offset(text, offset_charset_input_error)
     }
 
+    /// Writes a line followed by the configured line ending.
+    ///
+    /// # Parameters
+    ///
+    /// - `line`: Text to write before the line ending.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if writing the line or its ending fails.
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         let ending = self.line_ending();
@@ -286,6 +343,11 @@ where
         self.write_str(ending.as_str())
     }
 
+    /// Flushes buffered encoded bytes to the wrapped output.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if flushing the output fails.
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.writer.flush()
@@ -293,6 +355,16 @@ where
 }
 
 /// Offsets charset errors whose indices identify input characters.
+///
+/// # Parameters
+///
+/// - `error`: Charset encoding error to adjust.
+/// - `base`: Number of input characters preceding the error's local range.
+///
+/// # Returns
+///
+/// Returns an error with the base added to input-character offsets when the
+/// error identifies such an offset; other errors are returned unchanged.
 fn offset_charset_input_error(error: CharsetEncodeError, base: usize) -> CharsetEncodeError {
     match error.kind() {
         CharsetEncodeErrorKind::InvalidCodePoint { .. }

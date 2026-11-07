@@ -22,6 +22,10 @@ use crate::TextWriter;
 /// shares the generic charset buffering and encoder state machine instead of
 /// exposing a separate `std::io::Write`-based core API.
 ///
+/// # Type Parameters
+///
+/// - `O`: Qubit byte output that receives the UTF-8 encoded text.
+///
 /// # Examples
 ///
 /// ```
@@ -93,6 +97,17 @@ where
         }
     }
 
+    /// Returns a shared reference to the wrapped byte output.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped output. Encoded bytes may still be buffered.
+    #[inline(always)]
+    #[must_use]
+    pub const fn output(&self) -> &O {
+        self.writer.output()
+    }
+
     /// Sets the line ending used for subsequent lines.
     ///
     /// # Parameters
@@ -107,17 +122,6 @@ where
     pub fn with_line_ending(mut self, line_ending: LineEnding) -> Self {
         self.writer = self.writer.with_line_ending(line_ending);
         self
-    }
-
-    /// Returns a shared reference to the wrapped byte output.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped output. Encoded bytes may still be buffered.
-    #[inline(always)]
-    #[must_use]
-    pub const fn output(&self) -> &O {
-        self.writer.output()
     }
 
     /// Finalizes encoded output and flushes pending bytes.
@@ -136,6 +140,7 @@ where
     pub fn finish(&mut self) -> io::Result<()> {
         self.writer.finish()
     }
+
     /// Recovers the wrapped output and the status of encoded bytes retained by
     /// this writer.
     ///
@@ -162,34 +167,103 @@ impl<O> TextWriter for Utf8TextWriter<O>
 where
     O: ByteOutput,
 {
+    /// Error type used by this writer's byte output.
     type Error = io::Error;
 
+    /// Returns the line ending configured on the wrapped charset writer.
     #[inline]
     fn line_ending(&self) -> LineEnding {
         self.writer.line_ending()
     }
 
+    /// Encodes and writes one Unicode scalar value as UTF-8.
+    ///
+    /// # Parameters
+    ///
+    /// - `ch`: Unicode scalar value to encode and write.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after the character is accepted by the output.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying output error if the encoded character cannot be
+    /// accepted.
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
         self.writer.write_char(ch)
     }
 
+    /// Encodes and writes Unicode scalar values in slice order.
+    ///
+    /// # Parameters
+    ///
+    /// - `chars`: Unicode scalar values to encode and write in order.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after all characters are accepted by the output.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying output error if any encoded character cannot be
+    /// accepted. Earlier characters may already have been accepted.
     #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         self.writer.write_chars(chars)
     }
 
+    /// Encodes and writes the supplied string as UTF-8 bytes.
+    ///
+    /// # Parameters
+    ///
+    /// - `text`: String slice to encode and write.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after the text is accepted by the output.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying output error if the encoded text cannot be
+    /// accepted. A prefix may already have been accepted.
     #[inline]
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
         self.writer.write_utf8_bytes(text)
     }
 
+    /// Writes the line content followed by the configured line ending.
+    ///
+    /// # Parameters
+    ///
+    /// - `line`: Line content to write before the configured line ending.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after both the line content and line ending are
+    /// accepted by the output.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying output error if the line content or line ending
+    /// cannot be accepted. The content may have been accepted before the line
+    /// ending fails.
     #[inline]
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.write_str(line)?;
         self.write_str(self.line_ending().as_str())
     }
 
+    /// Flushes buffered encoded bytes to the wrapped byte output.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after buffered encoded bytes are flushed.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying output error if flushing fails.
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.writer.flush()

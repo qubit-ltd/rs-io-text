@@ -57,6 +57,9 @@ impl<'a> OutputTextWriter<'a> {
     ///
     /// Unbuffered outputs are wrapped in [`BufferedOutput`] automatically.
     ///
+    /// # Type Parameters
+    /// - `O`: Character output type owned by this writer.
+    ///
     /// # Parameters
     /// - `output`: Character output to write.
     ///
@@ -156,23 +159,53 @@ impl<'a> OutputTextWriter<'a> {
 }
 
 impl TextWriter for OutputTextWriter<'_> {
+    /// I/O error type returned by writes and flushes to the wrapped output.
     type Error = io::Error;
 
+    /// Returns the configured line terminator used by [`Self::write_line`].
     #[inline]
     fn line_ending(&self) -> LineEnding {
         self.line_ending
     }
 
+    /// Writes one character to the wrapped output.
+    ///
+    /// An I/O error can occur after the output has accepted the character.
+    ///
+    /// # Parameters
+    /// - `ch`: Character to write.
+    ///
+    /// # Errors
+    /// Returns the wrapped output's error if it cannot accept the character.
     #[inline]
     fn write_char(&mut self, ch: char) -> Result<(), Self::Error> {
         self.output.write_fully(&[ch])
     }
 
+    /// Writes the supplied characters to the wrapped output in order.
+    ///
+    /// An I/O error can occur after the output has accepted a prefix.
+    ///
+    /// # Parameters
+    /// - `chars`: Characters to write in order.
+    ///
+    /// # Errors
+    /// Returns the wrapped output's error if it cannot accept all characters.
     #[inline]
     fn write_chars(&mut self, chars: &[char]) -> Result<(), Self::Error> {
         self.output.write_fully(chars)
     }
 
+    /// Writes UTF-8 text in bounded character chunks without allocating.
+    ///
+    /// An I/O error can occur after the output has accepted a prefix; the
+    /// failing call does not report how many characters were accepted.
+    ///
+    /// # Parameters
+    /// - `text`: UTF-8 text to write.
+    ///
+    /// # Errors
+    /// Returns the wrapped output's error if it cannot accept all text.
     fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
         let mut chars = ['\0'; DEFAULT_CHAR_CHUNK_CAPACITY];
         let mut count = 0;
@@ -190,11 +223,26 @@ impl TextWriter for OutputTextWriter<'_> {
         Ok(())
     }
 
+    /// Writes the text followed by this writer's configured line terminator.
+    ///
+    /// If writing the terminator fails, the line content may already have
+    /// been accepted by the output.
+    ///
+    /// # Parameters
+    /// - `line`: Text to write before the configured line terminator.
+    ///
+    /// # Errors
+    /// Returns the wrapped output's error if it cannot accept the line or its
+    /// terminator. The line may have been accepted before a terminator error.
     fn write_line(&mut self, line: &str) -> Result<(), Self::Error> {
         self.write_str(line)?;
         self.write_str(self.line_ending.as_str())
     }
 
+    /// Flushes buffered characters and reports delivery errors.
+    ///
+    /// # Errors
+    /// Returns the wrapped output's error if flushing fails.
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.output.flush()
@@ -202,6 +250,13 @@ impl TextWriter for OutputTextWriter<'_> {
 }
 
 impl fmt::Debug for OutputTextWriter<'_> {
+    /// Formats the writer's buffering state and configured line ending.
+    ///
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the debug representation.
+    ///
+    /// # Errors
+    /// Returns the formatter's error if it cannot write the representation.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("OutputTextWriter")

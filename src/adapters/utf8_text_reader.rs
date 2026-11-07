@@ -24,6 +24,10 @@ use crate::TextReaderParts;
 /// shares the same buffering and decoder state machine instead of introducing
 /// a separate `std::io::Read`-based stream boundary.
 ///
+/// # Type Parameters
+///
+/// - `I`: Byte input that supplies the encoded UTF-8 stream.
+///
 /// # Examples
 ///
 /// ```
@@ -92,20 +96,6 @@ where
         }
     }
 
-    /// Sets the line endings recognized by [`TextLineReader::read_line`].
-    ///
-    /// # Parameters
-    /// - `line_endings`: Accepted line-ending sequences.
-    ///
-    /// # Returns
-    /// This reader with the requested line-ending configuration.
-    #[inline]
-    #[must_use]
-    pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
-        self.reader = self.reader.with_line_endings(line_endings);
-        self
-    }
-
     /// Returns the line endings recognized by this reader.
     #[inline]
     #[must_use]
@@ -123,6 +113,22 @@ where
     #[must_use]
     pub const fn input(&self) -> &I {
         self.reader.input()
+    }
+
+    /// Sets the line endings recognized by [`TextLineReader::read_line`].
+    ///
+    /// # Parameters
+    ///
+    /// - `line_endings`: Accepted line-ending sequences.
+    ///
+    /// # Returns
+    ///
+    /// This reader with the requested line-ending configuration.
+    #[inline]
+    #[must_use]
+    pub fn with_line_endings(mut self, line_endings: LineEndingSet) -> Self {
+        self.reader = self.reader.with_line_endings(line_endings);
+        self
     }
 
     /// Consumes this reader and returns every component that may contain
@@ -198,18 +204,56 @@ impl<I> TextReader for Utf8TextReader<I>
 where
     I: ByteInput,
 {
+    /// Error type returned when reading the byte input or decoding UTF-8 fails.
     type Error = io::Error;
 
+    /// Reads the next Unicode scalar value, returning `None` at end of input.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(character)` for a decoded scalar value, or `None` when
+    /// the input is exhausted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an input or UTF-8 decoding error.
     #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         self.reader.read_char()
     }
 
+    /// Appends up to `max` decoded characters to `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination for the decoded characters.
+    /// - `max`: Maximum number of characters to append.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of characters appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns an input or UTF-8 decoding error.
     #[inline]
     fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.reader.read_chars(output, max)
     }
 
+    /// Appends all currently available decoded text to `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append decoded text to.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of bytes appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns an input or UTF-8 decoding error.
     #[inline]
     fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.reader.read_to_string(output)
@@ -220,6 +264,20 @@ impl<I> TextLineReader for Utf8TextReader<I>
 where
     I: ByteInput,
 {
+    /// Reads one line using this reader's configured line-ending policy.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to append the line to.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if a line or final unterminated line was read, and
+    /// `false` at EOF when no text was appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns an input or UTF-8 decoding error.
     #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         self.reader.read_line(output)

@@ -74,6 +74,7 @@ impl<'a> StrCharInput<'a> {
 }
 
 impl Input for StrCharInput<'_> {
+    /// Unicode scalar value read from the borrowed string.
     type Item = char;
 
     /// Reads characters into an indexed output range without checking the

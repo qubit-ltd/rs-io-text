@@ -46,7 +46,11 @@ use crate::LineEndingSet;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct AsyncUtf8TextReader<I>(AsyncCharsetTextReader<I, Utf8Codec>)
+pub struct AsyncUtf8TextReader<I>(
+    /// Stores the generic reader that owns the input, UTF-8 decoder, and any
+    /// buffered decode state.
+    AsyncCharsetTextReader<I, Utf8Codec>,
+)
 where
     I: AsyncByteInput;
 
@@ -143,8 +147,10 @@ impl<I> Deref for AsyncUtf8TextReader<I>
 where
     I: AsyncByteInput,
 {
+    /// The generic UTF-8 reader exposed by this wrapper's dereference methods.
     type Target = AsyncCharsetTextReader<I, Utf8Codec>;
 
+    /// Borrows the wrapped reader so callers can use its charset-reader API.
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -155,6 +161,8 @@ impl<I> DerefMut for AsyncUtf8TextReader<I>
 where
     I: AsyncByteInput,
 {
+    /// Mutably borrows the wrapped reader, including its input and decode
+    /// state.
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -165,16 +173,56 @@ impl<I> AsyncTextReader for AsyncUtf8TextReader<I>
 where
     I: AsyncByteInput + Unpin,
 {
+    /// Error type returned when asynchronous text reads fail.
     type Error = std::io::Error;
 
+    /// Reads the next decoded Unicode scalar value.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(character)` when a character is available, or `None` after
+    /// end of input has been reached.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when fetching or decoding input fails.
     async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
         self.0.read_char_async().await
     }
 
+    /// Appends up to `max` decoded characters to `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Buffer that receives the decoded characters; existing
+    ///   contents are preserved.
+    /// - `max`: Maximum number of characters to append.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of characters appended, which may be zero at EOF.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when fetching or decoding input fails.
     async fn read_chars_async(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         self.0.read_chars_async(output, max).await
     }
 
+    /// Appends decoded text to `output` until the input reaches EOF.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: String that receives decoded text; existing contents are
+    ///   preserved.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of characters appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when fetching or decoding input fails.
     async fn read_to_string_async(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         self.0.read_to_string_async(output).await
     }
@@ -184,6 +232,21 @@ impl<I> AsyncTextLineReader for AsyncUtf8TextReader<I>
 where
     I: AsyncByteInput + Unpin,
 {
+    /// Reads one configured line and appends its contents to `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: String that receives the line contents; existing contents
+    ///   are preserved.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when a line was read and `false` at EOF before another
+    /// line was available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when fetching or decoding input fails.
     async fn read_line_async(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         self.0.read_line_async(output).await
     }

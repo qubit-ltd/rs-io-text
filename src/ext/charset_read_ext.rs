@@ -35,6 +35,10 @@ use crate::TextReader;
 pub trait CharsetReadExt: ByteInput + Sized {
     /// Wraps this byte reader as a charset text reader.
     ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose input unit is one byte.
+    ///
     /// # Parameters
     ///
     /// - `codec`: Charset codec used by the byte input.
@@ -53,6 +57,10 @@ pub trait CharsetReadExt: ByteInput + Sized {
     }
 
     /// Wraps this byte reader as a charset text reader with a buffer capacity.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose input unit is one byte.
     ///
     /// # Parameters
     ///
@@ -78,6 +86,10 @@ pub trait CharsetReadExt: ByteInput + Sized {
     }
 
     /// Reads all remaining bytes as charset-encoded text.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose input unit is one byte.
     ///
     /// # Parameters
     ///
@@ -107,6 +119,10 @@ pub trait CharsetReadExt: ByteInput + Sized {
     }
 
     /// Reads remaining bytes as charset-encoded text with an append-size limit.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Charset codec whose input unit is one byte.
     ///
     /// # Parameters
     ///

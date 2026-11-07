@@ -21,7 +21,7 @@ use std::fmt;
 /// error does not grant permission to retry an operation or imply that the
 /// underlying input was rolled back.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use std::io::Cursor;
@@ -38,6 +38,7 @@ use std::fmt;
 ///     .map(TextAppendLimitError::max_append_len);
 /// assert_eq!(Some(3), limit);
 /// ```
+#[must_use = "an append-limit error should be handled or reported"]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TextAppendLimitError {
     /// The configured maximum number of UTF-8 bytes to append.
@@ -46,11 +47,25 @@ pub struct TextAppendLimitError {
 
 impl TextAppendLimitError {
     /// Creates an append-limit error for the configured UTF-8 byte limit.
+    ///
+    /// # Parameters
+    ///
+    /// * `max_append_len` - Maximum number of UTF-8 bytes the operation may
+    ///   append before rejecting the text.
+    ///
+    /// # Returns
+    ///
+    /// An error value carrying the configured append limit.
+    #[inline]
     pub(crate) const fn new(max_append_len: usize) -> Self {
         Self { max_append_len }
     }
 
     /// Returns the configured maximum number of UTF-8 bytes to append.
+    ///
+    /// # Returns
+    ///
+    /// The byte limit configured for the operation that produced this error.
     #[must_use]
     #[inline]
     pub const fn max_append_len(&self) -> usize {
@@ -59,6 +74,20 @@ impl TextAppendLimitError {
 }
 
 impl fmt::Display for TextAppendLimitError {
+    /// Formats this error with its configured UTF-8 byte limit.
+    ///
+    /// # Parameters
+    ///
+    /// * `formatter` - Destination formatter provided by the formatting
+    ///   framework.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the error text is written successfully.
+    ///
+    /// # Errors
+    ///
+    /// Returns the formatter's error if it cannot accept the output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,

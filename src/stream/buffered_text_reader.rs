@@ -48,6 +48,11 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// registered as readable are distinct from text already appended to the
 /// caller's output.
 ///
+/// # Type Parameters
+///
+/// - `R`: Byte input that supplies the encoded stream.
+/// - `D`: Streaming decoder that converts bytes into Unicode scalar values.
+///
 /// # Examples
 ///
 /// ```
@@ -301,6 +306,15 @@ where
     }
 
     /// Discards the remainder of the current line after a bounded read fails.
+    ///
+    /// # Parameters
+    ///
+    /// - `line_endings`: Line-ending sequences that terminate the rejected
+    ///   line.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O or decoding error while consuming the line remainder.
     fn discard_line_after_limit(&mut self, line_endings: LineEndingSet) -> io::Result<()> {
         let mut pending = self.pending_char.take();
         let result = discard_line_with(line_endings, &mut pending, || self.read_char());
@@ -538,8 +552,20 @@ where
     D::Error: StdError + Send + Sync + 'static,
     D::DecodeError: Send + Sync + 'static,
 {
+    /// I/O error type used when reading or decoding fails.
     type Error = io::Error;
 
+    /// Returns the next decoded character, preserving a pending lookahead
+    /// character before reading further input.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Some(ch))` for the next character, or `Ok(None)` at EOF.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O or decoding error. Characters already consumed remain
+    /// consumed.
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         if let Some(ch) = self.pending_char.take() {
             return Ok(Some(ch));
@@ -556,6 +582,21 @@ where
         Ok(Some(ch))
     }
 
+    /// Appends up to `max` decoded characters to `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination vector; characters are appended.
+    /// - `max`: Maximum number of characters to append.
+    ///
+    /// # Returns
+    ///
+    /// The number of characters appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O or decoding error. Any prefix appended before the error
+    /// remains in `output`.
     fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
         if max > 0
@@ -575,6 +616,20 @@ where
         Ok(count)
     }
 
+    /// Appends all remaining decoded text to `output`.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string; decoded text is appended.
+    ///
+    /// # Returns
+    ///
+    /// The number of Unicode scalar values appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O or decoding error. Any prefix appended before the error
+    /// remains in `output`.
     fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
         if let Some(ch) = self.pending_char.take() {
@@ -598,6 +653,21 @@ where
     D::Error: StdError + Send + Sync + 'static,
     D::DecodeError: Send + Sync + 'static,
 {
+    /// Reads one decoded line while preserving its configured line ending.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string; the line is appended to existing text.
+    ///
+    /// # Returns
+    ///
+    /// `true` when a line or final unterminated text was read, or `false` at
+    /// EOF with no text appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O or decoding error. A prefix appended before the error
+    /// remains in `output`.
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         if self.rejected_line.is_some() {
             return Err(self.finish_rejected_line()?);
@@ -611,6 +681,18 @@ where
 }
 
 /// Converts decoder errors at the buffered-reader boundary.
+///
+/// # Type Parameters
+///
+/// - `E`: Decoder error type implementing the standard error contract.
+///
+/// # Parameters
+///
+/// - `error`: Decoder error to wrap as an I/O error.
+///
+/// # Returns
+///
+/// An I/O error preserving the decoder error as its source.
 fn decode_error_to_io<E>(error: E) -> io::Error
 where
     E: StdError + Send + Sync + 'static,
@@ -619,6 +701,14 @@ where
 }
 
 /// Converts capacity errors at the buffered-reader boundary.
+///
+/// # Parameters
+///
+/// - `error`: Capacity-planning error to convert.
+///
+/// # Returns
+///
+/// An I/O error representing the capacity failure.
 fn capacity_error_to_io(error: CapacityError) -> io::Error {
     shared_capacity_error_to_io(error)
 }

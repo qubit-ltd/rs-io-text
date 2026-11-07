@@ -83,6 +83,7 @@ impl StringCharInput {
 }
 
 impl Input for StringCharInput {
+    /// A Unicode scalar value read from the owned UTF-8 text.
     type Item = char;
 
     /// Reads characters into an indexed output range without checking the

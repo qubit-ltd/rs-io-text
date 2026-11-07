@@ -50,6 +50,11 @@ const MIN_TEXT_BUFFER_CAPACITY: usize = 4;
 /// registered as readable are distinct from text already appended to the
 /// caller's output.
 ///
+/// # Type Parameters
+///
+/// - `I`: Asynchronous byte input decoded by this reader.
+/// - `C`: Charset codec that converts encoded bytes into Unicode characters.
+///
 /// # Examples
 ///
 /// ```no_run
@@ -125,6 +130,7 @@ where
     ///
     /// Returns a reader whose construction performs no input operation.
     #[must_use]
+    #[inline]
     pub fn new(input: I, codec: C, policy: CharsetDecodePolicy) -> Self {
         Self::new_with_buffer_capacity(input, codec, policy, DEFAULT_BUFFER_CAPACITY)
     }
@@ -142,6 +148,11 @@ where
     ///
     /// Returns a reader whose byte buffer is large enough to retain built-in
     /// Unicode codec tails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `buffer_capacity` exceeds the maximum supported allocation
+    /// size.
     #[must_use]
     pub fn new_with_buffer_capacity(input: I, codec: C, policy: CharsetDecodePolicy, buffer_capacity: usize) -> Self {
         let capacity = buffer_capacity.max(MIN_TEXT_BUFFER_CAPACITY);
@@ -168,10 +179,31 @@ where
     ///
     /// Returns the wrapped input. It may be positioned beyond encoded bytes
     /// retained by this reader.
-    #[must_use]
+    #[must_use = "inspect the wrapped input's logical position before continuing"]
     #[inline]
     pub const fn input(&self) -> &I {
         self.input.inner()
+    }
+
+    /// Returns the line endings recognized by this reader.
+    #[must_use]
+    #[inline]
+    pub const fn line_endings(&self) -> LineEndingSet {
+        self.line_endings
+    }
+
+    /// Returns a mutable reference to the asynchronous byte input.
+    ///
+    /// Mutating the input directly can invalidate the logical stream position
+    /// represented by retained bytes.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped input.
+    #[must_use = "use the mutable input reference without invalidating retained bytes"]
+    #[inline]
+    pub fn input_mut(&mut self) -> &mut I {
+        self.input.inner_mut()
     }
 
     /// Sets the line endings recognized by asynchronous line reads.
@@ -188,30 +220,16 @@ where
         self
     }
 
-    /// Returns the line endings recognized by this reader.
-    #[must_use]
-    #[inline]
-    pub const fn line_endings(&self) -> LineEndingSet {
-        self.line_endings
-    }
-
     /// Forces one EOF status for coverage-only branch tests.
-    #[cfg(coverage)]
+    ///
+    /// # Parameters
+    ///
+    /// - `mode`: Coverage override selector; zero leaves the decoder status
+    ///   unchanged.
     #[doc(hidden)]
+    #[cfg(coverage)]
     pub fn coverage_force_next_eof_status(mode: u8) {
         COVERAGE_FORCE_EOF_STATUS.with(|state| state.set(mode));
-    }
-
-    /// Returns a mutable reference to the asynchronous byte input.
-    ///
-    /// Mutating the input directly can invalidate the logical stream position
-    /// represented by retained bytes.
-    ///
-    /// # Returns
-    ///
-    /// Returns the wrapped input.
-    pub fn input_mut(&mut self) -> &mut I {
-        self.input.inner_mut()
     }
 
     /// Consumes this reader and returns every component that may contain
@@ -226,7 +244,6 @@ where
     ///
     /// Returns named components for the input, unread encoded bytes, decoder,
     /// and decoded characters not yet returned by this reader.
-    #[must_use = "all returned reader state must be handled"]
     pub fn into_parts(self) -> TextReaderParts<I, CharsetDecoder<C>> {
         let (input, unread) = self.input.into_parts();
         let mut pending_chars = Vec::new();
@@ -243,6 +260,7 @@ where
     }
 
     /// Returns whether at least one decoded character is buffered.
+    #[must_use]
     #[inline]
     fn has_buffered_chars(&self) -> bool {
         self.char_position < self.char_limit
@@ -256,6 +274,15 @@ where
     }
 
     /// Starts the decoder lifecycle before the first input operation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the decoder writes more characters than its reported reset
+    /// bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity or decoder reset errors.
     fn ensure_started(&mut self) -> io::Result<()> {
         if self.started {
             return Ok(());
@@ -276,6 +303,15 @@ where
     }
 
     /// Finishes decoder-owned output after all encoded input is consumed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the decoder writes more characters than its reported finish
+    /// bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity or decoder finalization errors.
     fn finish_decoder(&mut self) -> io::Result<bool> {
         if self.finished {
             return Ok(false);
@@ -340,6 +376,10 @@ where
     }
 
     /// Decodes enough retained input to make one character available.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, decoding, or incomplete-EOF errors.
     async fn fill_chars_async(&mut self) -> io::Result<bool>
     where
         I: Unpin,
@@ -407,16 +447,59 @@ where
     I: AsyncByteInput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Uses `io::Error` for failures produced while reading and decoding text.
     type Error = io::Error;
 
+    /// Reads the next decoded character through the asynchronous text-reader
+    /// contract.
+    ///
+    /// # Returns
+    ///
+    /// The next decoded character, or `None` when decoding reaches EOF.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors.
+    #[inline]
     async fn read_char_async(&mut self) -> Result<Option<char>, Self::Error> {
         AsyncCharsetTextReader::read_char_async(self).await
     }
 
+    /// Appends up to `max` decoded characters through the asynchronous
+    /// text-reader contract.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination character vector.
+    /// - `max`: Maximum number of characters to append.
+    ///
+    /// # Returns
+    ///
+    /// The number of appended characters.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors.
+    #[inline]
     async fn read_chars_async(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         AsyncCharsetTextReader::read_chars_async(self, output, max).await
     }
 
+    /// Appends all remaining decoded text through the asynchronous text-reader
+    /// contract.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string.
+    ///
+    /// # Returns
+    ///
+    /// The number of appended Unicode scalar values.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors.
+    #[inline]
     async fn read_to_string_async(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         AsyncCharsetTextReader::read_to_string_async(self, output).await
     }
@@ -427,6 +510,21 @@ where
     I: AsyncByteInput + Unpin,
     C: CharsetCodec<Unit = u8>,
 {
+    /// Appends one decoded line through the asynchronous text-line-reader
+    /// contract.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string.
+    ///
+    /// # Returns
+    ///
+    /// Whether a line or final unterminated line was read.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors.
+    #[inline]
     async fn read_line_async(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         AsyncCharsetTextReader::read_line_async(self, output).await
     }
@@ -438,6 +536,14 @@ thread_local! {
 }
 
 /// Applies a one-shot coverage override to the EOF transcode status.
+///
+/// # Parameters
+///
+/// - `status`: Decoder status to retain unless a coverage override is pending.
+///
+/// # Returns
+///
+/// Returns the pending override once, or `status` when none is pending.
 #[cfg(coverage)]
 fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
     match COVERAGE_FORCE_EOF_STATUS.with(|state| state.replace(0)) {
@@ -452,6 +558,14 @@ fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
 }
 
 /// Returns the EOF transcode status unchanged outside coverage builds.
+///
+/// # Parameters
+///
+/// - `status`: Decoder status produced at EOF.
+///
+/// # Returns
+///
+/// Returns `status` unchanged.
 #[cfg(not(coverage))]
 fn coverage_eof_status(status: TranscodeStatus) -> TranscodeStatus {
     status
@@ -639,11 +753,74 @@ where
     /// record with the original limit and line-ending policy before reporting
     /// `InvalidData`. Character reads and `into_parts` do not resume this line
     /// recovery.
+    #[inline]
     pub async fn read_line_async(&mut self, output: &mut String) -> io::Result<bool> {
         self.read_line_async_impl(output, None).await
     }
 
+    /// Asynchronously appends one decoded line while enforcing a UTF-8 byte
+    /// limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string. The line is appended to existing
+    ///   content.
+    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when a line or final unterminated line was read, or
+    /// `false` at EOF when this call appended no text. After a cancelled call
+    /// or an input error that the caller has determined is recoverable,
+    /// `false` can coexist with a prefix retained in `output`; deliver that
+    /// current line once before clearing `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors, or [`io::ErrorKind::InvalidData`]
+    /// when the decoded line exceeds `max_append_len`. On overflow, `output`
+    /// is restored to its original length and the oversized line is discarded
+    /// through its configured line ending before `InvalidData` is returned.
+    /// If cancellation or an input error interrupts that discard, the next
+    /// line-read call on this reader resumes it and reports `InvalidData` only
+    /// after reaching the saved line boundary. An input error encountered
+    /// during recovery is returned first.
+    ///
+    /// # Cancellation safety
+    ///
+    /// Cancelling before overflow retains reader state, but `output` can
+    /// already contain a successfully decoded prefix. Resume on the same
+    /// reader and do not append that prefix a second time; the byte limit is
+    /// per call. After overflow, a cancelled discard or an input error leaves
+    /// the rejected record pending. A later line-read call on this reader
+    /// continues discarding it with the original limit and line-ending
+    /// policy, then reports `InvalidData` once. That recovery call does not
+    /// change its output. A later line-read call can then read the next record.
+    /// Character reads and `into_parts` do not resume rejected-line recovery.
+    /// If a resumed call reaches EOF and returns `false`, `output` can still
+    /// contain the retained prefix; deliver it once. For a rejected line,
+    /// continue using a line-read method on the same reader to finish its
+    /// discard; the unlimited-line recovery example does not cover that case.
+    #[inline]
+    pub async fn read_line_limited_async(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
+        self.read_line_async_impl(output, Some(max_append_len)).await
+    }
     /// Reads one line with an optional UTF-8 append limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string to which the line is appended.
+    /// - `max_append_len`: Optional maximum UTF-8 byte length appended by this
+    ///   call.
+    ///
+    /// # Returns
+    ///
+    /// Returns whether a line or final unterminated line was read.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors, or `InvalidData` after rejecting an
+    /// oversized line.
     async fn read_line_async_impl(&mut self, output: &mut String, max_append_len: Option<usize>) -> io::Result<bool> {
         if self.rejected_line.is_some() {
             return Err(self.finish_rejected_line_async().await?);
@@ -708,53 +885,6 @@ where
         Ok(read)
     }
 
-    /// Asynchronously appends one decoded line while enforcing a UTF-8 byte
-    /// limit.
-    ///
-    /// # Parameters
-    ///
-    /// - `output`: Destination string. The line is appended to existing
-    ///   content.
-    /// - `max_append_len`: Maximum UTF-8 byte length appended by this call.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when a line or final unterminated line was read, or
-    /// `false` at EOF when this call appended no text. After a cancelled call
-    /// or an input error that the caller has determined is recoverable,
-    /// `false` can coexist with a prefix retained in `output`; deliver that
-    /// current line once before clearing `output`.
-    ///
-    /// # Errors
-    ///
-    /// Returns input or decoding errors, or [`io::ErrorKind::InvalidData`]
-    /// when the decoded line exceeds `max_append_len`. On overflow, `output`
-    /// is restored to its original length and the oversized line is discarded
-    /// through its configured line ending before `InvalidData` is returned.
-    /// If cancellation or an input error interrupts that discard, the next
-    /// line-read call on this reader resumes it and reports `InvalidData` only
-    /// after reaching the saved line boundary. An input error encountered
-    /// during recovery is returned first.
-    ///
-    /// # Cancellation safety
-    ///
-    /// Cancelling before overflow retains reader state, but `output` can
-    /// already contain a successfully decoded prefix. Resume on the same
-    /// reader and do not append that prefix a second time; the byte limit is
-    /// per call. After overflow, a cancelled discard or an input error leaves
-    /// the rejected record pending. A later line-read call on this reader
-    /// continues discarding it with the original limit and line-ending
-    /// policy, then reports `InvalidData` once. That recovery call does not
-    /// change its output. A later line-read call can then read the next record.
-    /// Character reads and `into_parts` do not resume rejected-line recovery.
-    /// If a resumed call reaches EOF and returns `false`, `output` can still
-    /// contain the retained prefix; deliver it once. For a rejected line,
-    /// continue using a line-read method on the same reader to finish its
-    /// discard; the unlimited-line recovery example does not cover that case.
-    pub async fn read_line_limited_async(&mut self, output: &mut String, max_append_len: usize) -> io::Result<bool> {
-        self.read_line_async_impl(output, Some(max_append_len)).await
-    }
-
     /// Finishes discarding a previously rejected line before reporting its
     /// original append-limit error.
     ///
@@ -766,6 +896,10 @@ where
     /// # Errors
     ///
     /// Returns an input or decoding error if discarding cannot continue yet.
+    ///
+    /// # Panics
+    ///
+    /// Panics if recovery is requested without a previously rejected line.
     async fn finish_rejected_line_async(&mut self) -> io::Result<io::Error> {
         let (limit, line_endings) = self
             .rejected_line
@@ -776,6 +910,10 @@ where
     }
 
     /// Reads one decoded character without consulting `pending_char`.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, decoding, or incomplete-EOF errors.
     async fn read_char_from_buffer_async(&mut self) -> io::Result<Option<char>> {
         if !self.fill_chars_async().await? {
             return Ok(None);
@@ -786,6 +924,14 @@ where
     }
 
     /// Discards the remainder of the current line after a bounded read fails.
+    ///
+    /// # Parameters
+    ///
+    /// - `line_endings`: Terminators that end the rejected line.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or decoding errors encountered while discarding.
     async fn discard_line_after_limit_async(&mut self, line_endings: LineEndingSet) -> io::Result<()> {
         loop {
             let Some(ch) = self.read_char_async().await? else {
@@ -819,6 +965,17 @@ where
     }
 
     /// Appends one line character, enforcing the optional UTF-8 byte limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination string receiving the character.
+    /// - `initial_len`: Original output length used to measure appended bytes.
+    /// - `max_append_len`: Optional maximum number of appended UTF-8 bytes.
+    /// - `ch`: Character to append.
+    ///
+    /// # Errors
+    ///
+    /// Returns `InvalidData` if appending `ch` would exceed the byte limit.
     fn append_line_char(
         &mut self,
         output: &mut String,

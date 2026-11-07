@@ -108,8 +108,15 @@ impl<'a> StrTextReader<'a> {
 }
 
 impl TextReader for StrTextReader<'_> {
+    /// This reader cannot fail because it reads from an in-memory string slice.
     type Error = Infallible;
 
+    /// Returns the next Unicode scalar value, first consuming any character
+    /// retained by line-ending lookahead.
+    ///
+    /// # Returns
+    /// `Ok(Some(ch))` when a character was read, or `Ok(None)` when the input
+    /// is exhausted.
     #[inline]
     fn read_char(&mut self) -> Result<Option<char>, Self::Error> {
         if let Some(ch) = self.pending_char.take() {
@@ -118,6 +125,15 @@ impl TextReader for StrTextReader<'_> {
         Ok(read_char_at(self.text, &mut self.position))
     }
 
+    /// Appends up to `max` characters, including a retained lookahead
+    /// character when the limit is nonzero, and returns the number appended.
+    ///
+    /// # Parameters
+    /// - `output`: Buffer that receives the characters.
+    /// - `max`: Maximum number of characters to append.
+    ///
+    /// # Returns
+    /// The number of characters appended. The result is always successful.
     #[inline]
     fn read_chars(&mut self, output: &mut Vec<char>, max: usize) -> Result<usize, Self::Error> {
         let mut count = 0;
@@ -130,6 +146,14 @@ impl TextReader for StrTextReader<'_> {
         Ok(count + read_chars_at(self.text, &mut self.position, output, max.saturating_sub(count)))
     }
 
+    /// Appends all remaining text and any retained lookahead character, then
+    /// returns the number of characters appended.
+    ///
+    /// # Parameters
+    /// - `output`: String that receives the remaining text.
+    ///
+    /// # Returns
+    /// The number of characters appended. The result is always successful.
     #[inline]
     fn read_to_string(&mut self, output: &mut String) -> Result<usize, Self::Error> {
         let mut count = 0;
@@ -142,6 +166,17 @@ impl TextReader for StrTextReader<'_> {
 }
 
 impl TextLineReader for StrTextReader<'_> {
+    /// Appends the next line according to this reader's configured line
+    /// endings, returning whether a line was read. A trailing terminator does
+    /// not produce an additional empty line.
+    ///
+    /// # Parameters
+    /// - `output`: String that receives the line contents, without its
+    ///   terminator.
+    ///
+    /// # Returns
+    /// `true` if a line was read, or `false` if no text remains. The result is
+    /// always successful.
     #[inline]
     fn read_line(&mut self, output: &mut String) -> Result<bool, Self::Error> {
         let text = self.text;
