@@ -166,11 +166,17 @@ fn main() -> std::io::Result<()> {
             let mut text = String::from("seed:中");
             let result = if chinese {
                 complete(user_guide_examples::budget_chinese::run(
-                    &mut reader, &mut text, 5, limit,
+                    &mut reader,
+                    &mut text,
+                    5,
+                    limit,
                 ))
             } else {
                 complete(user_guide_examples::budget_english::run(
-                    &mut reader, &mut text, 5, limit,
+                    &mut reader,
+                    &mut text,
+                    5,
+                    limit,
                 ))
             };
             if succeeds {
