@@ -689,9 +689,16 @@ where
     ///
     /// Returns the number of Unicode scalar values appended to `output`.
     /// The limit applies to this invocation only; a prefix retained after a
-    /// cancelled call is not charged against a later call's limit. Use a
-    /// separately retained message start and subtract `output.len()` from a
-    /// total message budget when the application needs an aggregate bound.
+    /// cancelled call is not charged against a later call's limit. For an aggregate
+    /// message budget, retain the output byte length at the start of the message as
+    /// `message_start`. Compute the message's used bytes with
+    /// `output.len().checked_sub(message_start)`, then compute the remaining budget
+    /// with `total_limit.checked_sub(used)`. Handle either failed subtraction before
+    /// calling this method. Existing output before `message_start` is not charged
+    /// to the message budget.
+    ///
+    /// See the [cumulative text budget guide](https://github.com/qubit-ltd/rs-io-text/blob/main/doc/user_guide.md#cumulative-text-budget)
+    /// for a complete example.
     ///
     /// # Errors
     ///

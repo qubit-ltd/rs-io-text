@@ -160,6 +160,31 @@ fn main() -> std::io::Result<()> {
         complete(user_guide_examples::budget_english::run(&mut reader, &mut text, 5, 6,))?
     );
     assert_eq!("seed:中文", text);
+    for chinese in [false, true] {
+        for (limit, succeeds) in [(6, true), (4, false)] {
+            let mut reader = AsyncUtf8TextReader::new(SliceAsyncInput::new("文".as_bytes()));
+            let mut text = String::from("seed:中");
+            let result = if chinese {
+                complete(user_guide_examples::budget_chinese::run(
+                    &mut reader, &mut text, 5, limit,
+                ))
+            } else {
+                complete(user_guide_examples::budget_english::run(
+                    &mut reader, &mut text, 5, limit,
+                ))
+            };
+            if succeeds {
+                assert_eq!(1, result?);
+                assert_eq!("seed:中文", text);
+            } else {
+                assert_eq!(
+                    std::io::ErrorKind::InvalidData,
+                    result.expect_err("remaining byte budget must reject the suffix").kind(),
+                );
+                assert_eq!("seed:中", text);
+            }
+        }
+    }
     let mut reader = AsyncUtf8TextReader::new(SliceAsyncInput::new(b"x"));
     let mut text = String::from("z");
     let error = complete(user_guide_examples::budget_chinese::run(&mut reader, &mut text, 2, 8))
