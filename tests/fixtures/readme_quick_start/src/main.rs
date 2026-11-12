@@ -36,6 +36,35 @@ impl AsyncInput for EofAsyncInput {
     }
 }
 
+/// Supplies a fixed byte slice and then EOF to execute budget examples.
+struct SliceAsyncInput {
+    bytes: &'static [u8],
+    position: usize,
+}
+
+impl SliceAsyncInput {
+    fn new(bytes: &'static [u8]) -> Self {
+        Self { bytes, position: 0 }
+    }
+}
+
+impl AsyncInput for SliceAsyncInput {
+    type Item = u8;
+
+    unsafe fn poll_read_unchecked(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> Poll<std::io::Result<usize>> {
+        let read = count.min(self.bytes.len().saturating_sub(self.position));
+        output[index..index + read].copy_from_slice(&self.bytes[self.position..self.position + read]);
+        self.position += read;
+        Poll::Ready(Ok(read))
+    }
+}
+
 /// Records the output of the executable documentation examples.
 #[derive(Default)]
 pub(crate) struct RecordingAsyncOutput {
@@ -124,6 +153,19 @@ fn main() -> std::io::Result<()> {
     ))?;
     assert_eq!(b"subject: status\r\n", output.bytes.as_slice());
     assert!(output.flushed);
+    let mut reader = AsyncUtf8TextReader::new(SliceAsyncInput::new("中文".as_bytes()));
+    let mut text = String::from("seed:");
+    assert_eq!(
+        2,
+        complete(user_guide_examples::budget_english::run(&mut reader, &mut text, 5, 6,))?
+    );
+    assert_eq!("seed:中文", text);
+    let mut reader = AsyncUtf8TextReader::new(SliceAsyncInput::new(b"x"));
+    let mut text = String::from("z");
+    let error = complete(user_guide_examples::budget_chinese::run(&mut reader, &mut text, 2, 8))
+        .expect_err("an invalid message start must fail");
+    assert_eq!(std::io::ErrorKind::InvalidInput, error.kind());
+    assert_eq!(0, reader.input().position);
     let output = complete(user_guide_examples::guide_async_chinese::run(
         RecordingAsyncOutput::default(),
     ))?;

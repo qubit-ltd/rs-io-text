@@ -13,10 +13,12 @@ use qubit_io::BoxInput;
 use qubit_io::BufferedInput;
 use qubit_io::CharInput;
 
-use crate::LineEnding;
 use crate::TextLineReader;
 use crate::TextReader;
 use crate::line_ending_set::LineEndingSet;
+use crate::line_ending_set::ends_after_cr;
+use crate::line_ending_set::ends_without_lookahead;
+use crate::line_ending_set::needs_crlf_lookahead;
 
 /// Default character chunk capacity for text reads.
 const DEFAULT_CHAR_CHUNK_CAPACITY: usize = 256;
@@ -338,52 +340,45 @@ impl TextLineReader for InputTextReader<'_> {
 
             let ch = pending.pop_front().expect("pending character is available");
             read = true;
-            if ch == '\n' && line_endings.contains(LineEnding::Lf) {
+            if needs_crlf_lookahead(ch, line_endings) {
+                if pending.is_empty() {
+                    let count = match self.read_chunk(&mut chars) {
+                        Ok(count) => count,
+                        Err(error) => {
+                            pending.push_front('\r');
+                            self.pending = pending;
+                            return Err(error);
+                        }
+                    };
+                    pending.extend(chars[..count].iter().copied());
+                }
+                match pending.pop_front() {
+                    Some('\n') => {
+                        output.push('\r');
+                        output.push('\n');
+                        self.pending = pending;
+                        return Ok(true);
+                    }
+                    Some(next) => {
+                        output.push('\r');
+                        pending.push_front(next);
+                        if ends_after_cr(Some(next), line_endings) {
+                            self.pending = pending;
+                            return Ok(true);
+                        }
+                        continue;
+                    }
+                    None => {
+                        output.push('\r');
+                        self.pending = pending;
+                        return Ok(ends_after_cr(None, line_endings));
+                    }
+                }
+            }
+            if ends_without_lookahead(ch, line_endings) {
                 output.push(ch);
                 self.pending = pending;
                 return Ok(true);
-            }
-            if ch == '\r' {
-                if line_endings.contains(LineEnding::CrLf) {
-                    if pending.is_empty() {
-                        let count = match self.read_chunk(&mut chars) {
-                            Ok(count) => count,
-                            Err(error) => {
-                                pending.push_front('\r');
-                                self.pending = pending;
-                                return Err(error);
-                            }
-                        };
-                        pending.extend(chars[..count].iter().copied());
-                    }
-                    match pending.pop_front() {
-                        Some('\n') => {
-                            output.push('\r');
-                            output.push('\n');
-                            self.pending = pending;
-                            return Ok(true);
-                        }
-                        Some(next) => {
-                            output.push('\r');
-                            pending.push_front(next);
-                            if line_endings.contains(LineEnding::Cr) {
-                                self.pending = pending;
-                                return Ok(true);
-                            }
-                            continue;
-                        }
-                        None => {
-                            output.push('\r');
-                            self.pending = pending;
-                            return Ok(true);
-                        }
-                    }
-                }
-                if line_endings.contains(LineEnding::Cr) {
-                    output.push('\r');
-                    self.pending = pending;
-                    return Ok(true);
-                }
             }
             output.push(ch);
         }

@@ -80,6 +80,18 @@ fn main() {
         ));
     }
     for (file, heading, name) in [
+        ("doc/user_guide.md", "## Cumulative Text Budget", "budget_english"),
+        ("doc/user_guide.zh_CN.md", "## 累计文本预算", "budget_chinese"),
+    ] {
+        let path = project.join(file);
+        println!("cargo:rerun-if-changed={}", path.display());
+        let markdown = fs::read_to_string(&path).expect("read cumulative budget example");
+        let code = extract_core(&markdown, heading);
+        generated.push_str(&format!("pub mod {name} {{\n"));
+        generated.push_str(code);
+        generated.push_str("\npub(crate) use read_message_with_total_limit as run;\n}\n");
+    }
+    for (file, heading, name) in [
         (
             "doc/user_guide.md",
             "## Resuming an interrupted line read",

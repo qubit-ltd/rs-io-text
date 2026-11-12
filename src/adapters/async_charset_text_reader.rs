@@ -22,12 +22,14 @@ use qubit_io::AsyncByteInput;
 
 use crate::AsyncTextLineReader;
 use crate::AsyncTextReader;
-use crate::LineEnding;
 use crate::TextReaderParts;
 use crate::io_error::capacity_error_to_io;
 use crate::io_error::decode_error_to_io;
 use crate::line_ending_set::LineEndingSet;
 use crate::line_ending_set::append_limited_char;
+use crate::line_ending_set::ends_after_cr;
+use crate::line_ending_set::ends_without_lookahead;
+use crate::line_ending_set::needs_crlf_lookahead;
 
 /// Default encoded-byte capacity used by asynchronous charset readers.
 const DEFAULT_BUFFER_CAPACITY: usize = 8 * 1024;
@@ -686,6 +688,10 @@ where
     /// # Returns
     ///
     /// Returns the number of Unicode scalar values appended to `output`.
+    /// The limit applies to this invocation only; a prefix retained after a
+    /// cancelled call is not charged against a later call's limit. Use a
+    /// separately retained message start and subtract `output.len()` from a
+    /// total message budget when the application needs an aggregate bound.
     ///
     /// # Errors
     ///
@@ -699,7 +705,9 @@ where
     ///
     /// Cancelling this future retains reader state, but `output` can already
     /// contain a successfully decoded prefix. Resume on the same reader and
-    /// do not append that prefix a second time.
+    /// do not append that prefix a second time. A later call starts a fresh
+    /// append limit, and an overflow rolls back only text appended by that
+    /// later call; it does not roll back reader input already consumed.
     pub async fn read_to_string_limited_async(
         &mut self,
         output: &mut String,
@@ -829,7 +837,7 @@ where
         let mut read = false;
         while let Some(ch) = self.read_char_async().await? {
             read = true;
-            if ch == '\r' && self.line_endings.contains(LineEnding::CrLf) {
+            if needs_crlf_lookahead(ch, self.line_endings) {
                 if let Some(max_append_len) = max_append_len
                     && ch.len_utf8() > max_append_len.saturating_sub(output.len() - initial_len)
                 {
@@ -855,14 +863,14 @@ where
                     Some(next) => {
                         output.push('\r');
                         self.pending_char = Some(next);
-                        if self.line_endings.contains(LineEnding::Cr) {
+                        if ends_after_cr(Some(next), self.line_endings) {
                             return Ok(true);
                         }
                         continue;
                     }
                     None => {
                         output.push('\r');
-                        return Ok(true);
+                        return Ok(ends_after_cr(None, self.line_endings));
                     }
                 }
             }
@@ -875,10 +883,7 @@ where
                 self.rejected_line = Some((limit, self.line_endings));
                 return Err(self.finish_rejected_line_async().await?);
             }
-            if ch == '\n' && self.line_endings.contains(LineEnding::Lf) {
-                return Ok(true);
-            }
-            if ch == '\r' && self.line_endings.contains(LineEnding::Cr) {
+            if ends_without_lookahead(ch, self.line_endings) {
                 return Ok(true);
             }
         }
@@ -937,29 +942,24 @@ where
             let Some(ch) = self.read_char_async().await? else {
                 return Ok(());
             };
-            if ch == '\n' && line_endings.contains(LineEnding::Lf) {
-                return Ok(());
-            }
-            if ch == '\r' {
-                if line_endings.contains(LineEnding::CrLf) {
-                    self.pending_char = Some('\r');
-                    let next = self.read_char_from_buffer_async().await?;
-                    self.pending_char = None;
-                    match next {
-                        Some('\n') => return Ok(()),
-                        Some(next) => {
-                            self.pending_char = Some(next);
-                            if line_endings.contains(LineEnding::Cr) {
-                                return Ok(());
-                            }
-                            continue;
+            if needs_crlf_lookahead(ch, line_endings) {
+                self.pending_char = Some('\r');
+                let next = self.read_char_from_buffer_async().await?;
+                self.pending_char = None;
+                match next {
+                    Some('\n') => return Ok(()),
+                    Some(next) => {
+                        self.pending_char = Some(next);
+                        if ends_after_cr(Some(next), line_endings) {
+                            return Ok(());
                         }
-                        None => return Ok(()),
+                        continue;
                     }
+                    None => return Ok(()),
                 }
-                if line_endings.contains(LineEnding::Cr) {
-                    return Ok(());
-                }
+            }
+            if ends_without_lookahead(ch, line_endings) {
+                return Ok(());
             }
         }
     }

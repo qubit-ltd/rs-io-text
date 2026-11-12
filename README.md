@@ -143,6 +143,8 @@ After an asynchronous bounded line read rejects an oversized record, resume
 with a line-read method on the same reader to finish recovery before reading
 the next record. Use fallible `try_*` constructors for replacement policies
 from runtime configuration; see [Errors and Diagnostics](doc/user_guide.md#errors-and-diagnostics).
+For a cumulative UTF-8 byte budget across cancelled reads, see
+[Cumulative Text Budget](doc/user_guide.md#cumulative-text-budget).
 
 To take ownership of an async writer's existing pending buffer, use
 `into_buffered_parts()`; the `Vec<u8>` from `into_parts()` remains available.

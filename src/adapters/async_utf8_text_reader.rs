@@ -25,6 +25,11 @@ use crate::LineEndingSet;
 /// available through [`Deref`] and [`DerefMut`]. To consume the reader and
 /// recover its parts, call `into_inner().into_parts()`.
 ///
+/// The dereferenced [`AsyncCharsetTextReader::read_to_string_limited_async`]
+/// method limits UTF-8 bytes appended by each call. To enforce a total message
+/// budget across cancellation, retain the message's starting output length and
+/// pass only the remaining byte budget on each call.
+///
 /// # Type Parameters
 ///
 /// - `I`: Asynchronous byte input that supplies UTF-8 encoded data.

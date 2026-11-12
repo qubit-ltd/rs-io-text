@@ -181,6 +181,35 @@ where
 
 成功返回时，`write_str_async` 的进度按 UTF-8 字节计数，`write_chars_async` 则按 `char` 元素计数；继续写入时，要据此截取各自的输入后缀。[AsyncTextWriter 示例](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextWriter.html#examples) 展示两种推进方式和显式结束编码器的步骤；[AsyncTextLineReader 示例](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextLineReader.html#examples) 展示保留终止符的逐行读取。
 
+## 累计文本预算
+
+`read_to_string_limited_async` 的字节上限只适用于单次调用。若调用在追加前缀后被取消，`output` 会保留此前缀；后续调用会重新计算自己的限额。应在整条逻辑消息开始时记录 output 长度，并在取消后继续沿用该起点，只传入总预算扣除已保留字节后的余额。各次调用之间不得截短、替换 output，也不得混入其他消息。限额按 UTF-8 字节而非 Unicode 字符计算；reader 已消费的输入不会回滚。
+
+```rust
+use std::io;
+
+use qubit_io::AsyncByteInput;
+use qubit_io_text::AsyncUtf8TextReader;
+
+pub async fn read_message_with_total_limit<I>(
+    reader: &mut AsyncUtf8TextReader<I>,
+    output: &mut String,
+    message_start: usize,
+    total_limit: usize,
+) -> io::Result<usize>
+where
+    I: AsyncByteInput + Unpin,
+{
+    let used = output.len().checked_sub(message_start).ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "message start exceeds output length")
+    })?;
+    let remaining = total_limit.checked_sub(used).ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "retained text exceeds total limit")
+    })?;
+    reader.read_to_string_limited_async(output, remaining).await
+}
+```
+
 ## Send future 与跨线程任务
 
 运行时无关 API 不选择执行器，但运行时无关不代表所有泛型 future 都可在线程间调度。

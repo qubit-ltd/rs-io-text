@@ -220,6 +220,72 @@ fn test_line_ending_matrix_empty_and_consecutive_terminators() -> io::Result<()>
     Ok(())
 }
 
+#[test]
+fn test_line_ending_matrix_repeated_cr_before_record() {
+    const INPUT: &str = "a\r\rb\r\nc";
+    const EXPECTED: [&[&str]; 8] = [
+        &["a\r", "\r", "b\r\n", "c"],
+        &["a\r\rb\r\n", "c"],
+        &["a\r\rb\r\n", "c"],
+        &["a\r", "\r", "b\r", "\nc"],
+        &["a\r\rb\r\nc"],
+        &["a\r\rb\r\n", "c"],
+        &["a\r", "\r", "b\r", "\n", "c"],
+        &["a\r", "\r", "b\r\n", "c"],
+    ];
+
+    for (index, set) in endings().into_iter().enumerate() {
+        assert_eq!(
+            EXPECTED[index],
+            collect_lines(StrTextReader::new(INPUT).with_line_endings(set))
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn test_limited_crlf_boundary_and_recovery() -> io::Result<()> {
+    for limit in [2, 3] {
+        let mut sync_reader = BufferedTextReader::with_capacity(
+            Cursor::new(b"a\r\nok\n"),
+            qubit_codec_text::CharsetDecoder::with_policy(Utf8Codec, CharsetDecodePolicy::report()),
+            4,
+        );
+        let mut output = String::from("seed:");
+        if limit == 2 {
+            let error = sync_reader.read_line_limited(&mut output, limit).unwrap_err();
+            assert_eq!(io::ErrorKind::InvalidData, error.kind());
+            assert_eq!("seed:", output);
+            assert!(sync_reader.read_line_limited(&mut output, 3)?);
+            assert_eq!("seed:ok\n", output);
+        } else {
+            assert!(sync_reader.read_line_limited(&mut output, limit)?);
+            assert_eq!("seed:a\r\n", output);
+        }
+
+        let input = ShortAsyncInput {
+            bytes: b"a\r\nok\n".to_vec(),
+            position: 0,
+            max_read: 1,
+        };
+        let mut async_reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+        let mut output = String::from("seed:");
+        if limit == 2 {
+            let error = block_on(async_reader.read_line_limited_async(&mut output, limit)).unwrap_err();
+            assert_eq!(io::ErrorKind::InvalidData, error.kind());
+            assert_eq!("seed:", output);
+            assert!(block_on(async_reader.read_line_limited_async(&mut output, 3))?);
+            assert_eq!("seed:ok\n", output);
+        } else {
+            assert!(block_on(async_reader.read_line_limited_async(&mut output, limit))?);
+            assert_eq!("seed:a\r\n", output);
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 struct ShortAsyncInput {
     bytes: Vec<u8>,

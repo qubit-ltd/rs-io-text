@@ -199,6 +199,41 @@ corresponding source suffix. The [AsyncTextWriter example](https://docs.rs/qubit
 shows both loops and explicit finalization; the [AsyncTextLineReader example](https://docs.rs/qubit-io-text/latest/qubit_io_text/trait.AsyncTextLineReader.html#examples)
 shows line reads that preserve terminators.
 
+## Cumulative Text Budget
+
+`read_to_string_limited_async` applies its byte limit to each call. If a call
+is cancelled after appending a prefix, that prefix remains in `output`; a later
+call starts a fresh limit. Keep the output length at the start of the logical
+message across cancellation, and pass only the remaining part of the total
+budget. The output must not be shortened, replaced, or mixed with another
+message between calls. These limits count UTF-8 bytes, not Unicode characters,
+and do not restore input already consumed by the reader.
+
+```rust
+use std::io;
+
+use qubit_io::AsyncByteInput;
+use qubit_io_text::AsyncUtf8TextReader;
+
+pub async fn read_message_with_total_limit<I>(
+    reader: &mut AsyncUtf8TextReader<I>,
+    output: &mut String,
+    message_start: usize,
+    total_limit: usize,
+) -> io::Result<usize>
+where
+    I: AsyncByteInput + Unpin,
+{
+    let used = output.len().checked_sub(message_start).ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "message start exceeds output length")
+    })?;
+    let remaining = total_limit.checked_sub(used).ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "retained text exceeds total limit")
+    })?;
+    reader.read_to_string_limited_async(output, remaining).await
+}
+```
+
 ## Send Futures and Threaded Tasks
 
 Runtime-neutral APIs do not select an executor, and runtime neutrality does not

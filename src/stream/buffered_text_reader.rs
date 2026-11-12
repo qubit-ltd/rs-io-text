@@ -24,6 +24,9 @@ use crate::io_error::decode_error_to_io as shared_decode_error_to_io;
 use crate::line_ending_set::LineEndingSet;
 use crate::line_ending_set::append_limited_char;
 use crate::line_ending_set::discard_line_with;
+use crate::line_ending_set::ends_after_cr;
+use crate::line_ending_set::ends_without_lookahead;
+use crate::line_ending_set::needs_crlf_lookahead;
 use crate::line_ending_set::read_line_with;
 
 /// Default byte buffer capacity used by buffered text readers.
@@ -507,38 +510,33 @@ where
                 };
             }
             read = true;
-            if ch == '\n' && self.line_endings.contains(crate::LineEnding::Lf) {
-                return Ok(true);
-            }
-            if ch == '\r' {
-                if self.line_endings.contains(crate::LineEnding::CrLf) {
-                    let next = match self.read_char() {
-                        Ok(next) => next,
-                        Err(error) => {
-                            // CR was appended immediately before this lookahead.
-                            output.truncate(output.len() - '\r'.len_utf8());
-                            self.pending_char = Some('\r');
-                            return Err(error);
-                        }
-                    };
-                    match next {
-                        Some('\n') => {
-                            append_limited_char(output, initial_len, max_append_len, '\n')?;
+            if needs_crlf_lookahead(ch, self.line_endings) {
+                let next = match self.read_char() {
+                    Ok(next) => next,
+                    Err(error) => {
+                        // CR was appended immediately before this lookahead.
+                        output.truncate(output.len() - '\r'.len_utf8());
+                        self.pending_char = Some('\r');
+                        return Err(error);
+                    }
+                };
+                match next {
+                    Some('\n') => {
+                        append_limited_char(output, initial_len, max_append_len, '\n')?;
+                        return Ok(true);
+                    }
+                    Some(next) => {
+                        if ends_after_cr(Some(next), self.line_endings) {
+                            self.pending_char = Some(next);
                             return Ok(true);
                         }
-                        Some(next) => {
-                            if self.line_endings.contains(crate::LineEnding::Cr) {
-                                self.pending_char = Some(next);
-                                return Ok(true);
-                            }
-                            self.pending_char = Some(next);
-                        }
-                        None => return Ok(true),
+                        self.pending_char = Some(next);
                     }
+                    None => return Ok(ends_after_cr(None, self.line_endings)),
                 }
-                if self.line_endings.contains(crate::LineEnding::Cr) {
-                    return Ok(true);
-                }
+            }
+            if ends_without_lookahead(ch, self.line_endings) {
+                return Ok(true);
             }
         }
         Ok(read)

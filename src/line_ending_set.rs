@@ -120,6 +120,42 @@ impl Default for LineEndingSet {
     }
 }
 
+/// Returns whether `ch` starts a CRLF candidate that requires lookahead.
+///
+/// Call this before [`ends_without_lookahead`] so CRLF recognition takes
+/// precedence when multiple line endings are enabled.
+///
+/// # Parameters
+/// - `ch` is the current character.
+/// - `endings` is the set of configured line endings.
+#[inline]
+pub(crate) fn needs_crlf_lookahead(ch: char, endings: LineEndingSet) -> bool {
+    ch == '\r' && endings.contains(LineEnding::CrLf)
+}
+
+/// Returns whether `ch` ends a line without reading another character.
+///
+/// # Parameters
+/// - `ch` is the current character.
+/// - `endings` is the set of configured line endings.
+#[inline]
+pub(crate) fn ends_without_lookahead(ch: char, endings: LineEndingSet) -> bool {
+    (ch == '\n' && endings.contains(LineEnding::Lf)) || (ch == '\r' && endings.contains(LineEnding::Cr))
+}
+
+/// Returns whether the character after a CR completes or ends a line.
+///
+/// Call only after a CRLF lookahead for a CR with CRLF enabled. `None` means
+/// EOF; `ends_after_cr` treats that as the end of the final unterminated line.
+///
+/// # Parameters
+/// - `next` is the optional character after CR, or `None` at EOF.
+/// - `endings` is the set of configured line endings.
+#[inline]
+pub(crate) fn ends_after_cr(next: Option<char>, endings: LineEndingSet) -> bool {
+    next.is_none() || next == Some('\n') || endings.contains(LineEnding::Cr)
+}
+
 /// Reads characters into `output` until an accepted line ending or end of
 /// input is reached.
 ///
@@ -160,49 +196,38 @@ where
         read_char()?
     } {
         read = true;
-        if ch == '\n' && line_endings.contains(LineEnding::Lf) {
-            output.push(ch);
-            return Ok(true);
-        }
-        if ch == '\r' {
-            if line_endings.contains(LineEnding::CrLf) {
-                // Retain CR while the lookahead can fail so callers can retry
-                // without losing the character that started the boundary.
-                *pending = Some('\r');
-                match read_char()? {
-                    Some('\n') => {
-                        *pending = None;
-                        output.push('\r');
-                        output.push('\n');
-                        return Ok(true);
-                    }
-                    Some(next) => {
-                        *pending = None;
-                        if line_endings.contains(LineEnding::Cr) {
-                            output.push('\r');
-                            *pending = Some(next);
-                            return Ok(true);
-                        }
+        if needs_crlf_lookahead(ch, line_endings) {
+            // Retain CR while the lookahead can fail so callers can retry
+            // without losing the character that started the boundary.
+            *pending = Some('\r');
+            match read_char()? {
+                Some('\n') => {
+                    *pending = None;
+                    output.push('\r');
+                    output.push('\n');
+                    return Ok(true);
+                }
+                Some(next) => {
+                    *pending = None;
+                    if ends_after_cr(Some(next), line_endings) {
                         output.push('\r');
                         *pending = Some(next);
-                        continue;
-                    }
-                    None if line_endings.contains(LineEnding::Cr) => {
-                        *pending = None;
-                        output.push('\r');
                         return Ok(true);
                     }
-                    None => {
-                        *pending = None;
-                        output.push('\r');
-                        return Ok(true);
-                    }
+                    output.push('\r');
+                    *pending = Some(next);
+                    continue;
+                }
+                None => {
+                    *pending = None;
+                    output.push('\r');
+                    return Ok(ends_after_cr(None, line_endings));
                 }
             }
-            if line_endings.contains(LineEnding::Cr) {
-                output.push('\r');
-                return Ok(true);
-            }
+        }
+        if ends_without_lookahead(ch, line_endings) {
+            output.push(ch);
+            return Ok(true);
         }
         output.push(ch);
     }
@@ -250,35 +275,30 @@ where
             return Ok(());
         };
 
-        if ch == '\n' && line_endings.contains(LineEnding::Lf) {
-            return Ok(());
-        }
-        if ch == '\r' {
-            if line_endings.contains(LineEnding::CrLf) {
-                *pending = Some('\r');
-                match read_char()? {
-                    Some('\n') => {
-                        *pending = None;
-                        return Ok(());
-                    }
-                    Some(next) => {
-                        *pending = None;
-                        if line_endings.contains(LineEnding::Cr) {
-                            *pending = Some(next);
-                            return Ok(());
-                        }
+        if needs_crlf_lookahead(ch, line_endings) {
+            *pending = Some('\r');
+            match read_char()? {
+                Some('\n') => {
+                    *pending = None;
+                    return Ok(());
+                }
+                Some(next) => {
+                    *pending = None;
+                    if ends_after_cr(Some(next), line_endings) {
                         *pending = Some(next);
-                        continue;
-                    }
-                    None => {
-                        *pending = None;
                         return Ok(());
                     }
+                    *pending = Some(next);
+                    continue;
+                }
+                None => {
+                    *pending = None;
+                    return Ok(());
                 }
             }
-            if line_endings.contains(LineEnding::Cr) {
-                return Ok(());
-            }
+        }
+        if ends_without_lookahead(ch, line_endings) {
+            return Ok(());
         }
     }
 }

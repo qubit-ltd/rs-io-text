@@ -1329,6 +1329,80 @@ fn test_line_prefix_cancellation_keeps_append_limit_per_call() -> io::Result<()>
 }
 
 #[test]
+fn test_cancelled_limited_string_uses_per_call_bytes_and_preserves_output() -> io::Result<()> {
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new("中文".as_bytes().to_vec(), 1, true).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::from("seed:");
+    let message_start = output.len();
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_to_string_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 3));
+    drop(future);
+    assert_eq!("seed:中", output);
+    assert_eq!(1, complete(reader.read_to_string_limited_async(&mut output, 4))?);
+    assert_eq!("seed:中文", output);
+    assert_eq!(6, output.len() - message_start);
+
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new("中文".as_bytes().to_vec(), 1, true).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::from("seed:");
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_to_string_limited_async(&mut output, 4));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 3));
+    drop(future);
+    let error = complete(reader.read_to_string_limited_async(&mut output, 1)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(
+        1,
+        error
+            .get_ref()
+            .expect("limit error source")
+            .downcast_ref::<TextAppendLimitError>()
+            .expect("structured append limit error")
+            .max_append_len()
+    );
+    assert_eq!("seed:中", output);
+
+    let progress = Rc::new(Cell::new(0));
+    let input = ChunkedAsyncInput::new(b"abcde".to_vec(), 1, true).with_progress(progress.clone());
+    let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
+    let mut output = String::from("seed:");
+    let mut context = test_context();
+    let mut future = Box::pin(reader.read_to_string_limited_async(&mut output, 99));
+    assert!(poll_until_position(future.as_mut(), &mut context, &progress, 2));
+    drop(future);
+    assert_eq!("seed:ab", output);
+    let error = complete(reader.read_to_string_limited_async(&mut output, 2)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("seed:ab", output);
+
+    let mut eof_reader = AsyncCharsetTextReader::new(
+        ChunkedAsyncInput::new("中文".as_bytes().to_vec(), 1, true),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut eof_output = String::new();
+    assert_eq!(
+        2,
+        complete(eof_reader.read_to_string_limited_async(&mut eof_output, 6))?
+    );
+    assert_eq!("中文", eof_output);
+
+    let mut non_eof_reader = AsyncCharsetTextReader::new(
+        ChunkedAsyncInput::new(b"abc".to_vec(), 1, true),
+        Utf8Codec,
+        CharsetDecodePolicy::report(),
+    );
+    let mut non_eof_output = String::new();
+    let error = complete(non_eof_reader.read_to_string_limited_async(&mut non_eof_output, 2)).unwrap_err();
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("", non_eof_output);
+    Ok(())
+}
+
+#[test]
 fn test_async_charset_reader_limited_reads_preserve_pending_order_and_endings() -> io::Result<()> {
     let input = ChunkedAsyncInput::new(b"first\rbc".to_vec(), 1, false);
     let mut reader = AsyncCharsetTextReader::new(input, Utf8Codec, CharsetDecodePolicy::report());
