@@ -7,6 +7,6 @@ publish = false
 [workspace]
 
 [dependencies]
-qubit-io-text = { path = "../../.." }
-qubit-io = "0.19"
+qubit-io-text = { path = "../../../", version = "^0.9" }
+qubit-io = "^0.19"
 qubit-codec-text = "^0.9"
