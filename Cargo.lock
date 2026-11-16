@@ -46,9 +46,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.11.1"
+version = "1.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ff2a8126fff0f8c839080d619675a585e61720bb12d2baceae45769fd66f155"
+checksum = "33ef9e3e8154a45c7a95cff4c1299702106ad94062d7bb85fdc5d3a5afd91d45"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -237,9 +237,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec"
-version = "0.17.5"
+version = "0.17.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d25abb7a1f4ded768185f3b912946223ab541ffe3fe5450dd91fa4a3b4c981ad"
+checksum = "afb185338021b791a7693ac5f4f84d70262ee738f4f9416f1a4292ebdb1c1a5b"
 dependencies = [
  "qubit-io",
  "qubit-utils",
@@ -248,9 +248,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec-text"
-version = "0.9.5"
+version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79a65edd0b8c14d248ee2faf15a05cf214dfabdc34eb3b2cdec7d92c23a7bff8"
+checksum = "041871692e1bfb31364356e539d7bfc38303f6cdf46ca796875e0b456e24b683"
 dependencies = [
  "qubit-codec",
  "qubit-utils",
@@ -259,16 +259,16 @@ dependencies = [
 
 [[package]]
 name = "qubit-io"
-version = "0.19.5"
+version = "0.19.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e563c7c3ed87a06ce8eba9810179e346762f7122f68090e64a5f9472425bc78"
+checksum = "3e782e5b568b1dfa6ee6e9b3f8617a86980b9438f0c449235e3840533d25f83c"
 dependencies = [
  "qubit-utils",
 ]
 
 [[package]]
 name = "qubit-io-text"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "criterion",
  "qubit-codec",
@@ -279,9 +279,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-utils"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e16644d9ad9d6eafa3216b8a1d50db0cec09ef364f6cbd082ff49ea87bf154"
+checksum = "51269ed5cb6c0a936c79de455c299479653cbb28d772cfad8231710d2623a8b6"
 
 [[package]]
 name = "quote"
